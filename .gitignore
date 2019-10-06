@@ -1,0 +1,6 @@
+*.pyc
+*.avi
+*.pypirc
+*.gv*
+*.mp4
+.DS_Store
