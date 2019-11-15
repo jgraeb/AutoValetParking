@@ -101,62 +101,62 @@ m.show_animation = False
 waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[336/100,223/100,np.deg2rad(0.0)],[456/100,223/100,np.deg2rad(0)],[505/100,300/100,np.deg2rad(90.0)],[505/100,420/100,np.deg2rad(90.0)],[400/100,473/100,np.deg2rad(180.0)],[321/100,520/100,np.deg2rad(125.0)],[321/100,473/100,np.deg2rad(180.0)],[200/100,473/100,np.deg2rad(180.0)],[75/100,575/100,np.deg2rad(90.0)],[200/100,667/100,np.deg2rad(0.0)],[339/100,667/100,np.deg2rad(0.0)]]
 
 # Compute, plot the path and save the x,y, yaw coordinates
-# try:
-#     pathA = m.mainAVPtest(obstacleList,waypoints[0],waypoints[1],[3.5, 5.0],[0.0,2.5], max_iter=300)
-#     plt.plot([x for (x, y,yaw) in pathA], [y for (x, y,yaw) in pathA], '-r')
-#     with open('PathA', 'w') as fh:
-#         for x, y, yaw in pathA: 
-#             fh.write('{} {} {}\n'.format(x, y, yaw))
-# except:
-#     pass
-# try:
-#     pathB = m.mainAVPtest(obstacleList,waypoints[1],waypoints[2],[2.5,3.5],[1,2.5],max_iter=300)
-#     plt.plot([x for (x, y, yaw) in pathB], [y for (x, y, yaw) in pathB], '-r')
-#     with open('PathB', 'w') as fh:
-#         for x, y, yaw in pathB: 
-#             fh.write('{} {} {}\n'.format(x, y, yaw))
-# except:
-#     pass
-# try:
-#     pathC = m.mainAVPtest(obstacleList,waypoints[2],waypoints[3],[3,4.5],[1.5,2.5],max_iter=300)
-#     plt.plot([x for (x, y, yaw) in pathC], [y for (x, y, yaw) in pathC], '-r')
-#     with open('PathC', 'w') as fh:
-#         for x, y, yaw in pathC: 
-#             fh.write('{} {} {}\n'.format(x, y, yaw))
-# except:
-#     pass
-# try:
-#     pathD = m.mainAVPtest(obstacleList,waypoints[3],waypoints[4],[4.0,5.5],[2, 4.0],max_iter=300)
-#     plt.plot([x for (x, y, yaw) in pathD], [y for (x, y, yaw) in pathD], '-r')
-#     with open('PathD', 'w') as fh:
-#         for x, y, yaw in pathD: 
-#             fh.write('{} {} {}\n'.format(x, y, yaw))
-# except:
-#     pass
-# try:
-#     pathE = m.mainAVPtest(obstacleList,waypoints[4],waypoints[5],[4.5,5.5],[2.5,4.5],max_iter=300)
-#     plt.plot([x for (x, y, yaw) in pathE], [y for (x, y, yaw) in pathE], '-r')
-#     with open('PathE', 'w') as fh:
-#         for x, y, yaw in pathE: 
-#             fh.write('{} {} {}\n'.format(x, y, yaw))
-# except:
-#     pass
-# try:
-#     pathF = m.mainAVPtest(obstacleList,waypoints[5],waypoints[6],[4.0,5.5],[3.5,5.0],max_iter=300)
-#     plt.plot([x for (x, y, yaw) in pathF], [y for (x, y, yaw) in pathF], '-r')
-#     with open('PathF', 'w') as fh:
-#         for x, y, yaw in pathF: 
-#             fh.write('{} {} {}\n'.format(x, y, yaw))
-# except:
-#     pass
-# try:
-#     pathG = m.mainAVPtest(obstacleList,waypoints[6],waypoints[7],[2.5,4.5],[4.0, 5.5],max_iter=300)
-#     plt.plot([x for (x, y, yaw) in pathG], [y for (x, y, yaw) in pathG], '-r')
-#     with open('PathG', 'w') as fh:
-#         for x, y, yaw in pathG: 
-#             fh.write('{} {} {}\n'.format(x, y, yaw))
-# except:
-#     pass
+try:
+    pathA = m.mainAVPtest(obstacleList,waypoints[0],waypoints[1],[3.5, 5.0],[0.0,2.5], max_iter=300)
+    plt.plot([x for (x, y,yaw) in pathA], [y for (x, y,yaw) in pathA], '-r')
+    with open('PathA', 'w') as fh:
+        for x, y, yaw in pathA: 
+            fh.write('{} {} {}\n'.format(x, y, yaw))
+except:
+    pass
+try:
+    pathB = m.mainAVPtest(obstacleList,waypoints[1],waypoints[2],[2.5,3.5],[1,2.5],max_iter=300)
+    plt.plot([x for (x, y, yaw) in pathB], [y for (x, y, yaw) in pathB], '-r')
+    with open('PathB', 'w') as fh:
+        for x, y, yaw in pathB: 
+            fh.write('{} {} {}\n'.format(x, y, yaw))
+except:
+    pass
+try:
+    pathC = m.mainAVPtest(obstacleList,waypoints[2],waypoints[3],[3,4.5],[1.5,2.5],max_iter=300)
+    plt.plot([x for (x, y, yaw) in pathC], [y for (x, y, yaw) in pathC], '-r')
+    with open('PathC', 'w') as fh:
+        for x, y, yaw in pathC: 
+            fh.write('{} {} {}\n'.format(x, y, yaw))
+except:
+    pass
+try:
+    pathD = m.mainAVPtest(obstacleList,waypoints[3],waypoints[4],[4.0,5.5],[2, 4.0],max_iter=300)
+    plt.plot([x for (x, y, yaw) in pathD], [y for (x, y, yaw) in pathD], '-r')
+    with open('PathD', 'w') as fh:
+        for x, y, yaw in pathD: 
+            fh.write('{} {} {}\n'.format(x, y, yaw))
+except:
+    pass
+try:
+    pathE = m.mainAVPtest(obstacleList,waypoints[4],waypoints[5],[4.5,5.5],[2.5,4.5],max_iter=300)
+    plt.plot([x for (x, y, yaw) in pathE], [y for (x, y, yaw) in pathE], '-r')
+    with open('PathE', 'w') as fh:
+        for x, y, yaw in pathE: 
+            fh.write('{} {} {}\n'.format(x, y, yaw))
+except:
+    pass
+try:
+    pathF = m.mainAVPtest(obstacleList,waypoints[5],waypoints[6],[4.0,5.5],[3.5,5.0],max_iter=300)
+    plt.plot([x for (x, y, yaw) in pathF], [y for (x, y, yaw) in pathF], '-r')
+    with open('PathF', 'w') as fh:
+        for x, y, yaw in pathF: 
+            fh.write('{} {} {}\n'.format(x, y, yaw))
+except:
+    pass
+try:
+    pathG = m.mainAVPtest(obstacleList,waypoints[6],waypoints[7],[2.5,4.5],[4.0, 5.5],max_iter=300)
+    plt.plot([x for (x, y, yaw) in pathG], [y for (x, y, yaw) in pathG], '-r')
+    with open('PathG', 'w') as fh:
+        for x, y, yaw in pathG: 
+            fh.write('{} {} {}\n'.format(x, y, yaw))
+except:
+    pass
 try:
     pathH = m.mainAVPtest(obstacleList,waypoints[6],waypoints[7],[2.0,4.0],[4.0, 6.0],max_iter=300)
     plt.plot([x for (x, y, yaw) in pathH], [y for (x, y, yaw) in pathH], '-r')
