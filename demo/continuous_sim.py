@@ -53,7 +53,7 @@ start_walk_lane = (2908,665)
 end_walk_lane = (3160,665)
 # add one pedestrian to the scene
 pedestrian = pedestrian.Pedestrian(pedestrian_type='1')
-pedestrian.prim_queue.enqueue(((start_walk_lane, end_walk_lane, 200), 0))
+pedestrian.prim_queue.enqueue(((start_walk_lane, end_walk_lane, 60), 0))
 
 dt = 0.1
 path_idx = 0
@@ -62,8 +62,8 @@ def animate(frame_idx): # update animation by dt
     ax.clear()
     current_loc = path[path_idx][0].split()
     path_idx += 1
-    x = float(current_loc[0])*367
-    y = float(current_loc[1])*367+100
+    x = float(current_loc[0])*360
+    y = float(current_loc[1])*380
     print(y)
     theta = float(current_loc[2])
     #x,y,theta = [5.0*367, 0.2*367+145, 1.5707963267948966]
@@ -84,7 +84,7 @@ t0 = time.time()
 animate(0)
 t1 = time.time()
 interval = (t1 - t0)
-ani = animation.FuncAnimation(fig, animate, frames=100, interval=10**3, blit=True, repeat=False) # by default the animation function loops so set repeat to False in order to limit the number of frames generated to num_frames
+ani = animation.FuncAnimation(fig, animate, frames=200, interval=10**3, blit=True, repeat=False) # by default the animation function loops so set repeat to False in order to limit the number of frames generated to num_frames
 if save_video:
     #Writer = animation.writers['ffmpeg']
     writer = animation.FFMpegWriter(fps = 1, metadata=dict(artist='Easy Park Simulator'), bitrate=None)
