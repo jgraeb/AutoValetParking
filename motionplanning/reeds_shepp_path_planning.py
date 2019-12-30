@@ -245,7 +245,7 @@ def generate_path(q0, q1, maxc):
 
 
 def interpolate(ind, l, m, maxc, ox, oy, oyaw, px, py, pyaw, directions):
-
+    # modify here (pick random curvature in range?)
     if m == "S":
         px[ind] = ox + l / maxc * math.cos(oyaw)
         py[ind] = oy + l / maxc * math.sin(oyaw)
@@ -427,7 +427,7 @@ def main():
     end_y = 5.0  # [m]
     end_yaw = np.deg2rad(25.0)  # [rad]
 
-    curvature = 1.0
+    curvature = 1.0 # modify here
     step_size = 0.1
 
     px, py, pyaw, mode, clen = reeds_shepp_path_planning(
@@ -450,7 +450,7 @@ def main():
         assert False, "No path"
 
 
-def solveAVPLayout():
+def solveAVPLayout(): # not in use
     print("Reeds Shepp path planner for AVP")
     start_x = 50.00  # [m]
     start_y = 2.0  # [m]
@@ -460,7 +460,8 @@ def solveAVPLayout():
     end_y = 53.10  # [m]
     end_yaw = np.deg2rad(235.0)  # [rad]
 
-    curvature = 2.0
+    curvature = 1.0
+    #curvature = 1.0 / (np.random.rand() * 20.0)
     step_size = 0.1
 
     px, py, pyaw, mode, clen = reeds_shepp_path_planning(

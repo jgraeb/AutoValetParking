@@ -66,7 +66,7 @@ class RRTStarReedsShepp(RRTStar):
         self.obstacle_list = obstacle_list
         self.connect_circle_dist = connect_circle_dist
 
-        self.curvature = 2.0
+        self.curvature = 1.5 # set max curvature here
         self.goal_yaw_th = np.deg2rad(1.0)
         self.goal_xy_th = 0.1
 
@@ -79,6 +79,7 @@ class RRTStarReedsShepp(RRTStar):
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
+            self.curvature = 1.2*np.random.rand() # EDIT choose curvature in set randomly for each iteration
             print("Iter:", i, ", number of nodes:", len(self.node_list))
             rnd = self.get_random_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
@@ -259,7 +260,7 @@ def main(max_iter=100):
         plt.show()
 
 
-def mainAVP(obstacleList, max_iter=100):
+def mainAVP(obstacleList, max_iter=100): # not using this
     print("Start " + __file__)
 
     # ====Search Path with RRT====
@@ -286,7 +287,7 @@ def mainAVP(obstacleList, max_iter=100):
         return path
 
 
-def mainAVPtest(obstacleList,start,goal,rand_areax,rand_areay, max_iter=100):
+def mainAVPtest(obstacleList,start,goal,rand_areax,rand_areay, max_iter=100): # using this
     print("Start " + __file__)
 
     # ====Search Path with RRT====

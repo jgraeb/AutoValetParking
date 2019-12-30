@@ -23,7 +23,7 @@ def drange2(start, stop, step):
             yield start + i*step
 
 # read in obstacles from image
-for im_path in glob.glob("imglib/layout_clean.png"):
+for im_path in glob.glob("imglib/Clean_Layout_solid_no_cars.png"):
      #im = imageio.imread(im_path)
      im = Image.open(im_path)
      pix=im.load()
@@ -40,26 +40,41 @@ for im_path in glob.glob("imglib/layout_clean.png"):
      g = G.load()
      b = B.load()
      # make a list of black pixels
-     k=0
-     #for i in drange2(0, xnum, 2):
-     for i in range(xnum):
-          for j in drange2(0,ynum,5):
-          #for j in range(ynum):
-               if(r[i, j] != 255 or g[i, j] != 255 or b[i, j] != 255):
-                    k+=1
+     # choose every pixel which is at the border to a white pixel
+     # do not choose minimum and maximum x value for each y value and 
+     # min and max y value for each x value to get rid of outside border
+     for i in range(29,xnum-50):
+        for j in range(50,ynum-50):
+            if(r[i, j] != 255 or g[i, j] != 255 or b[i, j] != 255): # if pixel is black
+                if (r[i+1, j] == 255 or g[i+1, j] == 255 or b[i+1, j] == 255): # if neighbor is white
                     obs.append((i, j, 1)) # Make a list of obstacle pixels
                     obstacleList.append((i/100, j/100, 0.1)) # Make a list of obstacle pixels scaled
+                if (r[i-1, j] == 255 or g[i-1, j] == 255 or b[i-1, j] == 255): # if neighbor is white
+                    obs.append((i, j, 1)) # Make a list of obstacle pixels
+                    obstacleList.append((i/100, j/100, 0.1)) # Make a list of obstacle pixels scaled
+                if (r[i, j+1] == 255 or g[i, j+1] == 255 or b[i, j+1] == 255): # if neighbor is white
+                    obs.append((i, j, 1)) # Make a list of obstacle pixels
+                    obstacleList.append((i/100, j/100, 0.1)) # Make a list of obstacle pixels scaled
+                if (r[i, j-1] == 255 or g[i, j-1] == 255 or b[i, j-1] == 255): # if neighbor is white
+                    obs.append((i, j, 1)) # Make a list of obstacle pixels
+                    obstacleList.append((i/100, j/100, 0.1)) # Make a list of obstacle pixels scaled
+# now choose every 5th pixel
+obs2=[]
+obstacleList2=[]
+for k in range(len(obs)):
+    if (k%5==0): # use every 5th pixel
+        obs2.append(obs[k])
+        obstacleList2.append(obstacleList[k])
+        
 # check obs data
 data = np.zeros( (xnum,ynum,3), dtype=np.uint8)
 # for row in data
-#      row = makecolor((255-r, 255-g, 255-b))
-#data= [x*255 for x in data]
-for row in obs:
+for row in obs2:
      for item in row:
           data[row[0],row[1]] = [255,0,0] # makes obstacles red
 
 img = Image.fromarray( data )       # Create a PIL image
-#img.show()                      # View in default viewer
+#img.show()                      # Show the chosen obstacles as black/red image
 
 #print(obs)
 #testobs=obs[0:60]
@@ -69,27 +84,17 @@ img = Image.fromarray( data )       # Create a PIL image
 # voronoi_plot_2d(vor,show_vertices=True, line_colors='orange',line_width=1, line_alpha=0.6, point_size=1)
 # plt.show()
 #print(size(obs))
-
-# Reeds Shepp and RRT*
-# sys.path.append(os.path.dirname(os.path.abspath(__file__))
-#                 + "/PythonRobotics-master/PathPlanning/RRTStarReedsShepp/")
-# sys.path.append(os.path.dirname(os.path.abspath(__file__))
-#                 + "/PythonRobotics-master/PathPlanning/ReedsSheppPath/")
-
 try:
     import rrt_star_reeds_shepp as m
 except:
     raise
-
-# sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
-#                 "/../PathPlanning/RRTStar/")
 
 try:
     import rrt_star as rrtstar
 except ImportError:
     raise
 
-print('Number of obstacles '+str(len(obs)))
+print('Number of obstacles '+str(len(obs2)))
 
 m.show_animation = False
 # get Voronoi map of the obstacles
@@ -98,11 +103,12 @@ m.show_animation = False
 # get waypoints from Voronoi map
 
 # Specify waypoints and connect RRT* through the waypoints by matching location and yaw (and velocity??)
-waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[336/100,223/100,np.deg2rad(0.0)],[456/100,223/100,np.deg2rad(0)],[505/100,300/100,np.deg2rad(90.0)],[505/100,420/100,np.deg2rad(90.0)],[400/100,473/100,np.deg2rad(180.0)],[321/100,520/100,np.deg2rad(125.0)],[321/100,473/100,np.deg2rad(180.0)],[200/100,473/100,np.deg2rad(180.0)],[75/100,575/100,np.deg2rad(90.0)],[200/100,667/100,np.deg2rad(0.0)],[339/100,667/100,np.deg2rad(0.0)],[470/100,667/100, np.deg2rad(0.0)],[600/100,575/100,np.deg2rad(-90.0)],[600/100,420/100,np.deg2rad(-90.0)],[600/100,300/100,np.deg2rad(-90.0)],[690/100,220/100,np.deg2rad(0.0)],[750/100,220/100,np.deg2rad(0.0)],[700/100,122/100,np.deg2rad(180.0)],[600/100, 0.2, np.deg2rad(-90.0)]]
+waypoints=[[1844/100,60/100,np.deg2rad(90.0)],[1572/100,463/100,np.deg2rad(180.0)],[1276/100,463/100,np.deg2rad(180.0)],[1434/100,828/100,np.deg2rad(0)],[1891/100,1062/100,np.deg2rad(90.0)],[1891/100,1515/100,np.deg2rad(90.0)],[1512/100,1777/100,np.deg2rad(180.0)],[1032/100,1990/100,np.deg2rad(125.0)],[983/100,1777/100,np.deg2rad(180.0)],[546/100,1777/100,np.deg2rad(180.0)],[245/100,2133/100,np.deg2rad(90.0)],[520/100,2489/100,np.deg2rad(0.0)],[1147/100,2489/100,np.deg2rad(0.0)],[1746/100,2489/100, np.deg2rad(0.0)],[2203/100,2114/100,np.deg2rad(-90.0)],[2203/100,1515/100,np.deg2rad(-90.0)],[2203/100,1062/100,np.deg2rad(-90.0)],[2515/100,835/100,np.deg2rad(0.0)],[2826/100,835/100,np.deg2rad(0.0)],[2627/100,462/100,np.deg2rad(180.0)],[2200/100, 60/100, np.deg2rad(-90.0)]]
 
 # Compute, plot the path and save the x,y, yaw coordinates
+iternum=50
 # try:
-#     pathA = m.mainAVPtest(obstacleList,waypoints[0],waypoints[1],[3.5, 5.0],[0.0,2.5], max_iter=300)
+#     pathA = m.mainAVPtest(obstacleList,waypoints[0],waypoints[1],[15.0, 19.0],[0.0, 5.0], max_iter=iternum)
 #     plt.plot([x for (x, y,yaw) in pathA], [y for (x, y,yaw) in pathA], '-r')
 #     with open('PathA', 'w') as fh:
 #         for x, y, yaw in pathA: 
@@ -110,7 +116,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 # except:
 #     pass
 # try:
-#     pathB = m.mainAVPtest(obstacleList,waypoints[1],waypoints[2],[2.5,3.5],[1,2.5],max_iter=300)
+#     pathB = m.mainAVPtest(obstacleList,waypoints[1],waypoints[2],[12.0,16.0],[4.0,5.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathB], [y for (x, y, yaw) in pathB], '-r')
 #     with open('PathB', 'w') as fh:
 #         for x, y, yaw in pathB: 
@@ -118,15 +124,15 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 # except:
 #     pass
 # try:
-#     pathC = m.mainAVPtest(obstacleList,waypoints[2],waypoints[3],[3,4.5],[1.5,2.5],max_iter=300)
+#     pathC = m.mainAVPtest(obstacleList,waypoints[2],waypoints[3],[9.5,15.0],[4.0,9.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathC], [y for (x, y, yaw) in pathC], '-r')
 #     with open('PathC', 'w') as fh:
 #         for x, y, yaw in pathC: 
 #             fh.write('{} {} {}\n'.format(x, y, yaw))
 # except:
 #     pass
-# try:
-#     pathD = m.mainAVPtest(obstacleList,waypoints[3],waypoints[4],[4.0,5.5],[2, 4.0],max_iter=300)
+# # try:
+#     pathD = m.mainAVPtest(obstacleList,waypoints[3],waypoints[4],[14.0,19.0],[7.5, 11.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathD], [y for (x, y, yaw) in pathD], '-r')
 #     with open('PathD', 'w') as fh:
 #         for x, y, yaw in pathD: 
@@ -134,7 +140,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 # except:
 #     pass
 # try:
-#     pathE = m.mainAVPtest(obstacleList,waypoints[4],waypoints[5],[4.5,5.5],[2.5,4.5],max_iter=300)
+#     pathE = m.mainAVPtest(obstacleList,waypoints[4],waypoints[5],[18.0,19.5],[10.0,15.5],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathE], [y for (x, y, yaw) in pathE], '-r')
 #     with open('PathE', 'w') as fh:
 #         for x, y, yaw in pathE: 
@@ -142,7 +148,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 # except:
 #     pass
 # try:
-#     pathF = m.mainAVPtest(obstacleList,waypoints[5],waypoints[6],[4.0,5.5],[3.5,5.0],max_iter=300)
+#     pathF = m.mainAVPtest(obstacleList,waypoints[5],waypoints[6],[15.0,19.5],[15.0,18.5],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathF], [y for (x, y, yaw) in pathF], '-r')
 #     with open('PathF', 'w') as fh:
 #         for x, y, yaw in pathF: 
@@ -150,7 +156,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 # except:
 #     pass
 # try:
-#     pathG = m.mainAVPtest(obstacleList,waypoints[6],waypoints[7],[2.5,4.5],[4.0, 5.5],max_iter=300)
+#     pathG = m.mainAVPtest(obstacleList,waypoints[6],waypoints[7],[10.0,15.5],[17.0, 20.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathG], [y for (x, y, yaw) in pathG], '-r')
 #     with open('PathG', 'w') as fh:
 #         for x, y, yaw in pathG: 
@@ -158,7 +164,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 # except:
 #     pass
 # try:
-#     pathH = m.mainAVPtest(obstacleList,waypoints[7],waypoints[8],[2.0,4.0],[4.0, 6.0],max_iter=500)
+#     pathH = m.mainAVPtest(obstacleList,waypoints[7],waypoints[8],[9.5,15.0],[17.0, 20.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathH], [y for (x, y, yaw) in pathH], '-r')
 #     with open('PathH', 'w') as fh:
 #         for x, y, yaw in pathH: 
@@ -167,7 +173,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathI = m.mainAVPtest(obstacleList,waypoints[8],waypoints[9],[1.5,4.0],[4.0, 6.0],max_iter=1000)
+#     pathI = m.mainAVPtest(obstacleList,waypoints[8],waypoints[9],[5.0,10.0],[17.0, 18.2],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathI], [y for (x, y, yaw) in pathI], '-r')
 #     with open('PathI', 'w') as fh:
 #         for x, y, yaw in pathI: 
@@ -176,7 +182,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathJ = m.mainAVPtest(obstacleList,waypoints[9],waypoints[10],[0.5,2.2],[4.0, 6.0],max_iter=300)
+#     pathJ = m.mainAVPtest(obstacleList,waypoints[9],waypoints[10],[2.0,6.0],[17.0, 22.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathJ], [y for (x, y, yaw) in pathJ], '-r')
 #     with open('PathJ', 'w') as fh:
 #         for x, y, yaw in pathJ: 
@@ -185,7 +191,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathK = m.mainAVPtest(obstacleList,waypoints[10],waypoints[11],[0.5,2.2],[5.5, 7.0],max_iter=300)
+#     pathK = m.mainAVPtest(obstacleList,waypoints[10],waypoints[11],[2.0,5.5],[21.0, 25.5],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathK], [y for (x, y, yaw) in pathK], '-r')
 #     with open('PathK', 'w') as fh:
 #         for x, y, yaw in pathK: 
@@ -194,7 +200,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathL = m.mainAVPtest(obstacleList,waypoints[11],waypoints[12],[1.8,4.0],[6.0, 7.0],max_iter=300)
+#     pathL = m.mainAVPtest(obstacleList,waypoints[11],waypoints[12],[5.0,12.0],[24.0, 25.5],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathL], [y for (x, y, yaw) in pathL], '-r')
 #     with open('PathL', 'w') as fh:
 #         for x, y, yaw in pathL: 
@@ -203,7 +209,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathM = m.mainAVPtest(obstacleList,waypoints[12],waypoints[13],[3.0,5.0],[6.0, 7.0],max_iter=300)
+#     pathM = m.mainAVPtest(obstacleList,waypoints[12],waypoints[13],[11.0,18.0],[24.0, 25.5],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathM], [y for (x, y, yaw) in pathM], '-r')
 #     with open('PathM', 'w') as fh:
 #         for x, y, yaw in pathM: 
@@ -212,7 +218,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathN = m.mainAVPtest(obstacleList,waypoints[13],waypoints[14],[4.5,6.2],[5.5, 7.0],max_iter=300)
+#     pathN = m.mainAVPtest(obstacleList,waypoints[13],waypoints[14],[17.0,22.5],[20.5, 25.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathN], [y for (x, y, yaw) in pathN], '-r')
 #     with open('PathN', 'w') as fh:
 #         for x, y, yaw in pathN: 
@@ -221,7 +227,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathO = m.mainAVPtest(obstacleList,waypoints[14],waypoints[15],[5.5,6.5],[4.0, 6.0],max_iter=300)
+#     pathO = m.mainAVPtest(obstacleList,waypoints[14],waypoints[15],[21.5,22.5],[21.0, 15.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathO], [y for (x, y, yaw) in pathO], '-r')
 #     with open('PathO', 'w') as fh:
 #         for x, y, yaw in pathO: 
@@ -230,7 +236,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathP = m.mainAVPtest(obstacleList,waypoints[15],waypoints[16],[5.5,6.5],[3.5, 4.5],max_iter=300)
+#     pathP = m.mainAVPtest(obstacleList,waypoints[15],waypoints[16],[21.5,22.5],[15.5, 10.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathP], [y for (x, y, yaw) in pathP], '-r')
 #     with open('PathP', 'w') as fh:
 #         for x, y, yaw in pathP: 
@@ -239,7 +245,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathQ = m.mainAVPtest(obstacleList,waypoints[16],waypoints[17],[5.5,7.5],[1.8, 3.5],max_iter=300)
+#     pathQ = m.mainAVPtest(obstacleList,waypoints[16],waypoints[17],[21.0,25.5],[10.5, 7.5],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathQ], [y for (x, y, yaw) in pathQ], '-r')
 #     with open('PathQ', 'w') as fh:
 #         for x, y, yaw in pathQ: 
@@ -248,7 +254,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathR = m.mainAVPtest(obstacleList,waypoints[17],waypoints[18],[6.5,8.0],[1.8, 3.5],max_iter=300)
+#     pathR = m.mainAVPtest(obstacleList,waypoints[17],waypoints[18],[25.0,28.5],[8.0, 9.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathR], [y for (x, y, yaw) in pathR], '-r')
 #     with open('PathR', 'w') as fh:
 #         for x, y, yaw in pathR:
@@ -257,7 +263,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathS = m.mainAVPtest(obstacleList,waypoints[18],waypoints[19],[6.5,9.0],[0.5, 2.5],max_iter=300)
+#     pathS = m.mainAVPtest(obstacleList,waypoints[18],waypoints[19],[25.0,35.0],[4.0, 8.5],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathS], [y for (x, y, yaw) in pathS], '-r')
 #     with open('PathS', 'w') as fh:
 #         for x, y, yaw in pathS: 
@@ -266,7 +272,7 @@ waypoints=[[500/100,0.2,np.deg2rad(90.0)],[390/100,122/100,np.deg2rad(180.0)],[3
 #     pass
 
 # try:
-#     pathT = m.mainAVPtest(obstacleList,waypoints[19],waypoints[20],[5.5,7.5],[0.0, 1.5],max_iter=300)
+#     pathT = m.mainAVPtest(obstacleList,waypoints[19],waypoints[20],[21.0,27.5],[5.5, 0.0],max_iter=iternum)
 #     plt.plot([x for (x, y, yaw) in pathT], [y for (x, y, yaw) in pathT], '-r')
 #     with open('PathT', 'w') as fh:
 #         for x, y, yaw in pathT: 
@@ -308,8 +314,9 @@ for (ox, oy, oyaw) in waypoints:
      plt.plot(ox, oy, "xr")
 
 # plot obstacles
-for (ox, oy, size) in obstacleList:    
+for (ox, oy, size) in obstacleList2:    
      plt.plot(ox, oy, "ok", ms=30 * size)
 plt.show()
+
 
 
