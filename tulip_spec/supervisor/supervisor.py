@@ -88,7 +88,7 @@ env_vars |= {'no_spot'} # Parking lot is full - no spots left
 # Initial env vars
 env_init |= {'!no_spot'} # at the beginning there are spots available
 # Progess
-env_prog |= {'requested'} # the car will always eventually be requested
+#env_prog |= {'requested'} # the car will always eventually be requested
 env_prog |= {'requested && !exception_stop'} # the car will always eventually be requested and not stopped
 env_prog |= {'!exception_stop'} # always eventually the car will not be stopped
 env_prog |= {'!no_spot'} # always eventually there will be a spot
@@ -106,8 +106,8 @@ sys_vars |= {'random_spot'}     # pick an available spot randomly
 sys_vars |= {'easy_spot'}       # pick a spot for a car, which is easier to reach (for steering problem)
 # sys_vars |= {'new_spot'}      # to be added for replanning
 # @ set initial values
-sys_init = {'!random_spot'}     # beginning no spot picked
-sys_init = {'!easy_spot'}       # beginning no spot picked
+sys_init |= {'!random_spot'}     # beginning no spot picked
+sys_init |= {'!easy_spot'}       # beginning no spot picked
 # @ set progress
 sys_prog |= {'(picked_up || rejected)'}             # []<> car will leave (picked up or rejected)
 # @  set safety
