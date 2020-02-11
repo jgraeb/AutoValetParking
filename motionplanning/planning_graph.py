@@ -7,19 +7,19 @@ import random
 
 class DirectedGraph():
     def __init__(self):
-        self._nodes = set() # set of nodes
+        self._nodes = [] # list of nodes
         self._edges = {} # set of edges is a dictionary of sets (of nodes)
-        self._sources = set()
-        self._sinks = set()
+        self._sources = []
+        self._sinks = []
 
     def add_node(self, node): # add a node
-            self._nodes.add(node)
+            self._nodes.append(node)
 
     def add_source(self, source): # add a source node
-            self._sources.add(source)
+            self._sources.append(source)
 
     def add_sink(self, sink): # add a source node
-            self._sinks.add(sink)
+            self._sinks.append(sink)
 
     def add_edges(self, edge_set): # add edges
         for edge in edge_set:

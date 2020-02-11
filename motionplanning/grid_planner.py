@@ -3,7 +3,7 @@
 # California Institute of Technology
 # February 10th, 2020
 
-import planning_graph
+from planning_graph import DirectedGraph
 import csv
 import cv2
 import numpy as np
@@ -87,30 +87,26 @@ def get_tube_for_line(point1, point2, r):
     tube = np.vstack((ball1, ball2, rect))
     return np.unique(tube, axis=0)
 
-np_bitmap = csv_bitmap_to_numpy_bitmap('bitmap')
-anchor = [32, 55]
-grid_size = 10
-sampled = uniform_sample_grid_points(np_bitmap, anchor = anchor, grid_size = grid_size)
+def in_range(x, x_min, x_max):
+    return x >= x_min and x <= x_max
 
-point1 = [30, 20]
-point2 = [55, 80]
-point3 = [100, 100]
-r = 10
-tube1 = get_tube_for_line(point1, point2, r)
-tube2 = get_tube_for_line(point2, point3, r)
+def point_set_is_safe(point_set, bitmap):
+    i_max = bitmap.shape[0]
+    j_max = bitmap.shape[1]
+    for point in point_set:
+        if in_range(point[0], 0, i_max-1) and in_range(point[1], 0, j_max-1):
+            if not bitmap[point[0]][point[1]]:
+                return False
+    return True
 
-plt.plot(sampled[:,0], sampled[:,1], '.')
-plt.plot(tube1[:,0], tube1[:,1])
-plt.plot(tube2[:,0], tube2[:,1])
-plt.axis('equal')
-plt.show()
-def to_planning_graph():
-    pass
-
-def make_grid(m, n):
-    for i in range(m):
-        for j in range(n):
-            print(i,j)
+def to_planning_graph(bitmap, sampled_points, uncertainty):
+    bitmap = bitmap.transpose()
+    graph = DirectedGraph()
+    for point in sampled_points:
+        neighbors = get_ball_neighbors(point, uncertainty)
+        if point_set_is_safe(neighbors, bitmap):
+            graph.add_node(point)
+    return np.array(graph._nodes)
 
 def A_star(start, end, weighted_graph):
     def get_manhattan_distance(start, end):
@@ -118,3 +114,29 @@ def A_star(start, end, weighted_graph):
 
     checked = []
     unchecked = []
+
+if __name__ == '__main__':
+    np_bitmap = csv_bitmap_to_numpy_bitmap('bitmap')
+    anchor = [0, 0]
+    grid_size = 5
+    uncertainty = 2
+    sampled = uniform_sample_grid_points(np_bitmap, anchor = anchor, grid_size = grid_size)
+
+    planning_graph = to_planning_graph(bitmap=np_bitmap, sampled_points=sampled, uncertainty=uncertainty)
+
+#    for i in range(100):
+#        point1 = [30, 20]
+#        point2 = [55, 80]
+#        point3 = [100, 100]
+#        r = 10
+#        tube1 = get_tube_for_line(point1, point2, r)
+#        tube2 = get_tube_for_line(point2, point3, r)
+#
+    plt.gca().invert_yaxis()
+    plt.plot(planning_graph[:,0], planning_graph[:,1], '.')
+#    plt.plot(sampled[:,0], sampled[:,1], '.')
+#    plt.plot(tube1[:,0], tube1[:,1], 'r.')
+#    plt.plot(tube2[:,0], tube2[:,1], 'r.')
+    plt.axis('equal')
+    plt.show()
+
