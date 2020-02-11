@@ -3,6 +3,7 @@
 # California Institute of Technology
 # February 10th, 2020
 
+from collections import namedtuple
 from planning_graph import DirectedGraph
 import csv
 import cv2
@@ -99,6 +100,15 @@ def point_set_is_safe(point_set, bitmap):
                 return False
     return True
 
+def get_grid_neighbors(point, grid):
+    GridNeighbor = namedtuple('GridNeighbor', ['xy', 'weight'])
+    for dx in [-1, 1]:
+        for dy in [-1, 1]:
+            weight = np.abs(dx) + np.abs(dy)
+            neighbor_xy = point + np.array([dx, dy])
+            print(not np.any(np.array(grid) - neighbor_xy).astype('bool'))
+    return []
+
 def to_planning_graph(bitmap, sampled_points, uncertainty):
     bitmap = bitmap.transpose()
     graph = DirectedGraph()
@@ -106,6 +116,9 @@ def to_planning_graph(bitmap, sampled_points, uncertainty):
         neighbors = get_ball_neighbors(point, uncertainty)
         if point_set_is_safe(neighbors, bitmap):
             graph.add_node(point)
+    for node in graph._nodes:
+        for neighbor in get_grid_neighbors(node, graph._nodes):
+            pass
     return np.array(graph._nodes)
 
 def A_star(start, end, weighted_graph):
