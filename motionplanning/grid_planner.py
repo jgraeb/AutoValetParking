@@ -29,11 +29,11 @@ def img_to_csv_bitmap(img, save_name=None, verbose=False):
         if verbose:
             print('bitmap progress: {0:.1f}%'.format((i*n+j)/(m*n)*100))
     if save_name:
-        np.savetxt('{}.csv'.format(save_name), np_bitmap, fmt='%i', delimiter=",")
+        np.savetxt(save_name + '.csv', np_bitmap, fmt='%i', delimiter=",")
     return np_bitmap
 
 def csv_bitmap_to_numpy_bitmap(file_name):
-    with open('{}.csv'.format(file_name), 'rt') as f:
+    with open(file_name+'.csv', 'rt') as f:
         np_bitmap = np.array(list(csv.reader(f, delimiter=','))).astype('bool')
     return np_bitmap
 
@@ -142,7 +142,7 @@ def bitmap_to_planning_graph(np_bitmap, anchor, grid_size, uncertainty, planning
     grid = create_uniform_grid(np_bitmap, anchor = anchor, grid_size = grid_size)
     planning_graph = grid_to_planning_graph(bitmap=np_bitmap, grid=grid, uncertainty=uncertainty, verbose=verbose)
     if planning_graph_save_name:
-        with open('{}.pkl'.format(planning_graph_save_name), 'wb') as f:
+        with open(planning_graph_save_name + '.pkl', 'wb') as f:
             pickle.dump(planning_graph, f)
 
 def image_to_planning_graph(img_name, anchor, grid_size, uncertainty, planning_graph_save_name, verbose=True):
