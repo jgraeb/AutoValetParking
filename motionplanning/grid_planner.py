@@ -1,4 +1,4 @@
-# A-star algorithm and image processing
+# Image processing and A-star path finding
 # Tung M. Phan
 # California Institute of Technology
 # February 10th, 2020
@@ -15,7 +15,6 @@ from ipdb import set_trace as st
 import _pickle as pickle
 import heapq
 
-
 def img_to_csv_bitmap(img, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
     # drivable area masked as white
@@ -29,11 +28,11 @@ def img_to_csv_bitmap(img, save_name=None, verbose=False):
         if verbose:
             print('bitmap progress: {0:.1f}%'.format((i*n+j)/(m*n)*100))
     if save_name:
-        np.savetxt(save_name + '.csv', np_bitmap, fmt='%i', delimiter=",")
+        np.savetxt('{}.csv'.format(save_name), np_bitmap, fmt='%i', delimiter=",")
     return np_bitmap
 
 def csv_bitmap_to_numpy_bitmap(file_name):
-    with open(file_name+'.csv', 'rt') as f:
+    with open('{}.csv'.format(file_name), 'rt') as f:
         np_bitmap = np.array(list(csv.reader(f, delimiter=','))).astype('bool')
     return np_bitmap
 
@@ -68,11 +67,13 @@ def get_ball_neighbors(center, r):
             neighbors.append([center[0]+dx, center[1]+dy])
     return np.unique(np.array(neighbors), axis=0)
 
-def get_rotation_matrix(theta):
+def get_rotation_matrix(theta, deg):
+    if deg:
+        theta = theta / 180 * np.pi
     return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
-def rotate_vector(vec, theta):
-    rot_mat = get_rotation_matrix(theta)
+def rotate_vector(vec, theta, deg=False):
+    rot_mat = get_rotation_matrix(theta, deg=deg)
     return np.array([int(round(x)) for x in np.matmul(rot_mat, vec)])
 
 def get_rect_for_line(point1, point2, r):
@@ -83,7 +84,7 @@ def get_rect_for_line(point1, point2, r):
     for dy in range(-r, r+1):
         for dx in range(0, d+1):
             pre_displacements.append([dx, dy])
-    pre_displacements = np.matmul(np.array(pre_displacements), get_rotation_matrix(angle).transpose()).astype(int)
+    pre_displacements = np.matmul(np.array(pre_displacements), get_rotation_matrix(angle, deg=False).transpose()).astype(int)
     offset = np.tile(np.array(point1), (pre_displacements.shape[0], 1))
     displacements = pre_displacements + offset
     return np.unique(displacements, axis=0)
@@ -107,8 +108,8 @@ def point_set_is_safe(point_set, bitmap):
                 return False
     return True
 
-def get_grid_neighbors(point, sampled_points, grid_size):
-    GridNeighbor = namedtuple('GridNeighbor', ['xy', 'weight'])
+def get_pacman_neighbors(point, sampled_points, grid_size):
+    PacmanNeighbor = namedtuple('PacmanNeighbor', ['xy', 'weight'])
     neighbors = []
     for dx in [-grid_size, 0, grid_size]:
         for dy in [-grid_size, 0, grid_size]:
@@ -116,10 +117,33 @@ def get_grid_neighbors(point, sampled_points, grid_size):
             neighbor_xy = tuple(np.array(point) + np.array([dx, dy]))
             if neighbor_xy in sampled_points: # check if neighbor_xy is in sampled_points:
                 if neighbor_xy != point:
-                    neighbors.append(GridNeighbor(xy=neighbor_xy, weight=weight))
+                    neighbors.append(PacmanNeighbor(xy=neighbor_xy, weight=weight))
     return neighbors
 
-def grid_to_planning_graph(bitmap, grid, uncertainty, verbose=False):
+def constrain_heading_to_pm_180(heading):
+    heading = heading % 360
+    if heading > 180:
+        heading = -(360-heading)
+    return heading
+
+def get_car_neighbors(xy_heading, sampled_points, grid_size):
+    CarNeighbor = namedtuple('CarNeighbor', ['xy', 'heading', 'weight'])
+    neighbors = []
+    xy = xy_heading[0:2]
+    heading = xy_heading[2]
+    STEP = grid_size
+    dstate = [[STEP, 0, 0], [-STEP, 0, 0], [STEP, STEP, 45], [STEP, -STEP, -45], [-STEP, STEP, -45], [-STEP, -STEP, 45]]
+    for d in dstate:
+        dxy = np.array(d[0:2])
+        new_xy = np.array(xy) + rotate_vector(dxy,heading,deg=True)
+        new_heading = constrain_heading_to_pm_180(heading + d[2])
+        if (new_xy[0], new_xy[1], new_heading) in sampled_points: # TODO: quite inefficient, fix this
+            weight = int(d[0] != 0)
+            new_neighbor = CarNeighbor(xy=new_xy, heading=new_heading, weight=int(weight))
+            neighbors.append(new_neighbor)
+    return neighbors
+
+def grid_to_pacman_graph(bitmap, grid, uncertainty, verbose=False):
     bitmap = bitmap.transpose()
     graph = WeightedDirectedGraph()
     sampled_points = grid.sampled_points
@@ -130,7 +154,7 @@ def grid_to_planning_graph(bitmap, grid, uncertainty, verbose=False):
     for idx, node in enumerate(graph._nodes):
         if verbose:
             print('planning graph progress: {0:.1f}%'.format(idx/len(graph._nodes)*100))
-        for neighbor in get_grid_neighbors(node, graph._nodes, grid.grid_size):
+        for neighbor in get_pacman_neighbors(node, graph._nodes, grid.grid_size):
             neighbor_xy = neighbor.xy
             weight = neighbor.weight
             tube = get_tube_for_line(node, neighbor_xy, r=uncertainty)
@@ -138,16 +162,50 @@ def grid_to_planning_graph(bitmap, grid, uncertainty, verbose=False):
                 graph.add_double_edges([[node, neighbor_xy, weight]])
     return graph
 
-def bitmap_to_planning_graph(np_bitmap, anchor, grid_size, uncertainty, planning_graph_save_name=None, verbose=True):
-    grid = create_uniform_grid(np_bitmap, anchor = anchor, grid_size = grid_size)
-    planning_graph = grid_to_planning_graph(bitmap=np_bitmap, grid=grid, uncertainty=uncertainty, verbose=verbose)
-    if planning_graph_save_name:
-        with open(planning_graph_save_name + '.pkl', 'wb') as f:
-            pickle.dump(planning_graph, f)
+def grid_to_car_graph(bitmap, grid, uncertainty, verbose=False):
+    bitmap = bitmap.transpose()
+    graph = WeightedDirectedGraph()
+    sampled_points = grid.sampled_points
+    for point in sampled_points:
+        neighbors = get_ball_neighbors(point, uncertainty)
+        if point_set_is_safe(neighbors, bitmap):
+            for heading in [0, 45, 90, 135, 180, -45, -90, -135]:
+                graph.add_node((point[0], point[1], heading))
+    for idx, node in enumerate(graph._nodes):
+        if verbose:
+            print('planning graph progress: {0:.1f}%'.format(idx/len(graph._nodes)*100))
+        for neighbor in get_car_neighbors(node, graph._nodes, grid.grid_size):
+            neighbor_xy = neighbor.xy
+            node_xy = [node[0], node[1]]
+            weight = neighbor.weight
+            tube = get_tube_for_line(node_xy, neighbor_xy, r=uncertainty)
+            if point_set_is_safe(tube, bitmap):
+                graph.add_double_edges([[node, (neighbor_xy[0], neighbor_xy[1], neighbor.heading), weight]])
+    return graph
 
-def image_to_planning_graph(img_name, anchor, grid_size, uncertainty, planning_graph_save_name, verbose=True):
+def bitmap_to_pacman_graph(np_bitmap, anchor, grid_size, uncertainty, planning_graph_save_name=None, verbose=True):
+    grid = create_uniform_grid(np_bitmap, anchor = anchor, grid_size = grid_size)
+    planning_graph = grid_to_pacman_graph(bitmap=np_bitmap, grid=grid, uncertainty=uncertainty, verbose=verbose)
+    if planning_graph_save_name:
+        with open('{}.pkl'.format(planning_graph_save_name), 'wb') as f:
+            pickle.dump(planning_graph, f)
+    return planning_graph
+
+def bitmap_to_car_graph(np_bitmap, anchor, grid_size, uncertainty, planning_graph_save_name=None, verbose=True):
+    grid = create_uniform_grid(np_bitmap, anchor = anchor, grid_size = grid_size)
+    planning_graph = grid_to_car_graph(bitmap=np_bitmap, grid=grid, uncertainty=uncertainty, verbose=verbose)
+    if planning_graph_save_name:
+        with open('{}.pkl'.format(planning_graph_save_name), 'wb') as f:
+            pickle.dump(planning_graph, f)
+    return planning_graph
+
+def image_to_pacman_graph(img_name, anchor, grid_size, uncertainty, planning_graph_save_name, verbose=True):
     np_bitmap = img_to_csv_bitmap(cv2.imread('imglib/{}.png'.format(img_name)), save_name=None, verbose=True)
-    return bitmap_to_planning_graph(np_bitmap, anchor, grid_size, uncertainty, verbose, planning_graph_save_name)
+    return bitmap_to_pacman_graph(np_bitmap=np_bitmap, anchor=anchor, grid_size=grid_size, uncertainty=uncertainty, planning_graph_save_name=planning_graph_save_name, verbose=verbose)
+
+def image_to_car_graph(img_name, anchor, grid_size, uncertainty, planning_graph_save_name, verbose=True):
+    np_bitmap = img_to_csv_bitmap(cv2.imread('imglib/{}.png'.format(img_name)), save_name=None, verbose=True)
+    return bitmap_to_car_graph(np_bitmap=np_bitmap, anchor=anchor, grid_size=grid_size, uncertainty=uncertainty, planning_graph_save_name=planning_graph_save_name, verbose=verbose)
 
 def open_pickle(file_name):
     with open('{}.pkl'.format(file_name), 'rb') as f:
@@ -175,38 +233,44 @@ def convert_to_nx_graph(digraph):
             G.add_weighted_edges_from([(edge[0], edge[1], weight)])
     return G
 
-def A_star(start, end, weighted_graph):
-    node_score = namedtuple('node_score', ['x', 'y', 'score', 'parent'])
-    def to_score_node(node, score, parent):
-        return score_node(x=node[0], y=node[1], score=score, parent=parent)
+def get_manhattan_distance(p1, p2):
+    return np.sum(np.abs(np.array(p1)-np.array(p2)))
 
-    def get_manhattan_distance(p1, p2):
-        return np.abs(p1.x - p2.x) + np.abs(p1.y - p2.y)
+def find_closest_point(p1, graph):
+    diff = np.array(graph._nodes)-p1
+    return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2+diff[:,1]**2))]
 
-    def propagate_from(p1):
-        for end in weighted_graph._edges[(p1.x, p1.y)]:
-            pass
-
-    assert start in weighted_graph._nodes and end in weighted_graph._nodes
-
-    checked = [start]
-    unchecked = weighted_graph._nodes
-    x1 = to_score_node(start, score=None, parent=None)
-    x2 = to_score_node(end, score=None, parent=None)
-    print(get_manhattan_distance(x1, x2))
-    print(propagate_from(x1))
-
-    return shortest_path
+def astar_trajectory(planning_graph, start, end):
+    closest_start = find_closest_point(start, planning_graph)
+    closest_end = find_closest_point(end, planning_graph)
+    nx_graph = convert_to_nx_graph(planning_graph)
+    path = np.array(nx.astar_path(nx_graph, closest_start, closest_end, get_manhattan_distance))
+    return path
 
 if __name__ == '__main__':
-#    image_to_planning_graph(img_name='AVP_planning_300p', planning_graph_save_name='planning_graph', anchor=[0,0], grid_size=10, uncertainty=5)
-    planning_graph = open_pickle('planning_graph')
-    start = planning_graph._nodes[23]
-    end = planning_graph._nodes[223]
-    print(A_star(start, end, planning_graph))
-
-
-#    plt.gca().invert_yaxis()
-#    plt.axis('equal')
-#    plt.show()
+    remap = False
+    if remap:
+        planning_graph = image_to_car_graph(img_name='AVP_planning_300p', planning_graph_save_name='planning_graph', anchor=[0,0], grid_size=10, uncertainty=10)
+        img = plt.imread('imglib/AVP_planning_300p.png')
+        plt.imshow(img)
+        for node in planning_graph._nodes:
+            plt.plot(node[0], node[1], '.')
+        plt.axis('equal')
+        plt.show()
+    else:
+        planning_graph = open_pickle('planning_graph')
+        ps = []
+        ps.append((150, 54))
+        ps.append((50, 150))
+        ps.append((90, 216))
+        for p in range(len(ps)-1):
+            start = ps[p]
+            end = ps[p+1]
+            traj = astar_trajectory(planning_graph, start, end)
+            plt.plot(traj[:,0], traj[:,1])
+        img = plt.imread('imglib/AVP_planning_300p.png')
+        plt.imshow(img)
+        plt.plot(traj[:,0], traj[:,1])
+        plt.axis('equal')
+        plt.show()
 
