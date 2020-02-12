@@ -8,7 +8,7 @@ import random
 class DirectedGraph():
     def __init__(self):
         self._nodes = [] # list of nodes
-        self._edges = {} # set of edges is a dictionary of sets (of nodes)
+        self._edges = dict() # set of edges is a dictionary of sets (of nodes)
         self._sources = []
         self._sinks = []
 
@@ -35,7 +35,7 @@ class DirectedGraph():
     def add_double_edges(self, edge_set): # add two edges (of the same weight) for two nodes
         for edge in edge_set:
             self.add_edges([edge])
-            self.add_edges([(edge[1], edge[0])])
+            self.add_edges([[edge[1], edge[0]] + edge[2:]])
 
     def print_graph(self):
         print('The directed graph has ' + str(len(self._nodes)) + ' nodes: ')
@@ -47,10 +47,10 @@ class DirectedGraph():
 class WeightedDirectedGraph(DirectedGraph):
     def __init__(self):
         DirectedGraph.__init__(self)
-        self._weights = {} # a dictionary of weights
+        self._weights = dict() # a dictionary of weights
         self._edge_labels = dict()
 
-    def add_edges(self, edge_set, use_euclidean_weight = True, label_edges = False, edge_label_set = None): # override parent's method to allow for edge weights
+    def add_edges(self, edge_set, label_edges = False, edge_label_set = None, use_euclidean_weight=False): # override parent's method to allow for edge weights
         '''
         Use this function to add edges to the directed graph. When 'use_euclidean_weight' is False, each edge must be a 3-tuple of the form (start, end, weight), otherwise the weight will be automatically computed as the euclidean distances between the nodes (which are assumed to be points in a 2D plane)
 
@@ -70,7 +70,7 @@ class WeightedDirectedGraph(DirectedGraph):
                 self._weights[(edge[0], edge[1])] = np.linalg.norm(x-y)  # add Euclidean distance as weight
             else:
                 if len(edge) != 3:
-                    raise SyntaxError('Each edge must be a 3-tuple of the form (start, end, weight)!') 
+                    raise SyntaxError('Each edge must be a 3-tuple of the form (start, end, weight)!')
                 for node in edge[0:2]:
                     if node not in self._nodes:
                         self.add_node(node)

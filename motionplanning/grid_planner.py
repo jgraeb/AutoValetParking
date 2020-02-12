@@ -3,15 +3,20 @@
 # California Institute of Technology
 # February 10th, 2020
 
+import networkx as nx
+from typing import List, Any, Tuple
 from collections import namedtuple
-from planning_graph import DirectedGraph
+from planning_graph import WeightedDirectedGraph
 import csv
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from ipdb import set_trace as st
+import _pickle as pickle
+import heapq
 
-def img_to_csv_bitmap(img, save_name, verbose=False):
+
+def img_to_csv_bitmap(img, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
     # drivable area masked as white
     # saves as 'save_name'.csv and then returns a bitmap of drivable area (1) for drivable, (0) otherwise
@@ -22,8 +27,9 @@ def img_to_csv_bitmap(img, save_name, verbose=False):
         for j in range(n):
             np_bitmap[i][j] = all(img[i][j] == [255, 255, 255]) # if white
         if verbose:
-            print('progress: {0:.1f}'.format((i*n+j)/(m*n)*100))
-    np.savetxt('{}.csv'.format(save_name), np_bitmap, fmt='%i', delimiter=",")
+            print('bitmap progress: {0:.1f}%'.format((i*n+j)/(m*n)*100))
+    if save_name:
+        np.savetxt('{}.csv'.format(save_name), np_bitmap, fmt='%i', delimiter=",")
     return np_bitmap
 
 def csv_bitmap_to_numpy_bitmap(file_name):
@@ -31,25 +37,26 @@ def csv_bitmap_to_numpy_bitmap(file_name):
         np_bitmap = np.array(list(csv.reader(f, delimiter=','))).astype('bool')
     return np_bitmap
 
-def uniform_sample_grid_points(np_bitmap, anchor, grid_size):
+def create_uniform_grid(np_bitmap, anchor, grid_size):
+    Grid = namedtuple('Grid', ['sampled_points', 'grid_size'])
     h = np_bitmap.shape[0]
     w = np_bitmap.shape[1]
     assert anchor[0] >= 0 and anchor[0] <= w # check range x
     assert anchor[1] >= 0 and anchor[1] <= h # check range y
     x_start = anchor[0] % grid_size
     y_start = anchor[1] % grid_size
-    sample_points = []
+    sampled_points = []
     x_curr = x_start
     y_curr = y_start
     while x_curr < w:
         y_curr = y_start
         while y_curr < h:
-            sample_points.append([x_curr, y_curr])
+            sampled_points.append([x_curr, y_curr])
             y_curr += grid_size
         x_curr += grid_size
-    return np.array(sample_points)
+    grid = Grid(sampled_points=np.array(sampled_points), grid_size = grid_size)
+    return grid
 
-#img_to_csv_bitmap(cv2.imread('imglib/AVP_planning_300p.png'), 'bitmap', verbose=True)
 
 def get_ball_neighbors(center, r):
     r = int(np.ceil(r)) # robustify r
@@ -100,56 +107,106 @@ def point_set_is_safe(point_set, bitmap):
                 return False
     return True
 
-def get_grid_neighbors(point, grid):
+def get_grid_neighbors(point, sampled_points, grid_size):
     GridNeighbor = namedtuple('GridNeighbor', ['xy', 'weight'])
-    for dx in [-1, 1]:
-        for dy in [-1, 1]:
-            weight = np.abs(dx) + np.abs(dy)
-            neighbor_xy = point + np.array([dx, dy])
-            print(not np.any(np.array(grid) - neighbor_xy).astype('bool'))
-    return []
+    neighbors = []
+    for dx in [-grid_size, 0, grid_size]:
+        for dy in [-grid_size, 0, grid_size]:
+            weight = (np.abs(dx) + np.abs(dy))/grid_size
+            neighbor_xy = tuple(np.array(point) + np.array([dx, dy]))
+            if neighbor_xy in sampled_points: # check if neighbor_xy is in sampled_points:
+                if neighbor_xy != point:
+                    neighbors.append(GridNeighbor(xy=neighbor_xy, weight=weight))
+    return neighbors
 
-def to_planning_graph(bitmap, sampled_points, uncertainty):
+def grid_to_planning_graph(bitmap, grid, uncertainty, verbose=False):
     bitmap = bitmap.transpose()
-    graph = DirectedGraph()
+    graph = WeightedDirectedGraph()
+    sampled_points = grid.sampled_points
     for point in sampled_points:
         neighbors = get_ball_neighbors(point, uncertainty)
         if point_set_is_safe(neighbors, bitmap):
-            graph.add_node(point)
-    for node in graph._nodes:
-        for neighbor in get_grid_neighbors(node, graph._nodes):
-            pass
-    return np.array(graph._nodes)
+            graph.add_node(tuple(point))
+    for idx, node in enumerate(graph._nodes):
+        if verbose:
+            print('planning graph progress: {0:.1f}%'.format(idx/len(graph._nodes)*100))
+        for neighbor in get_grid_neighbors(node, graph._nodes, grid.grid_size):
+            neighbor_xy = neighbor.xy
+            weight = neighbor.weight
+            tube = get_tube_for_line(node, neighbor_xy, r=uncertainty)
+            if point_set_is_safe(tube, bitmap):
+                graph.add_double_edges([[node, neighbor_xy, weight]])
+    return graph
+
+def bitmap_to_planning_graph(np_bitmap, anchor, grid_size, uncertainty, planning_graph_save_name=None, verbose=True):
+    grid = create_uniform_grid(np_bitmap, anchor = anchor, grid_size = grid_size)
+    planning_graph = grid_to_planning_graph(bitmap=np_bitmap, grid=grid, uncertainty=uncertainty, verbose=verbose)
+    if planning_graph_save_name:
+        with open('{}.pkl'.format(planning_graph_save_name), 'wb') as f:
+            pickle.dump(planning_graph, f)
+
+def image_to_planning_graph(img_name, anchor, grid_size, uncertainty, planning_graph_save_name, verbose=True):
+    np_bitmap = img_to_csv_bitmap(cv2.imread('imglib/{}.png'.format(img_name)), save_name=None, verbose=True)
+    return bitmap_to_planning_graph(np_bitmap, anchor, grid_size, uncertainty, verbose, planning_graph_save_name)
+
+def open_pickle(file_name):
+    with open('{}.pkl'.format(file_name), 'rb') as f:
+        content = pickle.load(f)
+    return content
+
+def plot_planning_graph(planning_graph, plt, verbose=True):
+    # very inefficient plotting
+    edges = [] # type: List[Any]
+    for idx, edge in enumerate(planning_graph._edges):
+        print('collecting graph edges progress: {0:.1f}%'.format(idx/len(planning_graph._edges)*100))
+        for to_edge in planning_graph._edges[edge]:
+            if [edge, to_edge] not in edges and [edge, to_edge] not in edges:
+                edges.append([edge, to_edge])
+    for idx, edge in enumerate(edges):
+        print('plotting graph edges progress: {0:.1f}%'.format(idx/len(edges)*100))
+        plt.plot([edge[0][0], edge[1][0]], [edge[0][1], edge[1][1]])
+
+def convert_to_nx_graph(digraph):
+    G = nx.DiGraph()
+    for start in digraph._edges:
+        for end in digraph._edges[start]:
+            edge = (start, end)
+            weight = digraph._weights[edge]
+            G.add_weighted_edges_from([(edge[0], edge[1], weight)])
+    return G
 
 def A_star(start, end, weighted_graph):
-    def get_manhattan_distance(start, end):
-        return np.abs(start.x - end.x) + np.abs(start.y - end.y)
+    node_score = namedtuple('node_score', ['x', 'y', 'score', 'parent'])
+    def to_score_node(node, score, parent):
+        return score_node(x=node[0], y=node[1], score=score, parent=parent)
 
-    checked = []
-    unchecked = []
+    def get_manhattan_distance(p1, p2):
+        return np.abs(p1.x - p2.x) + np.abs(p1.y - p2.y)
+
+    def propagate_from(p1):
+        for end in weighted_graph._edges[(p1.x, p1.y)]:
+            pass
+
+    assert start in weighted_graph._nodes and end in weighted_graph._nodes
+
+    checked = [start]
+    unchecked = weighted_graph._nodes
+    x1 = to_score_node(start, score=None, parent=None)
+    x2 = to_score_node(end, score=None, parent=None)
+    print(get_manhattan_distance(x1, x2))
+    print(propagate_from(x1))
+
+    return shortest_path
 
 if __name__ == '__main__':
-    np_bitmap = csv_bitmap_to_numpy_bitmap('bitmap')
-    anchor = [0, 0]
-    grid_size = 5
-    uncertainty = 2
-    sampled = uniform_sample_grid_points(np_bitmap, anchor = anchor, grid_size = grid_size)
+#    image_to_planning_graph(img_name='AVP_planning_300p', planning_graph_save_name='planning_graph', anchor=[0,0], grid_size=10, uncertainty=5)
+    planning_graph = open_pickle('planning_graph')
+    start = planning_graph._nodes[23]
+    end = planning_graph._nodes[223]
+    print(A_star(start, end, planning_graph))
 
-    planning_graph = to_planning_graph(bitmap=np_bitmap, sampled_points=sampled, uncertainty=uncertainty)
 
-#    for i in range(100):
-#        point1 = [30, 20]
-#        point2 = [55, 80]
-#        point3 = [100, 100]
-#        r = 10
-#        tube1 = get_tube_for_line(point1, point2, r)
-#        tube2 = get_tube_for_line(point2, point3, r)
-#
-    plt.gca().invert_yaxis()
-    plt.plot(planning_graph[:,0], planning_graph[:,1], '.')
-#    plt.plot(sampled[:,0], sampled[:,1], '.')
-#    plt.plot(tube1[:,0], tube1[:,1], 'r.')
-#    plt.plot(tube2[:,0], tube2[:,1], 'r.')
-    plt.axis('equal')
-    plt.show()
+#    plt.gca().invert_yaxis()
+#    plt.axis('equal')
+#    plt.show()
 
