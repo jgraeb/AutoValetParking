@@ -75,7 +75,13 @@ def get_rotation_matrix(theta, deg):
 def rotate_vector(vec, theta, deg=False):
     rot_mat = get_rotation_matrix(theta, deg=deg)
     outvec =  np.array([int(round(x)) for x in np.matmul(rot_mat, vec)])
-    st()
+    return outvec
+
+def rotate_grid_displacement_vector(vec, theta, deg=False):
+    scale = np.max(np.abs(vec))
+    vec = vec/scale
+    outvec = rotate_vector(vec, theta, deg) * scale
+    return outvec
 
 def get_rect_for_line(point1, point2, r):
     angle = np.arctan2(point2[1] - point1[1], point2[0] - point1[0])
@@ -136,16 +142,16 @@ def get_car_neighbors(xy_heading, sampled_points, grid_size, reflect_over_y = Tr
     xy = xy_heading[0:2]
     heading = xy_heading[2]
     STEP = grid_size
-    dstate = [[STEP, 0, 0], [-STEP, 0, 0], [STEP, STEP, -45], [STEP, -STEP, 45], [-STEP, STEP, 45], [-STEP, -STEP, -45]]
-#    dstate = [[STEP, 0, 0], [-STEP, 0, 0], [STEP, STEP, 45], [STEP, -STEP, -45], [-STEP, STEP, -45], [-STEP, -STEP, 45]]
-    for d in dstate:
-        dxy = np.array(d[0:2])
-        vec = rotate_vector(dxy, heading, deg=True)
-        new_xy = np.array(xy) + rotate_vector(dxy, heading, deg=True)
-        new_heading = constrain_heading_to_pm_180(heading + d[2])
+    # x, y, heading, weight
+    dstate = [[STEP, 0, 0, 1], [-STEP, 0, 0, 3], [STEP, STEP, 45, 5], [STEP, -STEP, -45, 5], [-STEP, STEP, -45, 4], [-STEP, -STEP, 45, 4]]
+#    dstate = [[STEP, 0, 0, 1], [-STEP, 0, 0, 3], [STEP, STEP, 45, 2], [STEP, -STEP, -45, 2], [-STEP, STEP, -45, 4], [-STEP, -STEP, 45, 4]]
+    for ds in dstate:
+        dxy = np.array(ds[0:2])
+        new_xy = np.array(xy) + reflect_over_x_axis(rotate_grid_displacement_vector(dxy, heading, deg=True))
+        new_heading = constrain_heading_to_pm_180(heading + ds[2])
         if (new_xy[0], new_xy[1], new_heading) in sampled_points: # TODO: quite inefficient, fix this
-            weight = int(d[0] != 0) + 1
-            new_neighbor = CarNeighbor(xy=new_xy, heading=new_heading, weight=int(weight))
+            weight = ds[3]
+            new_neighbor = CarNeighbor(xy=new_xy, heading=new_heading, weight=weight)
             neighbors.append(new_neighbor)
     return neighbors
 
@@ -186,7 +192,7 @@ def grid_to_car_graph(bitmap, grid, uncertainty, verbose=False):
             weight = neighbor.weight
             tube = get_tube_for_line(node_xy, neighbor_xy, r=uncertainty)
             if point_set_is_safe(tube, bitmap):
-                graph.add_double_edges([[node, (neighbor_xy[0], neighbor_xy[1], neighbor.heading), weight]])
+                graph.add_edges([[node, (neighbor_xy[0], neighbor_xy[1], neighbor.heading), weight]])
     return graph
 
 def bitmap_to_pacman_graph(np_bitmap, anchor, grid_size, uncertainty, planning_graph_save_name=None, verbose=True):
@@ -239,54 +245,62 @@ def convert_to_nx_graph(digraph):
             G.add_weighted_edges_from([(edge[0], edge[1], weight)])
     return G
 
-def get_manhattan_distance(p1, p2):
-    return np.sum(np.abs(np.array(p1)-np.array(p2)))
+def manhattan_distance(p1, p2):
+    p1_xy = np.array([p1[0], p1[1]])
+    p2_xy = np.array([p2[0], p2[1]])
+    return np.sum(np.abs(p1_xy-p2_xy))
 
 def find_closest_point(p1, graph):
     diff = np.array(graph._nodes)-p1
     if (diff.shape[1] == 3):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
-            diff[:,1]**2 + diff[0:,2]**2))]
+            diff[:,1]**2 + 0.1 * diff[0:,2]**2))]
     if (diff.shape[1] == 2):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
             diff[:,1]**2))]
 
-def astar_trajectory(planning_graph, start, end):
+def astar_trajectory(planning_graph, start, end, heuristic=None):
     closest_start = find_closest_point(start, planning_graph)
     closest_end = find_closest_point(end, planning_graph)
     nx_graph = convert_to_nx_graph(planning_graph)
-    path = np.array(nx.astar_path(nx_graph, closest_start, closest_end, get_manhattan_distance))
+    if heuristic:
+        path = np.array(nx.astar_path(nx_graph, closest_start, closest_end, heuristic))
+    else:
+        path = np.array(nx.astar_path(nx_graph, closest_start, closest_end))
     return path
 
 if __name__ == '__main__':
     remap = False
     if remap:
-        planning_graph = image_to_pacman_graph(img_name='AVP_planning_300p',
+        planning_graph = image_to_car_graph(img_name='AVP_planning_300p',
                 planning_graph_save_name='planning_graph',
-                anchor=[0,0], grid_size=10, uncertainty=10)
+                anchor=[0,0], grid_size=10, uncertainty=7)
         img = plt.imread('imglib/AVP_planning_300p.png')
         plt.imshow(img)
-        for node in planning_graph._nodes:
-            plt.plot(node[0], node[1], '.')
-        plt.axis('equal')
-        plt.show()
+        if len(planning_graph._nodes) <= 1000: # if not too many
+            for node in planning_graph._nodes:
+                plt.plot(node[0], node[1], '.')
+            plt.axis('equal')
+            plt.show()
     else:
         planning_graph = open_pickle('planning_graph')
         ps = []
-#        ps.append((120, 55, 0))
-#        ps.append((100, 150, 180))
-        ps.append((120, 55))
-        ps.append((100, 150))
-        ps.append((70, 215))
-        ps.append((207, 115))
+        ps.append((120, 60, 0))
+        ps.append((170, 92, -90))
+        ps.append((80, 150, 180))
+        ps.append((144, 245, 0))
+#        ps.append((120, 55))
+#        ps.append((100, 150))
+#        ps.append((70, 215))
+#        ps.append((207, 115))
+#        ps.append((230, 60))
         for p in range(len(ps)-1):
             start = ps[p]
             end = ps[p+1]
             traj = astar_trajectory(planning_graph, start, end)
-            plt.plot(traj[:,0], traj[:,1], '.')
+            plt.plot(traj[:,0], traj[:,1])
         print(traj)
         img = plt.imread('imglib/AVP_planning_300p.png')
         plt.imshow(img)
         plt.axis('equal')
         plt.show()
-
