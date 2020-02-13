@@ -1,3 +1,4 @@
+from ipdb import set_trace as st
 """
 
 Path tracking simulation with iterative linear model predictive control for speed and steer control
@@ -17,7 +18,6 @@ import sys
 #     import cubic_spline_planner
 # except:
 #     raise
-
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
@@ -149,6 +149,7 @@ def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):  # pragma: n
     rl_wheel[0, :] += x
     rl_wheel[1, :] += y
 
+    st()
     plt.plot(np.array(outline[0, :]).flatten(),
              np.array(outline[1, :]).flatten(), truckcolor)
     plt.plot(np.array(fr_wheel[0, :]).flatten(),
@@ -528,11 +529,13 @@ def main():
     print(__file__ + " start!!")
 
     dl = 1.0  # course tick
-    cx, cy, cyaw, ck = get_course_2_park(dl)
+    cx, cy, cyaw, ck = get_course_2_pickup(dl)
 
     sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
 
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
+    #initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
+    print(cx[0], cy[0], cyaw[0])
+    initial_state = State(x=25, y=55, yaw=3, v=0.0)
 
     t, x, y, yaw, v, d, a, vkmh = do_simulation(
         cx, cy, cyaw, ck, sp, dl, initial_state)
