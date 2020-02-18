@@ -136,22 +136,34 @@ def constrain_heading_to_pm_180(heading):
 def reflect_over_x_axis(vector):
     return np.array([vector[0], -vector[1]])
 
-def get_car_neighbors(xy_heading, sampled_points, grid_size, reflect_over_y = True):
-    CarNeighbor = namedtuple('CarNeighbor', ['xy', 'heading', 'weight'])
-    neighbors = []
+def get_car_successors(xy_heading, grid_size, weights=[1,3,3,4,5,5]):
+    successors = []
     xy = xy_heading[0:2]
     heading = xy_heading[2]
     STEP = grid_size
-    # x, y, heading, weight
-    dstate = [[STEP, 0, 0, 1], [-STEP, 0, 0, 3], [STEP, STEP, 45, 5], [STEP, -STEP, -45, 5], [-STEP, STEP, -45, 4], [-STEP, -STEP, 45, 4]]
-#    dstate = [[STEP, 0, 0, 1], [-STEP, 0, 0, 3], [STEP, STEP, 45, 2], [STEP, -STEP, -45, 2], [-STEP, STEP, -45, 4], [-STEP, -STEP, 45, 4]]
+    dstate = [[STEP, 0, 0], [STEP, STEP, 45], [STEP, -STEP, -45], [-STEP, 0, 0], [-STEP, -STEP, 45], [-STEP, STEP, -45]]
     for ds in dstate:
         dxy = np.array(ds[0:2])
         new_xy = np.array(xy) + reflect_over_x_axis(rotate_grid_displacement_vector(dxy, heading, deg=True))
         new_heading = constrain_heading_to_pm_180(heading + ds[2])
-        if (new_xy[0], new_xy[1], new_heading) in sampled_points: # TODO: quite inefficient, fix this
-            weight = ds[3]
-            new_neighbor = CarNeighbor(xy=new_xy, heading=new_heading, weight=weight)
+        successors.append((new_xy[0], new_xy[1], new_heading))
+    return successors, weights
+
+def get_car_neighbors(xy_heading, sampled_points, grid_size):
+    CarNeighbor = namedtuple('CarNeighbor', ['xy', 'heading', 'weight'])
+    neighbors = []
+    xy = xy_heading[0:2]
+    heading = xy_heading[2]
+    successors, weights = get_car_successors(xy_heading=xy_heading, grid_size=grid_size)
+    for idx, succ in enumerate(successors):
+        new_x, new_y, new_heading = succ
+        if (new_x, new_y, new_heading) in sampled_points: # TODO: quite inefficient, fix this
+            new_xy = [new_x, new_y]
+            if weights:
+                weight = weights[idx]
+                new_neighbor = CarNeighbor(xy=new_xy, heading=new_heading, weight=weight)
+            else:
+                new_neighbor = CarNeighbor(xy=new_xy, heading=new_heading, weight=weight)
             neighbors.append(new_neighbor)
     return neighbors
 
@@ -288,7 +300,8 @@ if __name__ == '__main__':
         ps.append((120, 60, 0))
         ps.append((170, 92, -90))
         ps.append((80, 150, 180))
-        ps.append((144, 245, 0))
+        ps.append((200, 245, 0))
+        ps.append((260, 60, 0))
 #        ps.append((120, 55))
 #        ps.append((100, 150))
 #        ps.append((70, 215))
