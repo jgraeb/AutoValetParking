@@ -14,7 +14,7 @@ import cvxpy
 import math
 import numpy as np
 import sys
-sys.path.append("../../PathPlanning/CubicSpline/")
+sys.path.append("../PathPlanning/CubicSpline/")
 sys.path.append("../motionplanning")
 import grid_planner
 
