@@ -1,4 +1,3 @@
-from ipdb import set_trace as st
 """
 
 Path tracking simulation with iterative linear model predictive control for speed and steer control
@@ -7,17 +6,26 @@ author: Atsushi Sakai (@Atsushi_twi)
 
 modified for Automated Valet Parking (AVP)
 """
+from scipy.spatial.distance import cdist
+import random
+
 import matplotlib.pyplot as plt
 import cvxpy
 import math
 import numpy as np
 import sys
-# sys.path.append("../../PathPlanning/CubicSpline/")
+sys.path.append("../../PathPlanning/CubicSpline/")
+sys.path.append("../motionplanning")
+import grid_planner
 
-# try:
-#     import cubic_spline_planner
-# except:
-#     raise
+try:
+    import cubic_spline_planner
+except:
+    raise
+#mod
+TOL = 0.5
+BACK_TARGET_SPEED = -10.0 / 3.6  # [m/s] target speed
+GOAL_SPEED = 0.0
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
@@ -28,9 +36,9 @@ R = np.diag([0.01, 0.01])  # input cost matrix
 Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
-GOAL_DIS = 1.5  # goal distance
-STOP_SPEED = 0.5 / 3.6  # stop speed
-MAX_TIME = 500.0  # max simulation time
+GOAL_DIS = 0.5  # goal distance
+STOP_SPEED = 1.0 / 3.6  # stop speed
+MAX_TIME = 20.0  # max simulation time
 
 # iterative paramter
 MAX_ITER = 3  # Max iteration
@@ -106,6 +114,7 @@ def get_linear_model_matrix(v, phi, delta):
 
     return A, B, C
 
+
 def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):  # pragma: no cover
 
     outline = np.array([[-BACKTOWHEEL, (LENGTH - BACKTOWHEEL), (LENGTH - BACKTOWHEEL), -BACKTOWHEEL, -BACKTOWHEEL],
@@ -149,7 +158,6 @@ def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):  # pragma: n
     rl_wheel[0, :] += x
     rl_wheel[1, :] += y
 
-    st()
     plt.plot(np.array(outline[0, :]).flatten(),
              np.array(outline[1, :]).flatten(), truckcolor)
     plt.plot(np.array(fr_wheel[0, :]).flatten(),
@@ -344,7 +352,7 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
     return xref, ind, dref
 
 
-def check_goal(state, goal, tind, nind):
+def check_goal(state, goal, tind, nind,goalspeed):
 
     # check goal
     dx = state.x - goal[0]
@@ -355,8 +363,12 @@ def check_goal(state, goal, tind, nind):
 
     if abs(tind - nind) >= 5:
         isgoal = False
-
-    isstop = (abs(state.v) <= STOP_SPEED)
+    # modified
+    delgoalspeed = goalspeed*1.3
+    isstop = (abs(state.v) <= delgoalspeed)
+    if (goalspeed == 0.0):
+        #delgoalspeed == STOP_SPEED
+        isstop = (abs(state.v) <= STOP_SPEED)
 
     if isgoal and isstop:
         return True
@@ -364,7 +376,7 @@ def check_goal(state, goal, tind, nind):
     return False
 
 
-def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
+def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed):
     """
     Simulation
 
@@ -392,7 +404,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     y = [state.y]
     yaw = [state.yaw]
     v = [state.v]
-    vkmh = [state.v*3.6] # mod storing speed in km/h
+    #vkmh = [state.v*3.6] # mod storing speed in km/h
     t = [0.0]
     d = [0.0]
     a = [0.0]
@@ -424,9 +436,9 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         t.append(time)
         d.append(di)
         a.append(ai)
-        vkmh.append(state.v*3.6) # mod storing speed in km/h
+        #vkmh.append(state.v*3.6) # mod storing speed in km/h
 
-        if check_goal(state, goal, target_ind, len(cx)):
+        if check_goal(state, goal, target_ind, len(cx),goalspeed): # modified goal speed
             print("Goal")
             break
 
@@ -445,10 +457,10 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
                       + ", speed[km/h]:" + str(round(state.v * 3.6, 2)))
             plt.pause(0.0001)
 
-    return t, x, y, yaw, v, d, a, vkmh
+    return t, x, y, yaw, v, d, a
 
 
-def calc_speed_profile(cx, cy, cyaw, target_speed):
+def calc_speed_profile(cx, cy, cyaw, target_speed,goalvel):
 
     speed_profile = [target_speed] * len(cx)
     direction = 1.0  # forward
@@ -472,7 +484,8 @@ def calc_speed_profile(cx, cy, cyaw, target_speed):
         else:
             speed_profile[i] = target_speed
 
-    speed_profile[-1] = 0.0
+    # modified
+    speed_profile[-1] = goalvel
 
     return speed_profile
 
@@ -523,21 +536,326 @@ def get_course_2_pickup(dl):
     ck=0
     return cx, cy, cyaw, ck
 
+def get_random_course(dl):
+    ax = [random.random()*10, 0, 0]
+    ay = [0, random.random()*10, 0]
+    #print(ax)
+    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(ax, ay, ds=dl)
+
+    return cx, cy, cyaw, ck
+
+def get_error(pos,reftraj,t):
+    err = np.zeros(len(pos))
+    k=len(pos)
+    for n in range(0,k):
+        #print('position: '+str(pos[n]))#+str(row))
+        errmatrix=[cdist([pos[n]], reftraj,'euclidean')]
+        mindist = np.amin(errmatrix)
+        #print('dist '+str(errmatrix))
+        #print('mindist '+str(mindist))
+        err[n]=mindist
+    #print(err)
+    maxerr = np.amax(err)#[:15])
+    # find max error when passing though endpoint first time
+    enderr = np.amin(err[-5:-1])#np.amin(err[-1])
+    # find index at which err is less than tol
+    try:
+        idx = next(x for x, val in enumerate(err) if val < TOL) 
+        tmax=t[idx]
+    except:
+        tmax= 999
+        #print(maxerr)
+    return maxerr, tmax, enderr
+
+def get_guarantee(x_d, dl):
+    # set range of x_d
+    max_err_t=[]
+    for x in x_d:
+        # generate random curves using cubic spline
+        cx, cy, cyaw, ck = get_random_course(dl)
+        sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,0.0)
+        # Place car at x_d from traj start point
+        # pick a state randomly in a circle around the starting point
+        initial_state = get_random_initial_state(cx,cy,cyaw,x)#State(x=cx[0]+randx, y=cy[0]+randy, yaw=cyaw[0]+randyaw, v=0.0)
+        # do simulation
+        t, x, y, yaw, v, d, a, _ = do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state)
+        # find max error
+        cxa=np.asarray(cx)
+        cya=np.asarray(cy)
+        reftraj = np.stack((cxa, cya), axis=-1)#np.hstack((cxa,cya))
+        xa=np.asarray(x)
+        ya=np.asarray(y)
+        pos = np.stack((xa, ya), axis=-1)#np.hstack((cxa,cya))
+        # print(cxa)
+        # print(cya)
+        # print(reftraj)
+        # only do beginning of trajectory, first 15 points
+        tol = 0.25 # define tolerance
+        max_err_t.append(get_error(pos[:15],reftraj,t))
+        # return guarantee table with errors and time
+    return max_err_t
+
+def get_random_initial_state(cx,cy,cyaw,x_d,startV):
+        # Place car at x_d from traj start point
+        # pick a state randomly in a circle around the starting point, do several and pick worst
+        # pick random angle
+        randangle = np.random.uniform()*2*np.pi
+        randx = np.cos(randangle)*x_d
+        randy = (x_d**2-randx**2)**0.5
+        # random initial yaw should be correct direction +-45 degrees
+        randyaw = np.random.uniform()*np.deg2rad(random.randrange(-45,45))
+        #print(randyaw)
+        initial_state = State(x=cx[0]+randx, y=cy[0]+randy, yaw=cyaw[0]+randyaw, v=startV)
+        return initial_state
+
+def get_grid_planner_prims(x_d,steps):
+    # make grid primitives from starting position (0,0,0)
+    # preallocate primitives
+    prims = np.zeros((3**steps,steps+1,3))
+    lastpos = np.array([(0,0,0)]) # define starting position at (0,0,0)
+    prims[:,0,:] = lastpos
+    #print(prims)
+    #print(lastpos)
+    for i in range(1,steps+1):
+        #print('Step:'+str(i))
+        rep = 3**steps/(3**(steps-i))
+        num = int(3**steps/rep)
+        #print('Num: '+str(num))
+        next_step=np.zeros((lastpos.shape[0],3,3))
+        for idxa in range(0,lastpos.shape[0]): # iterate though the number of last positions
+            option=lastpos[idxa]
+            #print('Position: '+str(option))
+            next_step0,_ = grid_planner.get_car_successors(xy_heading=option, grid_size=x_d)
+            #print(next_step0)
+            next_step=np.array(next_step0[:3])
+            #print('The next steps are:')
+            #print(next_step)
+            for idxb in range(0,3):#next_step.shape[1]): # iterate though new positions
+                pos = next_step[idxb]
+                #print('Pos: '+str(pos))
+                if i==1:
+                    for k in range(0,num):
+                        #print('primindex: '+str((idxb*3)+k))
+                        prims[(idxb*3)+k][i]= pos
+                else:
+                    for k in range(0,num):
+                        #print('idxa:' +str(idxa))
+                        #print('idxb:' +str(idxb))
+                        #print('primindex: '+str((idxa*3)+idxb+k))
+                        prims[(idxa*3)+idxb+k][i]= pos
+                        #print(prims)
+                
+        lastpos=next_step
+    #print('primitives:')
+    #print(prims)
+    # convert prims into mpc data format
+    ck = 0
+    cx = prims[:,:,0]
+    cy = prims[:,:,1]
+    cyaw = np.deg2rad(prims[:,:,2])
+    #print(cyaw)
+    print(cx)
+    print(cy)
+    cyaw[:,0] = cyaw[:,0]*(-1)
+    cyaw[:,1] = cyaw[:,1]*(-1)
+    cyaw[:,2] = cyaw[:,2]*(-1)
+    print(cyaw)
+    cx2=[[0,2,4]]
+    cy2=[[0,0,-2]]
+    cyaw2 = [[ 0.0 , -np.pi/8, -0.78539816]]
+    return cx2, cy2, cyaw2, ck
+
+# make reverse function
+def reverse(x_d): # reversing just one step
+    # set target speed to negative
+    TARGET_SPEED = -TRAGET_SPEED
+    start = [0,0,0]
+    cx = np.zeros((3,2))
+    cy = np.zeros((3,2))
+    cyaw = np.zeros((3,2))
+    next_step0,_ = grid_planner.get_car_successors(xy_heading=start, grid_size=x_d)
+    back_step=np.array(next_step0[3:])
+    print(back_step)
+    cx[:,0] = start[0]
+    cx[0,1] = back_step[0,0]
+    cx[1,1] = back_step[1,0]
+    cx[2,1] = back_step[2,0]
+    cy[:,0] = start[1]
+    cy[0,1] = back_step[0,1]
+    cy[1,1] = back_step[1,1]
+    cy[2,1] = back_step[2,1]
+    cyaw[0,0] = start[2]
+    cyaw[0,1] = np.deg2rad(back_step[0,2])*(-1)
+    cyaw[1,1] = np.deg2rad(back_step[1,2])*(-1)
+    cyaw[2,1] = np.deg2rad(back_step[2,2])*(-1)
+    ck = 0
+    print(cx)
+    print(cy)
+    print(cyaw)
+    return cx, cy, cyaw, ck
+
+def switchback_turn(x_d):
+    step = x_d
+    cx = np.zeros((1,4))
+    cy = np.zeros((1,4))
+    cyaw = np.zeros((1,4))
+    cx[0,0] = 0
+    cx[0,1] = cx[0,0]+step
+    cx[0,2] = cx[0,1]-step
+    cx[0,3] = cx[0,2]+step
+    cy[0,0] = 0
+    cy[0,1] = cy[0,0]-step
+    cy[0,2] = cy[0,1]
+    cx[0,3] = cx[0,2]+step
+    cyaw[0,0] = -1/4*np.pi
+    cyaw[0,1] = 0
+    cyaw[0,2] = 1/4*np.pi
+    cyaw[0,3] = 1/4*np.pi
+    ck = 0
+    print(cx)
+    print(cy)
+    print(cyaw)
+    return cx,cy,cyaw,ck
+
+def get_grid_prims(x_d):
+    # get cx,cy,cyaw from grid planner
+    cx = np.zeros((5,4))
+    cy=np.zeros((5,4))
+    cyaw=np.zeros((5,4))
+    # Start at 
+    startx = 4
+    starty = 3
+    # set up x coordinates
+    cx[:,0] = startx
+    cx[:,1]= cx[0,0]+x_d
+    cx[:,2]= cx[0,1]+x_d
+    cx[:,3] = cx[0,2]+x_d
+    cx[3,3] = cx[0,2]
+    cx[4,3] = cx[0,2]
+    # set up y coordinates
+    cy[:,:] = starty
+    cy[1,2] = cy[1,0]-x_d
+    cy[1,3] = cy[1,2]
+    cy[2,2] = cy[2,1]+x_d
+    cy[2,3] = cy[2,2]
+    cy[3,2] = cy[3,1] - x_d
+    cy[3,3] = cy[3,2] - x_d
+    cy[4,2] = cy[4,1] + x_d
+    cy[4,3] = cy[4,2] + x_d
+    # Now calculate yaw to be directly towards the next point
+    cyaw[:,:] = 0
+    cyaw[1,1] = -1/4*np.pi
+    cyaw[2,1] = 1/4*np.pi
+    cyaw[3,1] = -1/4*np.pi
+    cyaw[4,1] = 1/4*np.pi
+    cyaw[3,2] = -1/2*np.pi
+    cyaw[4,2] = 1/2*np.pi   
+    cyaw[3,3] = -1/2*np.pi
+    cyaw[4,3] = 1/2*np.pi  
+    ck = 0
+    # print(cx)
+    # print(cy)
+    #print(cyaw)
+    
+    return cx, cy, cyaw, ck#
+
+
+def get_heading(x,y): # find heading towards the next point from x,y positions for MPC
+    heading = np.zeros(np.shape(x))
+    for i, xvals in enumerate(x):
+        print('i= '+str(i))
+        for k in range(0,(len(xvals))):
+            print('k = '+str(k))
+            if k<(len(xvals)-1):
+                dely = y[i,k+1]-y[i,k]
+                delx = xvals[k+1]-xvals[k]
+                heading[i,k] = math.atan2(dely,delx)
+            else:
+                heading[i,k] = heading[i,k-1] # keep the same heading for last point
+    return heading
+
+
+def guarantee_for_motionprims(x_d,dl):
+    # set range of x_d
+    #max_err_t=[]
+    max_err_0_0 = []
+    max_err_0_V = []
+    max_err_V_0 = []
+    max_err_V_V = []
+    num_sim = 1
+    for x in x_d:
+        # generate the motion primitives using simple grid
+        cx_vec, cy_vec, cyaw_vec, ck = get_grid_prims(x)
+        #cx_vec, cy_vec, cyaw_vec, ck = switchback_turn(x)
+        #cx_vec, cy_vec, cyaw_vec, ck = reverse(x)
+        # max distance is half of the diagonal in a grid
+        maxx=1/np.sqrt(2)*x
+        # test heading function
+        #heading = get_heading(cx_vec,cy_vec)
+        # loop over all 5 motion primitives
+        for n,val in enumerate(cx_vec):
+            cx=cx_vec[n]
+            cy=cy_vec[n]
+            cyaw=cyaw_vec[n]
+            #print(cyaw)
+            #sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED, goalvel)
+            # Place car at max. distance from traj start point
+            # to do: include velocity
+            # do the simulation for ~10 different initial states and choose the maximum error values
+            # Loop over V
+            V_vec =[0.0, TARGET_SPEED]
+            V_goal_vec = [0.0, TARGET_SPEED]
+            #V = V_vec[1]
+            maxerr = np.zeros(num_sim)
+            errend = np.zeros(num_sim)
+            terr = np.zeros(num_sim)
+            #maxerr_v = np.zeros((2,3))
+            for i,vel in enumerate(V_vec):
+                for n,goalvel in enumerate(V_goal_vec):
+                    # calculate speed profile
+                    sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED, goalvel)
+                    for k in range(0,num_sim): # simulate for k different initial conditions
+                        initial_state = get_random_initial_state(cx,cy,cyaw,maxx,vel)
+                        # do simulation
+                        t, x, y, yaw, v, d, a = do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state,goalvel)
+                        # find max error
+                        cxa=np.asarray(cx)
+                        cya=np.asarray(cy)
+                        reftraj = np.stack((cxa, cya), axis=-1)#np.hstack((cxa,cya))
+                        xa=np.asarray(x)
+                        ya=np.asarray(y)
+                        pos = np.stack((xa, ya), axis=-1)#np.hstack((cxa,cya))
+                        # only do beginning of trajectory, first 15 points
+                        tol = 0.25 # define tolerance
+                        # find error at the end of trajectory
+                        maxerr[k], terr[k], errend[k] = get_error(pos,reftraj,t)
+                    # find max values and save them
+                    #maxerr_v[i] = (np.amax(maxerr),np.amax(terr),np.amax(errend))
+                    if (i==0) and (n==0):
+                        max_err_0_0.append((np.amax(maxerr),np.amax(terr),np.amax(errend)))
+                    elif (i==0) and (n==1):
+                        max_err_0_V.append((np.amax(maxerr),np.amax(terr),np.amax(errend)))
+                    elif (i==1) and (n==0):
+                        max_err_V_0.append((np.amax(maxerr),np.amax(terr),np.amax(errend)))
+                    elif (i==1) and (n==1):
+                        max_err_V_V.append((np.amax(maxerr),np.amax(terr),np.amax(errend)))
+            #max_err_t.append((np.amax(maxerr_v[:,0]), np.amax(maxerr_v[:,1]), np.amax(maxerr_v[:,2])))#,np.amax(terr),np.amax(errend)))
+            #print(max_err_t)
+        # return guarantee table with max errors and time and uncertainty at the end
+    return max_err_0_0, max_err_0_V, max_err_V_0, max_err_V_V
+
 #  end mod
 
 def main():
     print(__file__ + " start!!")
-
     dl = 1.0  # course tick
-    cx, cy, cyaw, ck = get_course_2_pickup(dl)
+    cx, cy, cyaw, ck = get_course_2_park(dl)
 
     sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
 
-    #initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
-    print(cx[0], cy[0], cyaw[0])
-    initial_state = State(x=25, y=55, yaw=3, v=0.0)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
 
-    t, x, y, yaw, v, d, a, vkmh = do_simulation(
+    t, x, y, yaw, v, d, a = do_simulation(
         cx, cy, cyaw, ck, sp, dl, initial_state)
 
     if show_animation:  # pragma: no cover
@@ -560,5 +878,27 @@ def main():
         plt.show()
 
 
+def main_guarantee():
+    print(__file__ + " start!!")
+    # grid planner size size is in pixels - convert to meters
+    # 1 pixels are 0.306 ~ 0.3 meters
+    x_pix = [5]#, 15]
+    x_d=[val*0.3 for val in x_pix]
+    print('Grid Size = '+str(x_d)+' m / '+str(x_pix)+'pixels')
+    dl = 1.0  # course tick
+    max_err_0_0, max_err_0_V, max_err_V_0, max_err_V_V = guarantee_for_motionprims(x_d, dl)
+    print('[Max. Error, Time, Error @ Endpoint vel=(0,0)] = '+ str(max_err_0_0))
+    print('[Max. Error, Time, Error @ Endpoint vel=(0,V)] = '+ str(max_err_0_V))
+    print('[Max. Error, Time, Error @ Endpoint vel=(V,0)] = '+ str(max_err_V_0))
+    print('[Max. Error, Time, Error @ Endpoint vel=(V,V)] = '+ str(max_err_V_V))
+
+    f= open("guarantee.txt","w+")
+    f.write("[Max. Error, Time, Error @ Endpoint vel=(0,0)] = "+ str(max_err_0_0)+"\r\n")
+    f.write("[Max. Error, Time, Error @ Endpoint vel=(0,V)] = "+ str(max_err_0_V)+"\r\n")
+    f.write("[Max. Error, Time, Error @ Endpoint vel=(V,0)] = "+ str(max_err_V_0)+"\r\n")
+    f.write("[Max. Error, Time, Error @ Endpoint vel=(V,V)] = "+ str(max_err_V_V)+"\r\n")
+    f.close()
+
 if __name__ == '__main__':
-    main()
+    #main()
+    main_guarantee()
