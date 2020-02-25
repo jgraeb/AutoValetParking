@@ -85,7 +85,7 @@ class Car(BoxComponent):
         now = get_current_time()
         if self.depart_time >= now:
             print('{} is requested'.format(self.name))
-            await self.out_channels['Planner'].send(car)
+            #await self.out_channels['Planner'].send()
 
     async def run(self):
         async with trio.open_nursery() as nursery:
