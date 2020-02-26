@@ -757,6 +757,8 @@ def get_grid_prims(x_d):
     # print(cy)
     #print(cyaw)
     
+    import ipdb
+    ipdb.set_trace()
     return cx, cy, cyaw, ck#
 
 
