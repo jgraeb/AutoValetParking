@@ -239,9 +239,11 @@ def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
 
     grid_prim_set = GridPrimitiveSet(norm_grid_trajectory_set=norm_grid_trajectory_set, sim_set=sim_set, grid_size=10)
     #####################
-    PrimitiveGraph = namedtuple('PrimitiveGraph', ['graph', 'edge_info'])
+    prim_graph = dict()
+    prim_graph['graph'] = None
+    prim_graph['edge_info'] = None
     bitmap = bitmap.transpose()
-    graph = nx.DiGraph()
+    graph = WeightedDirectedGraph()
     edge_info = dict()
     sampled_points = grid.sampled_points
     all_nodes = []
@@ -261,12 +263,11 @@ def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
             if point_set_is_safe(tube, bitmap):
                 from_tuple = node.x, node.y, node.heading, node.v
                 to_tuple = neighbor.node.x, neighbor.node.y, neighbor.node.heading, neighbor.node.v
-                graph.add_edge(from_tuple, to_tuple)
+                graph.add_edges([[from_tuple, to_tuple, len(neighbor.path)]])
                 edge_info[from_tuple, to_tuple] = neighbor.path
-                print(graph.edges)
-                st()
 
-    prim_graph = PrimitiveGraph(graph=graph, edge_info=edge_info)
+    prim_graph['graph'] = graph
+    prim_graph['edge_info'] = edge_info
     return prim_graph
 
 class GridPrimitiveSet:
@@ -370,6 +371,9 @@ def manhattan_distance(p1, p2):
 
 def find_closest_point(p1, graph):
     diff = np.array(graph._nodes)-p1
+    if (diff.shape[1] == 4):
+        return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
+            diff[:,1]**2 + 0.1 * diff[0:,2]**2 + 0.1 * diff[0:,3]**2))]
     if (diff.shape[1] == 3):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
             diff[:,1]**2 + 0.1 * diff[0:,2]**2))]
@@ -388,27 +392,30 @@ def astar_trajectory(planning_graph, start, end, heuristic=None):
     return path
 
 if __name__ == '__main__':
-    PathFile = open('nominal_trajectory.txt', 'w')
-    remap = True
+    remap = False
     if remap:
         planning_graph = image_to_prim_graph(img_name='AVP_planning_300p',
                 planning_graph_save_name='planning_graph',
                 anchor=[0,0], grid_size=10, uncertainty=7)
-        img = plt.imread('imglib/AVP_planning_300p.png')
-        plt.imshow(img)
-        if len(planning_graph._nodes) <= 1000: # if not too many
-            for node in planning_graph._nodes:
-                plt.plot(node[0], node[1], '.')
-            plt.axis('equal')
-            plt.show()
+#        img = plt.imread('imglib/AVP_planning_300p.png')
+#        plt.imshow(img)
+#        if len(planning_graph._nodes) <= 1000: # if not too many
+#            for node in planning_graph._nodes:
+#                plt.plot(node[0], node[1], '.')
+#            plt.axis('equal')
+#            plt.show()
     else:
         planning_graph = open_pickle('planning_graph')
+
+        edge_info = planning_graph['edge_info']
+        planning_graph = planning_graph['graph']
         ps = []
-        ps.append((120, 60, 0))
-        ps.append((170, 92, -90))
-        ps.append((80, 150, 180))
-        ps.append((200, 245, 0))
-        ps.append((260, 60, 0))
+        ps.append((120, 60, 0, 0))
+        ps.append((100, 100, 0, 0))
+#        ps.append((170, 92, -90, 0))
+#        ps.append((80, 150, 180))
+#        ps.append((200, 245, 0))
+#        ps.append((260, 60, 0))
 #        ps.append((120, 55))
 #        ps.append((100, 150))
 #        ps.append((70, 215))
@@ -420,13 +427,7 @@ if __name__ == '__main__':
             start = ps[p]
             end = ps[p+1]
             traj = astar_trajectory(planning_graph, start, end)
-            path = traj.tolist()
-            for ip in traj:
-                PathFile.write(str(ip).replace("[","").replace("]","")) # remove "[" and "]" in array
-                PathFile.write('\n')                     
             plt.plot(traj[:,0], traj[:,1])
-        PathFile.close()
-
 #        print("--- %s seconds ---" % (time.time() - start_time))
         print(traj)
         img = plt.imread('imglib/AVP_planning_300p.png')
