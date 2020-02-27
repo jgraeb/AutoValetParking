@@ -388,6 +388,7 @@ def astar_trajectory(planning_graph, start, end, heuristic=None):
     return path
 
 if __name__ == '__main__':
+    PathFile = open('nominal_trajectory.txt', 'w')
     remap = True
     if remap:
         planning_graph = image_to_prim_graph(img_name='AVP_planning_300p',
@@ -419,7 +420,13 @@ if __name__ == '__main__':
             start = ps[p]
             end = ps[p+1]
             traj = astar_trajectory(planning_graph, start, end)
+            path = traj.tolist()
+            for ip in traj:
+                PathFile.write(str(ip).replace("[","").replace("]","")) # remove "[" and "]" in array
+                PathFile.write('\n')                     
             plt.plot(traj[:,0], traj[:,1])
+        PathFile.close()
+
 #        print("--- %s seconds ---" % (time.time() - start_time))
         print(traj)
         img = plt.imread('imglib/AVP_planning_300p.png')

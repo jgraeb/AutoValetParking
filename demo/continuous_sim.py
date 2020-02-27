@@ -14,18 +14,21 @@ from prepare.helper import *
 from tulip_spec.simplestspec_ctrl import ExampleCtrl
 import prepare.user as user
 import component.pedestrian as pedestrian
+import supervisory.communication as communication
+import motionplanning.grid_planner as planner
 from PIL import Image
+from math import pi
+import time, platform, warnings, matplotlib, random
+import datetime
 
 path =[]
 dir_path = os.path.dirname(os.path.realpath(__file__))
 #intersection_fig = dir_path + "/components/imglib/intersection_states/intersection_lights.png"
-pathfile = os.path.dirname(dir_path) + '/motionplanning/nominal_paths/pathdata_read.txt'
+pathfile = os.path.dirname(dir_path) + '/motionplanning/nominal_trajectory.txt'
 with open(pathfile,'r') as f:
 	for line in f:
 		path.append(list(line.strip('\n').split(',')))
 
-import time, platform, warnings, matplotlib, random
-import datetime
 if platform.system() == 'Darwin': # if the operating system is MacOS
 #    matplotlib.use('macosx')
     matplotlib.use('Qt5Agg')
@@ -62,11 +65,14 @@ def animate(frame_idx): # update animation by dt
     ax.clear()
     current_loc = path[path_idx][0].split()
     path_idx += 1
-    x = float(current_loc[0])*360
-    y = float(current_loc[1])*380
-    print(y)
-    theta = float(current_loc[2])
-    #x,y,theta = [5.0*367, 0.2*367+145, 1.5707963267948966]
+    # scale to the large topo
+    xscale = 10.5
+    yscale = 10.3
+    xoffset = 0
+    yoffset = 225
+    x = float(current_loc[0])*xscale+xoffset
+    y = float(current_loc[1])*yscale+yoffset
+    theta = -float(current_loc[2])*pi/180 # deg to rad
     draw_car(background,x,y,theta) # draw cars to background
     
     if pedestrian.state[0] < end_walk_lane[0]: # if not at the destination
