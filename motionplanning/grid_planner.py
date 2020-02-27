@@ -56,7 +56,6 @@ def create_uniform_grid(np_bitmap, anchor, grid_size):
     grid = Grid(sampled_points=np.array(sampled_points), grid_size = grid_size)
     return grid
 
-
 def get_ball_neighbors(center, r):
     r = int(np.ceil(r)) # robustify r
     neighbors = []
@@ -102,6 +101,15 @@ def get_tube_for_line(point1, point2, r):
     rect = get_rect_for_line(point1, point2, r)
     tube = np.vstack((ball1, ball2, rect))
     return np.unique(tube, axis=0)
+
+def get_tube_for_lines(points, r):
+    assert len(points) > 1
+    tubes = []
+    for point1, point2 in zip(points, points[1:]):
+        tube = get_tube_for_line(point1, point2, r)
+        tubes.append(tube)
+
+    return np.unique(np.vstack(tubes), axis=0)
 
 def in_range(x, x_min, x_max):
     return x >= x_min and x <= x_max
@@ -207,6 +215,14 @@ def grid_to_car_graph(bitmap, grid, uncertainty, verbose=False):
                 graph.add_edges([[node, (neighbor_xy[0], neighbor_xy[1], neighbor.heading), weight]])
     return graph
 
+
+class Node:
+    def __init__(self, x, y, heading, v):
+        self.x = x
+        self.y = y
+        self.heading = heading
+        self.v = v
+
 def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
     ###################### TESTING HERE
     norm_grid_trajectory_set = [[[0, 0], [1, 0], [2, 0], [3, 0]],
@@ -224,46 +240,65 @@ def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
     grid_prim_set = GridPrimitiveSet(norm_grid_trajectory_set=norm_grid_trajectory_set, sim_set=sim_set, grid_size=10)
     #####################
     PrimitiveGraph = namedtuple('PrimitiveGraph', ['graph', 'edge_info'])
-    Node = namedtuple('Node', ['x', 'y', 'heading', 'v'])
     bitmap = bitmap.transpose()
     graph = nx.DiGraph()
+    edge_info = dict()
     sampled_points = grid.sampled_points
+    all_nodes = []
     for point in sampled_points:
         neighbors = get_ball_neighbors(point, uncertainty)
         if point_set_is_safe(neighbors, bitmap):
             for heading in [0, 90, 180, -90]:
                 for velocity in [0, 10]:
                     node = Node(x=point[0], y=point[1], heading=heading, v=velocity)
-                    graph.add_node(node)
-    for idx, node in enumerate(graph.nodes):
-        if verbose:
-            print('planning graph progress: {0:.1f}%'.format(idx/len(graph.nodes)*100))
-        for neighbor in grid_prim_set.get_neighbors(node):
-            pass
+                    all_nodes.append(node)
 
-    prim_graph = PrimitiveGraph(graph=graph, edge_info=dict())
+    for idx, node in enumerate(all_nodes):
+        if verbose:
+            print('planning graph progress: {0:.1f}%'.format(idx/len(all_nodes)*100))
+        for neighbor in grid_prim_set.get_neighbors(node):
+            tube = get_tube_for_lines(neighbor.path, r=uncertainty)
+            if point_set_is_safe(tube, bitmap):
+                from_tuple = node.x, node.y, node.heading, node.v
+                to_tuple = neighbor.node.x, neighbor.node.y, neighbor.node.heading, neighbor.node.v
+                graph.add_edge(from_tuple, to_tuple)
+                edge_info[from_tuple, to_tuple] = neighbor.path
+                print(graph.edges)
+                st()
+
+    prim_graph = PrimitiveGraph(graph=graph, edge_info=edge_info)
     return prim_graph
 
 class GridPrimitiveSet:
     def __init__(self, norm_grid_trajectory_set, sim_set, grid_size):
         self.grid_size = grid_size
+        self.sim_set = sim_set
         self.grid_trajectory_set = (np.array(norm_grid_trajectory_set) * self.grid_size).tolist()
     def add_primitive(self, new_grid_trajectory):
         self.grid_trajectory_set.append((np.array(new_grid_trajectory) * self.grid_size).tolist())
     def get_neighbors(self, node):
-        NodeNeighbor = namedtuple('NodeNeighbor', ['neighbor', 'path'])
+        def get_final_heading_from_path(path):
+            p1, p2 = path[-2:]
+            dy = p2[1]-p1[1]
+            dx = p2[0]-p1[0]
+            heading = int(np.arctan2(-dx, dy) / np.pi * 180)
+            return heading
+        NodeNeighbor = namedtuple('NodeNeighbor', ['node', 'path'])
         heading = node.heading
         xy = np.array([node.x, node.y])
         neighbors = []
-        for traj in self.grid_trajectory_set:
-            path = []
-            for point in traj:
-                new_vec = reflect_over_x_axis(rotate_vector(point, heading, deg=True)) # TODO: pre-compute and store this as an attribute
-                new_vec = np.array(xy) + new_vec
-                path.append(new_vec.tolist())
-            node_neighbor = NodeNeighbor(neighbor=0, path=path)
-            neighbors.append(node_neighbor)
-            st()
+        for traj_idx, traj in enumerate(self.grid_trajectory_set):
+            for velocity in [0, 10]:
+                sim_res = self.sim_set[(node.v, velocity)][traj_idx]
+                if sim_res[2] <= sim_res[0]:
+                    path = []
+                    for point in traj:
+                        new_vec = reflect_over_x_axis(rotate_vector(point, heading, deg=True)) # TODO: pre-compute and store this as an attribute
+                        new_vec = np.array(xy) + new_vec
+                        path.append(new_vec.tolist())
+                    final_heading = get_final_heading_from_path(path)
+                    node_neighbor = NodeNeighbor(node=Node(x=path[-1][0],y=path[-1][1],heading=final_heading,v=velocity), path=path)
+                    neighbors.append(node_neighbor)
         return neighbors
 
 def bitmap_to_pacman_graph(np_bitmap, anchor, grid_size, uncertainty, planning_graph_save_name=None, verbose=True):
@@ -273,7 +308,6 @@ def bitmap_to_pacman_graph(np_bitmap, anchor, grid_size, uncertainty, planning_g
         with open('{}.pkl'.format(planning_graph_save_name), 'wb') as f:
             pickle.dump(planning_graph, f)
     return planning_graph
-
 
 def bitmap_to_car_graph(np_bitmap, anchor, grid_size, uncertainty, planning_graph_save_name=None, verbose=True):
     grid = create_uniform_grid(np_bitmap, anchor = anchor, grid_size = grid_size)
