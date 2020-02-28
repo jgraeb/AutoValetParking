@@ -1,0 +1,4 @@
+[Max. Error, Error @ Endpoint, Heading [deg], Velocity Error [km/h] | vel=(0,0)] = [(1.7289271813966416, 1.0507996943886349, 15.352927379615064, -5.815248076357384e-09)]
+[Max. Error, Error @ Endpoint, Heading [deg], Velocity Error [km/h] | vel=(0,V)] = [(1.6648959171818658, 1.30810786453542, 19.187924034403736, 4.999977943778271)]
+[Max. Error, Error @ Endpoint, Heading [deg], Velocity Error [km/h] | vel=(V,0)] = [(1.4568405015896282, 0.7659718452264612, 11.952417345878128, -2.0629983039295284e-09)]
+[Max. Error, Error @ Endpoint, Heading [deg], Velocity Error [km/h] | vel=(V,V)] = [(1.8478372906438405, 1.467339726731629, 22.79847311695722, 4.999996006929428)]
