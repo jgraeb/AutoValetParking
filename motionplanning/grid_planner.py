@@ -3,6 +3,7 @@
 # California Institute of Technology
 # February 10th, 2020
 
+import json
 import networkx as nx
 from typing import List, Any, Tuple
 from collections import namedtuple
@@ -275,14 +276,12 @@ class GridPrimitiveSet:
         self.grid_size = grid_size
         self.sim_set = sim_set
         self.grid_trajectory_set = (np.array(norm_grid_trajectory_set) * self.grid_size).tolist()
-    def add_primitive(self, new_grid_trajectory):
-        self.grid_trajectory_set.append((np.array(new_grid_trajectory) * self.grid_size).tolist())
     def get_neighbors(self, node):
         def get_final_heading_from_path(path):
             p1, p2 = path[-2:]
             dy = p2[1]-p1[1]
             dx = p2[0]-p1[0]
-            heading = int(np.arctan2(-dy, dx) / np.pi * 180)
+            heading = constrain_heading_to_pm_180(int(np.arctan2(-dy, dx) / np.pi * 180))
             return heading
         NodeNeighbor = namedtuple('NodeNeighbor', ['node', 'path'])
         heading = node.heading
@@ -391,6 +390,27 @@ def astar_trajectory(planning_graph,start,end,heuristic=None):
         path = np.array(nx.astar_path(nx_graph, closest_start, closest_end))
     return path
 
+class PrimitiveSet:
+    def __init__(self):
+        self.norm_grid_trajectory_set = [[[0, 0], [1, 0], [2, 0], [3, 0]],
+                                         [[0, 0], [1, 0], [2, -1], [3, -1]],
+                                         [[0, 0], [1, 0], [2, 1], [3, 1]],
+                                         [[0, 0], [1, 0], [2, -1], [2, -2]],
+                                         [[0, 0], [1, 0], [2, 1], [2, 2]]]
+        self.keys = self.norm_grid_trajectory_set[0]
+        print(self.keys)
+
+class GridPlanner:
+    def __init__(self):
+        self.grid_size = 0
+        self.anchor = [0, 0]
+        self.uncertainty = 0
+        self.primitive_set = 0
+    def find_shortest_path(self, node1, node2):
+        traj = astar_trajectory(planning_graph, start, end)
+        return traj
+
+
 if __name__ == '__main__':
     remap = False
     if remap:
@@ -431,3 +451,4 @@ if __name__ == '__main__':
         plt.imshow(img)
         plt.axis('equal')
         plt.show()
+
