@@ -259,12 +259,17 @@ def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
         if verbose:
             print('planning graph progress: {0:.1f}%'.format(idx/len(all_nodes)*100))
         for neighbor in grid_prim_set.get_neighbors(node):
+#            n_node = neighbor.node
+#            print(n_node.x, n_node.y, n_node.heading, n_node.v)
+#            st()
             tube = get_tube_for_lines(neighbor.path, r=uncertainty)
             if point_set_is_safe(tube, bitmap):
                 from_tuple = node.x, node.y, node.heading, node.v
                 to_tuple = neighbor.node.x, neighbor.node.y, neighbor.node.heading, neighbor.node.v
                 graph.add_edges([[from_tuple, to_tuple, len(neighbor.path)]])
                 edge_info[from_tuple, to_tuple] = neighbor.path
+#                print(neighbor.node.x, neighbor.node.y, neighbor.node.heading, neighbor.node.v)
+#                st()
 
     prim_graph['graph'] = graph
     prim_graph['edge_info'] = edge_info
@@ -282,8 +287,13 @@ class GridPrimitiveSet:
             p1, p2 = path[-2:]
             dy = p2[1]-p1[1]
             dx = p2[0]-p1[0]
-            heading = int(np.arctan2(-dx, dy) / np.pi * 180)
+            heading = int(np.arctan2(-dy, dx) / np.pi * 180)
             return heading
+        ## FIXING ANGLE DEBUG
+        #{(150, 60, -90, 10), (150, 60, -90, 0)} before neighbors
+        #test = (120, 60, 0, 0)
+        #node = Node(x=test[0],y=test[1],heading=test[2],v=test[3])
+        ##
         NodeNeighbor = namedtuple('NodeNeighbor', ['node', 'path'])
         heading = node.heading
         xy = np.array([node.x, node.y])
@@ -373,7 +383,7 @@ def find_closest_point(p1, graph):
     diff = np.array(graph._nodes)-p1
     if (diff.shape[1] == 4):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
-            diff[:,1]**2 + 0.1 * diff[0:,2]**2 + 0.1 * diff[0:,3]**2))]
+            diff[:,1]**2) + 0.001 * diff[:,2]**2 + 0.001 * diff[:,3]**2)]
     if (diff.shape[1] == 3):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
             diff[:,1]**2 + 0.1 * diff[0:,2]**2))]
@@ -411,8 +421,11 @@ if __name__ == '__main__':
         planning_graph = planning_graph['graph']
         ps = []
         ps.append((120, 60, 0, 0))
-        ps.append((100, 100, 0, 0))
-#        ps.append((170, 92, -90, 0))
+#        print(planning_graph._edges[(120, 60, 0, 0)])
+        ps.append((150, 80, -90, 0))
+        ps.append((150, 110, -90, 0))
+#        ps.append((100, 100, 0, 0))
+        ps.append((170, 92, -90, 0))
 #        ps.append((80, 150, 180))
 #        ps.append((200, 245, 0))
 #        ps.append((260, 60, 0))
@@ -427,7 +440,9 @@ if __name__ == '__main__':
             start = ps[p]
             end = ps[p+1]
             traj = astar_trajectory(planning_graph, start, end)
-            plt.plot(traj[:,0], traj[:,1])
+            for start, end in zip(traj, traj[1:]):
+                segment = np.array(edge_info[(tuple(start), tuple(end))])
+                plt.plot(segment[:,0], segment[:,1])
 #        print("--- %s seconds ---" % (time.time() - start_time))
         print(traj)
         img = plt.imread('imglib/AVP_planning_300p.png')
