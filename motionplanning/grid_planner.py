@@ -226,10 +226,10 @@ class Node:
 def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
     ###################### TESTING HERE
     norm_grid_trajectory_set = [[[0, 0], [1, 0], [2, 0], [3, 0]],
-                           [[0, 0], [1, 0], [2, -1], [3, -1]],
-                           [[0, 0], [1, 0], [2, 1], [3, 1]],
-                           [[0, 0], [1, 0], [2, -1], [2, -2]],
-                           [[0, 0], [1, 0], [2, 1], [2, 2]]]
+                                [[0, 0], [1, 0], [2, -1], [3, -1]],
+                                [[0, 0], [1, 0], [2, 1], [3, 1]],
+                                [[0, 0], [1, 0], [2, -1], [2, -2]],
+                                [[0, 0], [1, 0], [2, 1], [2, 2]]]
 
     sim_set = dict()
     sim_set[(0,0)] = [(2.730174518127961, 999.0, 0.5296237328741152), (3.1947179750584196, 999.0, 0.6039733519585504), (2.9600269611982193, 999.0, 0.6854793141852606), (2.946945375575089, 5.600000000000002, 0.5071482908799032), (2.9529104574295957, 999.0, 0.7179876356918411)]
@@ -259,17 +259,12 @@ def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
         if verbose:
             print('planning graph progress: {0:.1f}%'.format(idx/len(all_nodes)*100))
         for neighbor in grid_prim_set.get_neighbors(node):
-#            n_node = neighbor.node
-#            print(n_node.x, n_node.y, n_node.heading, n_node.v)
-#            st()
             tube = get_tube_for_lines(neighbor.path, r=uncertainty)
             if point_set_is_safe(tube, bitmap):
                 from_tuple = node.x, node.y, node.heading, node.v
                 to_tuple = neighbor.node.x, neighbor.node.y, neighbor.node.heading, neighbor.node.v
                 graph.add_edges([[from_tuple, to_tuple, len(neighbor.path)]])
                 edge_info[from_tuple, to_tuple] = neighbor.path
-#                print(neighbor.node.x, neighbor.node.y, neighbor.node.heading, neighbor.node.v)
-#                st()
 
     prim_graph['graph'] = graph
     prim_graph['edge_info'] = edge_info
@@ -289,11 +284,6 @@ class GridPrimitiveSet:
             dx = p2[0]-p1[0]
             heading = int(np.arctan2(-dy, dx) / np.pi * 180)
             return heading
-        ## FIXING ANGLE DEBUG
-        #{(150, 60, -90, 10), (150, 60, -90, 0)} before neighbors
-        #test = (120, 60, 0, 0)
-        #node = Node(x=test[0],y=test[1],heading=test[2],v=test[3])
-        ##
         NodeNeighbor = namedtuple('NodeNeighbor', ['node', 'path'])
         heading = node.heading
         xy = np.array([node.x, node.y])
@@ -391,7 +381,7 @@ def find_closest_point(p1, graph):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
             diff[:,1]**2))]
 
-def astar_trajectory(planning_graph, start, end, heuristic=None):
+def astar_trajectory(planning_graph,start,end,heuristic=None):
     closest_start = find_closest_point(start, planning_graph)
     closest_end = find_closest_point(end, planning_graph)
     nx_graph = convert_to_nx_graph(planning_graph)
@@ -422,18 +412,10 @@ if __name__ == '__main__':
         ps = []
         ps.append((120, 60, 0, 0))
 #        print(planning_graph._edges[(120, 60, 0, 0)])
-        ps.append((150, 80, -90, 0))
-        ps.append((150, 110, -90, 0))
 #        ps.append((100, 100, 0, 0))
-        ps.append((170, 92, -90, 0))
-#        ps.append((80, 150, 180))
-#        ps.append((200, 245, 0))
-#        ps.append((260, 60, 0))
-#        ps.append((120, 55))
-#        ps.append((100, 150))
-#        ps.append((70, 215))
-#        ps.append((207, 115))
-#        ps.append((230, 60))
+        ps.append((50, 145, 180, 10))
+        ps.append((20, 200, -90, 10))
+        ps.append((135, 225, 0, 10))
 #        import time
 #        start_time = time.time()
         for p in range(len(ps)-1):
