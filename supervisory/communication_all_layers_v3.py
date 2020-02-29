@@ -7,7 +7,7 @@ import random
 average_arrival_rate = 1 # per second
 beta = 1/average_arrival_rate
 average_park_time = 1 # seconds
-max_buffer_size = np.inf
+MAX_BUFFER_SIZE = np.inf
 
 
 def get_current_time():
@@ -32,18 +32,18 @@ class BoxComponent:
         self.in_channels = dict()
         self.out_channels = dict()
 
-    def _initialize_channels(self, num_channels):
-        channels = []
-        for _ in range(num_channels):
-            channels.append(None)
-        return channels
-
-    def _find_open_channel(self, channel_list):
-        for idx in range(len(channel_list)):
-            if channel_list[idx] == None:
-                return idx
-        # all channels are closed!
-        return -1
+#    def _initialize_channels(self, num_channels):
+#        channels = []
+#        for _ in range(num_channels):
+#            channels.append(None)
+#        return channels
+#
+#    def _find_open_channel(self, channel_list):
+#        for idx in range(len(channel_list)):
+#            if channel_list[idx] == None:
+#                return idx
+#        # all channels are closed!
+#        return -1
 
 class Map(BoxComponent):
     def __init__(self,nursery):
@@ -66,33 +66,50 @@ class Map(BoxComponent):
             await self.send_position(car)
 
 class Planner(BoxComponent):
-    def __init__(self,nursery):
+    def __init__(self, nursery):
         super().__init__()
         self.name = self.__class__.__name__
         self.ref = None
         self.nursery = nursery
+        self.cars = []
 
     async def send_directive_to_car(self, car, ref):
-        print('Sending Directive to {0}'.format(car.name))
+        print('Planner sending Directive to {0}'.format(car.name))
         await self.out_channels[car.name].send(ref)
 
     async def update_car_response(self, car, ref):
         self.ref = await self.in_channels[car.name].receive()
-        print('Receiving Response from {}'.format(car.name))
+        print('Planner receiving Response from {}'.format(car.name))
         #await self.send_response_to_supervisor(car,ref)
 
     async def send_response_to_supervisor(self,car,ref):
-        print('Sending response to supervisor')
+        print('Planner sending response to Supervisor')
         await self.out_channels['Supervisor'].send(car)
 
-    async def run(self):
+    async def check_supervisor(self):
         ref = [[0,0],[1,1]]
-        while True:
-            async for car in self.in_channels['Supervisor']:
-                create_bidirectional_channel(self, car, max_buffer_size=np.inf)
-                self.nursery.start_soon(car.run)
-                await self.send_directive_to_car(car, ref)
-                await self.update_car_response(car,ref)
+        async for car in self.in_channels['Supervisor']:
+            print('qieqoweiwe')
+            print(self.in_channels.keys())
+            self.cars.append(car)
+            create_bidirectional_channel(self, car, max_buffer_size=np.inf)
+            self.nursery.start_soon(car.run)
+            await self.send_directive_to_car(car, ref)
+
+    async def check_cars(self):
+        ref = [[0,0],[1,1]]
+#        print(self.cars)
+#        st()
+        for car in self.cars:
+            await self.update_car_response(car,ref)
+
+    async def run(self):
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self.check_supervisor)
+            nursery.start_soon(self.check_cars)
+
+
+#        all_channels = [self.in_channels[car] for car in cars]
 
 
 class Car(BoxComponent):
@@ -118,13 +135,13 @@ class Car(BoxComponent):
             print('{} is requested'.format(self.name))
             requested = True
             await self.out_channels['Planner'].send(requested)
+            st()
 
     async def run(self):
         async with trio.open_nursery() as nursery:
-            await self.update_planner_command()
-            await self.track_reference()
-            print('TEST')
-            await self.times_up()
+            nursery.start_soon(self.update_planner_command)
+            nursery.start_soon(self.track_reference)
+            nursery.start_soon(self.times_up)
 
 class Supervisor(BoxComponent):
     def __init__(self):
@@ -184,8 +201,8 @@ async def main():
     all_components = []
     async with trio.open_nursery() as nursery:
         supervisor = Supervisor()#(nursery=nursery)
-        planner = Planner(nursery=nursery)
         all_components.append(supervisor)
+        planner = Planner(nursery=nursery)
         all_components.append(planner)
         customer = Customer(average_arrival_rate = average_arrival_rate, average_park_time = average_park_time)
         all_components.append(customer)
