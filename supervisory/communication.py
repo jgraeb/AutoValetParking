@@ -3,6 +3,8 @@ from ipdb import set_trace as st
 import numpy as np
 import trio
 import random
+import sys
+sys.path.append("../")
 import variables.global_vars as global_vars
 import component.car as vehicle
 
