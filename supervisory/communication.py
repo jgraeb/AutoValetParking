@@ -3,6 +3,8 @@ from ipdb import set_trace as st
 import numpy as np
 import trio
 import random
+import variables.global_vars as global_vars
+import component.car as vehicle
 
 average_arrival_rate = 1 # per second
 beta = 1/average_arrival_rate
@@ -109,6 +111,9 @@ class OutsideWorld(BoxComponent):
             # spawns cars according to exponential distribution
             await trio.sleep(np.random.exponential(1/self.average_arrival_rate))
             car = self.generate_car()
+            the_car = vehicle.Car(car_name=car.name)
+            global_vars.cars_to_show.append(the_car)
+            #print(len(global_vars.cars_to_show))
             print("Car with ID {0} arrives at {1:.3f} and promises to leave at {2:.3}".format(car.name, car.arrive_time, car.depart_time))
             await self.out_channels['Scheduler'].send(car)
             # Random sleeps help trigger the problem more reliably
@@ -130,3 +135,4 @@ async def main():
             nursery.start_soon(comp.run)
 
 trio.run(main)
+print(len(global_vars.cars_to_show))
