@@ -14,7 +14,7 @@ from prepare.helper import *
 from tulip_spec.simplestspec_ctrl import ExampleCtrl
 import prepare.user as user
 import component.pedestrian as pedestrian
-#import supervisory.communication as communication
+#from supervisory.communication import OutsideWorld
 import motionplanning.grid_planner as planner
 from PIL import Image
 from math import pi

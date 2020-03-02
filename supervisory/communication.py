@@ -135,4 +135,4 @@ async def main():
             nursery.start_soon(comp.run)
 
 trio.run(main)
-print(len(global_vars.cars_to_show))
+
