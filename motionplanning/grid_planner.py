@@ -8,6 +8,13 @@ from typing import List, Any, Tuple
 from collections import namedtuple
 from planning_graph import WeightedDirectedGraph
 import csv
+
+# Resolve conflict with ROS
+import sys
+ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
+if ros_path in sys.path:
+    sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
+    
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
