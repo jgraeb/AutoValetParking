@@ -14,13 +14,12 @@ import sys
 ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
 if ros_path in sys.path:
     sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
-    
+
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from ipdb import set_trace as st
 import _pickle as pickle
-import heapq
 
 def img_to_csv_bitmap(img, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
