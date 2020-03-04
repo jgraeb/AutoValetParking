@@ -398,7 +398,7 @@ def astar_trajectory(planning_graph,start,end,heuristic=None):
     return path
 
 if __name__ == '__main__':
-    remap = False
+    remap = True
     if remap:
         planning_graph = image_to_prim_graph(img_name='AVP_planning_300p',
                 planning_graph_save_name='planning_graph',
