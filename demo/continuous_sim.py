@@ -3,7 +3,7 @@
 """
 Created in Nov 2019
 
-@author: Jiaqi Yan 
+@author: Jiaqi Yan
 
 """
 
@@ -15,7 +15,7 @@ from tulip_spec.simplestspec_ctrl import ExampleCtrl
 import prepare.user as user
 import component.pedestrian as pedestrian
 #from supervisory.communication import OutsideWorld
-import motionplanning.grid_planner as planner
+#import motionplanning.grid_planner as planner
 from PIL import Image
 from math import pi
 import time, platform, warnings, matplotlib, random
@@ -38,7 +38,7 @@ else: # if the operating system is Linux or Windows
         matplotlib.use('TkAgg') # this may be slower
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-    
+
 # set to True to save video
 save_video = False
 
@@ -75,17 +75,17 @@ def animate(frame_idx): # update animation by dt
             theta = -theta*pi/180 # deg to rad
             draw_car(background,x,y,theta) # draw cars to background
             car.state_idx +=1
-    
+
     if pedestrian.state[0] < end_walk_lane[0]: # if not at the destination
         pedestrian.prim_next(dt)
-        draw_pedestrian(pedestrian,background) 
-        
+        draw_pedestrian(pedestrian,background)
+
     # update background
     the_parking_lot = [ax.imshow(background)] # update the stage
     background.close()
     background = parking_lot.get_background()
     #print(frame_idx)
-    all_artists = the_parking_lot 
+    all_artists = the_parking_lot
     return all_artists
 t0 = time.time()
 animate(0)

@@ -129,6 +129,8 @@ class GridPrimitiveSet:
         edges = []
         for prim in self.grid_trajectory_set:
             edge = dict()
+#            if xy[0] == 120 and xy[1] == 60:
+#                st()
             node_sequence = [[point[0]+xy[0], point[1]+xy[1]] for point in prim['node_sequence']]
             start_node = (node_sequence[0][0], node_sequence[0][1], prim['start_heading'], prim['start_v'])
             end_node = (node_sequence[-1][0], node_sequence[-1][1], prim['end_heading'], prim['end_v'])
@@ -243,10 +245,10 @@ class GridPlanner:
                 if point_set_is_safe(neighbors, self.bitmap):
                     all_xy_nodes.append(xy)
 
-            for idx, node in enumerate(all_xy_nodes):
+            for idx, xy in enumerate(all_xy_nodes):
                 if verbose:
                     print('planning graph progress: {0:.1f}%'.format(idx/len(all_xy_nodes)*100))
-                for edge in self.prim_set.get_edges_for_xy(node):
+                for edge in self.prim_set.get_edges_for_xy(xy):
                     tube = get_tube_for_lines(edge['node_sequence'], r=self.uncertainty)
                     if point_set_is_safe(tube, bitmap):
                         graph.add_edges([[edge['start_node'], edge['end_node'], len(edge['node_sequence'])]])
@@ -314,7 +316,7 @@ def astar_trajectory(planning_graph,start,end,heuristic=None):
     return path
 
 if __name__ == '__main__':
-    remap = True
+    remap = False
     if remap:
         # create bitmap from parking lot image
         bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
@@ -322,7 +324,7 @@ if __name__ == '__main__':
         grid_params = GridParams(grid_size = 10, grid_anchor = [0, 0])
         # load primitive set
         prim_set = json_to_grid_primitive_set('10px_prims.json')
-        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 3)
+        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 1)
         planning_graph = grid_planner.get_planning_graph()
         with open('planning_graph.pkl', 'wb') as f:
             pickle.dump(planning_graph, f)
