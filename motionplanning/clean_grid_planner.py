@@ -129,8 +129,6 @@ class GridPrimitiveSet:
         edges = []
         for prim in self.grid_trajectory_set:
             edge = dict()
-#            if xy[0] == 120 and xy[1] == 60:
-#                st()
             node_sequence = [[point[0]+xy[0], point[1]+xy[1]] for point in prim['node_sequence']]
             start_node = (node_sequence[0][0], node_sequence[0][1], prim['start_heading'], prim['start_v'])
             end_node = (node_sequence[-1][0], node_sequence[-1][1], prim['end_heading'], prim['end_v'])
@@ -187,7 +185,6 @@ def get_tube_for_lines(points, r):
     for point1, point2 in zip(points, points[1:]):
         tube = get_tube_for_line(point1, point2, r)
         tubes.append(tube)
-
     return np.unique(np.vstack(tubes), axis=0)
 
 def json_to_grid_primitive_set(infile):
@@ -205,12 +202,15 @@ class GridPlanner:
         self.bitmap = bitmap
         self.grid_size = grid_params.grid_size
         self.grid_anchor = grid_params.grid_anchor
-        self.grid = self.create_uniform_grid(bitmap, self.grid_anchor, self.grid_size)
+        self.grid = self.create_uniform_grid()
         self.prim_set = prim_set
         self.uncertainty = uncertainty
         self.planning_graph = None
 
-    def create_uniform_grid(self, bitmap, grid_anchor, grid_size):
+    def create_uniform_grid(self):
+        bitmap = self.bitmap
+        grid_size = self.grid_size
+        grid_anchor = self.grid_anchor
         Grid = namedtuple('Grid', ['sampled_points', 'grid_size'])
         h = bitmap.shape[0]
         w = bitmap.shape[1]
@@ -230,19 +230,25 @@ class GridPlanner:
         grid = Grid(sampled_points=np.array(sampled_points), grid_size = grid_size)
         return grid
 
+    def compute_sequence_weight(self, sequence):
+        weight = 0
+        for n1, n2 in zip(sequence, sequence[1:]):
+            weight += manhattan_distance(n1, n2)
+        return weight
+
     def get_planning_graph(self, verbose=True):
+        bitmap = self.bitmap.transpose()
         if not self.planning_graph:
             planning_graph = dict()
             planning_graph['graph'] = None
             planning_graph['edge_info'] = None
-            bitmap = self.bitmap.transpose()
             graph = WeightedDirectedGraph()
             edge_info = dict()
             sampled_points = self.grid.sampled_points
             all_xy_nodes = []
             for xy in sampled_points:
                 neighbors = get_ball_neighbors(xy, self.uncertainty)
-                if point_set_is_safe(neighbors, self.bitmap):
+                if point_set_is_safe(neighbors, bitmap):
                     all_xy_nodes.append(xy)
 
             for idx, xy in enumerate(all_xy_nodes):
@@ -251,7 +257,7 @@ class GridPlanner:
                 for edge in self.prim_set.get_edges_for_xy(xy):
                     tube = get_tube_for_lines(edge['node_sequence'], r=self.uncertainty)
                     if point_set_is_safe(tube, bitmap):
-                        graph.add_edges([[edge['start_node'], edge['end_node'], len(edge['node_sequence'])]])
+                        graph.add_edges([[edge['start_node'], edge['end_node'], self.compute_sequence_weight(edge['node_sequence'])]])
                         edge_info[edge['start_node'], edge['end_node']] = edge['node_sequence']
 
             planning_graph['graph'] = graph
@@ -260,12 +266,6 @@ class GridPlanner:
             return planning_graph
         else:
             return self.planning_graph
-
-def grid_to_prim_graph(bitmap, grid, uncertainty, verbose=False):
-    bitmap = bitmap.transpose()
-    graph = WeightedDirectedGraph()
-    edge_info = dict()
-    sampled_points = grid.sampled_points
 
 def plot_planning_graph(planning_graph, plt, verbose=True):
     # very inefficient plotting
@@ -321,10 +321,10 @@ if __name__ == '__main__':
         # create bitmap from parking lot image
         bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
         # define grid parameters
-        grid_params = GridParams(grid_size = 10, grid_anchor = [0, 0])
+        grid_params = GridParams(grid_size = 5, grid_anchor = [0, 0])
         # load primitive set
-        prim_set = json_to_grid_primitive_set('10px_prims.json')
-        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 1)
+        prim_set = json_to_grid_primitive_set('10px_prims_hacked.json')
+        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 10)
         planning_graph = grid_planner.get_planning_graph()
         with open('planning_graph.pkl', 'wb') as f:
             pickle.dump(planning_graph, f)
@@ -335,16 +335,21 @@ if __name__ == '__main__':
         planning_graph = planning_graph['graph']
         ps = []
         ps.append((120, 60, 0, 0))
-        ps.append((200, 60, 0, 0))
+        ps.append((190, 210, 0, 0))
+        ps.append((210, 80, 90, 0))
+        ps.append((80, 150, 180, 0))
+        ps.append((140, 220, 0, 0))
         for p in range(len(ps)-1):
             start = ps[p]
             end = ps[p+1]
             traj = astar_trajectory(planning_graph, start, end)
             for start, end in zip(traj, traj[1:]):
                 segment = np.array(edge_info[(tuple(start), tuple(end))])
-                plt.plot(segment[:,0], segment[:,1])
+                plt.plot(segment[0,0], segment[0,1], 'b.')
+                plt.plot(segment[-1,0], segment[-1,1], 'rx')
+                plt.plot(segment[:,0], segment[:,1], 'k--')
+                plt.plot(segment[:,0], segment[:,1], 'k--')
         img = plt.imread('imglib/AVP_planning_300p.png')
         plt.imshow(img)
         plt.axis('equal')
-
         plt.show()
