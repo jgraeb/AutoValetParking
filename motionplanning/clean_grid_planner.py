@@ -365,41 +365,43 @@ if __name__ == '__main__':
         coords = []
         clicks = 0
         print('click on parking lot to set next desired xy')
+        clickok = True
         def onclick(event):
-            global ix, iy, clicks, coords, ps
-            ix, iy = event.xdata, event.ydata
-            clicks += 1
-            coords.append((ix, iy))
-            if clicks % 2: # if odd
-                print('x = %d, y = %d'%( ix, iy))
-                print('click on another point to set desired heading')
-            else:
-                try:
-                    dys = coords[1][1] - coords[0][1]
-                    dxs = coords[1][0] - coords[0][0]
-                    theta = np.arctan2(-dys, dxs) / np.pi * 180
-                    print('theta = %d'%(theta))
-#                    print('x = %d, y = %d, theta = %d'%( ix, iy, theta))
-                    ps.append((coords[0][0], coords[0][1], theta, 0))
-                    coords = []
-                    start = ps[-2]
-                    end = ps[-1]
-                    traj = astar_trajectory(planning_graph, start, end)
-                    for start, end in zip(traj, traj[1:]):
-                        segment = np.array(edge_info[(tuple(start), tuple(end))])
-                        plt.plot(segment[0,0], segment[0,1], 'b.')
-                        plt.plot(segment[-1,0], segment[-1,1], 'rx')
-                        plt.plot(segment[:,0], segment[:,1], 'k--')
-                        plt.pause(0.1)
-                    print('trajectory plotted!')
-                    print('click to set desired xy')
-                    plt.show()
-                except:
-                    print('CANNOT FIND TRAJECTORY: click again to set xy!')
-                    if len(ps) > 1:
-                        ps = ps[:-1]
-#            if len(coords) == 2:
-#            fig.canvas.mpl_disconnect(cid)
-            return coords
+            global ix, iy, clicks, coords, ps, clickok
+            if clickok:
+                clickok = False
+                ix, iy = event.xdata, event.ydata
+                clicks += 1
+                coords.append((ix, iy))
+                if clicks % 2: # if odd
+                    print('x = %d, y = %d'%( ix, iy))
+                    print('click on another point to set desired heading')
+                    clickok = True
+                else:
+                    try:
+                        dys = coords[1][1] - coords[0][1]
+                        dxs = coords[1][0] - coords[0][0]
+                        theta = np.arctan2(-dys, dxs) / np.pi * 180
+                        print('theta = %d'%(theta))
+                        ps.append((coords[0][0], coords[0][1], theta, 0))
+                        coords = []
+                        start = ps[-2]
+                        end = ps[-1]
+                        traj = astar_trajectory(planning_graph, start, end)
+                        for start, end in zip(traj, traj[1:]):
+                            segment = np.array(edge_info[(tuple(start), tuple(end))])
+                            plt.plot(segment[0,0], segment[0,1], 'b.')
+                            plt.plot(segment[-1,0], segment[-1,1], 'rx')
+                            plt.plot(segment[:,0], segment[:,1], 'k--')
+                            plt.pause(0.1)
+                        print('trajectory plotted!')
+                        print('click to set desired xy')
+                        clickok = True
+                        plt.show()
+                    except:
+                        clickok = True
+                        print('CANNOT FIND TRAJECTORY: click again to set xy!')
+                        if len(ps) > 1:
+                            ps = ps[:-1]
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
