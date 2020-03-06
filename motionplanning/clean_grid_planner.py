@@ -294,10 +294,16 @@ def manhattan_distance(p1, p2):
     return np.sum(np.abs(p1_xy-p2_xy))
 
 def find_closest_point(p1, graph):
+    def angle_similarity_scores(a_diff):
+        c_diff = []
+        for diff in a_diff:
+            diff = constrain_heading_to_pm_180(diff)
+            c_diff.append(diff)
+        return np.array(c_diff)
     diff = np.array(graph._nodes)-p1
     if (diff.shape[1] == 4):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
-            diff[:,1]**2) + 0.001 * diff[:,2]**2 + 0.001 * diff[:,3]**2)]
+            diff[:,1]**2) + 0.001 * angle_similarity_scores(diff[:,2])**2 + 0.001 * diff[:,3]**2)]
     if (diff.shape[1] == 3):
         return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
             diff[:,1]**2 + 0.1 * diff[0:,2]**2))]
@@ -324,7 +330,7 @@ if __name__ == '__main__':
         grid_params = GridParams(grid_size = 10, grid_anchor = [0, 0])
         # load primitive set
         prim_set = json_to_grid_primitive_set('10px_prims_hacked.json')
-        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 6)
+        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 7)
         planning_graph = grid_planner.get_planning_graph()
         with open('planning_graph.pkl', 'wb') as f:
             pickle.dump(planning_graph, f)
@@ -356,43 +362,44 @@ if __name__ == '__main__':
         plt.imshow(img)
         plt.axis('equal')
 
-    coords = []
-    clicks = 0
-    print('click on parking lot to set next desired xy')
-    def onclick(event):
-        global ix, iy, clicks, coords, ps
-        ix, iy = event.xdata, event.ydata
-        clicks += 1
-        coords.append((ix, iy))
-        if clicks % 2: # if odd
-            print('x = %d, y = %d'%( ix, iy))
-            print('click on another point to set desired heading')
-        else:
-            try:
-                print('trajectory found!')
-                dys = coords[1][1] - coords[0][1]
-                dxs = coords[1][0] - coords[0][0]
-                theta = int(np.arctan2(-dys, dxs) / np.pi * 180)
-                print('x = %d, y = %d, theta = %d'%( ix, iy, theta))
-                coords = []
-                ps.append((int(ix), int(iy), theta, 0))
-                start = ps[-2]
-                end = ps[-1]
-                traj = astar_trajectory(planning_graph, start, end)
-                for start, end in zip(traj, traj[1:]):
-                    segment = np.array(edge_info[(tuple(start), tuple(end))])
-                    plt.plot(segment[0,0], segment[0,1], 'b.')
-                    plt.plot(segment[-1,0], segment[-1,1], 'rx')
-                    plt.plot(segment[:,0], segment[:,1], 'k--')
-                    plt.plot(segment[:,0], segment[:,1], 'k--')
-                plt.show()
-                print('click to set desired xy')
-            except:
-                print('cannot find trajectory, click again to set xy')
-                if len(ps) > 1:
-                    ps = ps[:-1]
-#        if len(coords) == 2:
-#        fig.canvas.mpl_disconnect(cid)
-        return coords
-    cid = fig.canvas.mpl_connect('button_press_event', onclick)
-    plt.show()
+        coords = []
+        clicks = 0
+        print('click on parking lot to set next desired xy')
+        def onclick(event):
+            global ix, iy, clicks, coords, ps
+            ix, iy = event.xdata, event.ydata
+            clicks += 1
+            coords.append((ix, iy))
+            if clicks % 2: # if odd
+                print('x = %d, y = %d'%( ix, iy))
+                print('click on another point to set desired heading')
+            else:
+                try:
+                    dys = coords[1][1] - coords[0][1]
+                    dxs = coords[1][0] - coords[0][0]
+                    theta = np.arctan2(-dys, dxs) / np.pi * 180
+                    print('theta = %d'%(theta))
+#                    print('x = %d, y = %d, theta = %d'%( ix, iy, theta))
+                    ps.append((coords[0][0], coords[0][1], theta, 0))
+                    coords = []
+                    start = ps[-2]
+                    end = ps[-1]
+                    traj = astar_trajectory(planning_graph, start, end)
+                    for start, end in zip(traj, traj[1:]):
+                        segment = np.array(edge_info[(tuple(start), tuple(end))])
+                        plt.plot(segment[0,0], segment[0,1], 'b.')
+                        plt.plot(segment[-1,0], segment[-1,1], 'rx')
+                        plt.plot(segment[:,0], segment[:,1], 'k--')
+                        plt.pause(0.1)
+                    print('trajectory plotted!')
+                    print('click to set desired xy')
+                    plt.show()
+                except:
+                    print('CANNOT FIND TRAJECTORY: click again to set xy!')
+                    if len(ps) > 1:
+                        ps = ps[:-1]
+#            if len(coords) == 2:
+#            fig.canvas.mpl_disconnect(cid)
+            return coords
+        cid = fig.canvas.mpl_connect('button_press_event', onclick)
+        plt.show()
