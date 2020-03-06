@@ -1,4 +1,4 @@
-# Image processing and A-star path finding
+# Grid planner module, image processing, and A-star path finding
 # Tung M. Phan
 # California Institute of Technology
 # February 10th, 2020
@@ -321,10 +321,10 @@ if __name__ == '__main__':
         # create bitmap from parking lot image
         bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
         # define grid parameters
-        grid_params = GridParams(grid_size = 5, grid_anchor = [0, 0])
+        grid_params = GridParams(grid_size = 10, grid_anchor = [0, 0])
         # load primitive set
         prim_set = json_to_grid_primitive_set('10px_prims_hacked.json')
-        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 10)
+        grid_planner = GridPlanner(bitmap, prim_set, grid_params, uncertainty = 6)
         planning_graph = grid_planner.get_planning_graph()
         with open('planning_graph.pkl', 'wb') as f:
             pickle.dump(planning_graph, f)
@@ -335,10 +335,12 @@ if __name__ == '__main__':
         planning_graph = planning_graph['graph']
         ps = []
         ps.append((120, 60, 0, 0))
-        ps.append((190, 210, 0, 0))
-        ps.append((210, 80, 90, 0))
-        ps.append((80, 150, 180, 0))
-        ps.append((140, 220, 0, 0))
+        plt.plot(120, 60, 'c.')
+#        ps.append((190, 210, 0, 0))
+#        ps.append((210, 80, 90, 0))
+#        ps.append((80, 150, 180, 0))
+#        ps.append((40, 220, 0, 0))
+#        ps.append((140, 220, 0, 0))
         for p in range(len(ps)-1):
             start = ps[p]
             end = ps[p+1]
@@ -350,6 +352,47 @@ if __name__ == '__main__':
                 plt.plot(segment[:,0], segment[:,1], 'k--')
                 plt.plot(segment[:,0], segment[:,1], 'k--')
         img = plt.imread('imglib/AVP_planning_300p.png')
+        fig = plt.figure(1)
         plt.imshow(img)
         plt.axis('equal')
-        plt.show()
+
+    coords = []
+    clicks = 0
+    print('click on parking lot to set next desired xy')
+    def onclick(event):
+        global ix, iy, clicks, coords, ps
+        ix, iy = event.xdata, event.ydata
+        clicks += 1
+        coords.append((ix, iy))
+        if clicks % 2: # if odd
+            print('x = %d, y = %d'%( ix, iy))
+            print('click on another point to set desired heading')
+        else:
+            try:
+                print('trajectory found!')
+                dys = coords[1][1] - coords[0][1]
+                dxs = coords[1][0] - coords[0][0]
+                theta = int(np.arctan2(-dys, dxs) / np.pi * 180)
+                print('x = %d, y = %d, theta = %d'%( ix, iy, theta))
+                coords = []
+                ps.append((int(ix), int(iy), theta, 0))
+                start = ps[-2]
+                end = ps[-1]
+                traj = astar_trajectory(planning_graph, start, end)
+                for start, end in zip(traj, traj[1:]):
+                    segment = np.array(edge_info[(tuple(start), tuple(end))])
+                    plt.plot(segment[0,0], segment[0,1], 'b.')
+                    plt.plot(segment[-1,0], segment[-1,1], 'rx')
+                    plt.plot(segment[:,0], segment[:,1], 'k--')
+                    plt.plot(segment[:,0], segment[:,1], 'k--')
+                plt.show()
+                print('click to set desired xy')
+            except:
+                print('cannot find trajectory, click again to set xy')
+                if len(ps) > 1:
+                    ps = ps[:-1]
+#        if len(coords) == 2:
+#        fig.canvas.mpl_disconnect(cid)
+        return coords
+    cid = fig.canvas.mpl_connect('button_press_event', onclick)
+    plt.show()
