@@ -22,6 +22,7 @@ import json
 from collections import OrderedDict as od
 from ipdb import set_trace as st
 from prim_json_maker import import_json
+from tools import get_rotation_matrix, reflect_over_x_axis, constrain_heading_to_pm_180, manhattan_distance
 
 def img_to_csv_bitmap(img_path, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
@@ -67,19 +68,6 @@ def point_set_is_safe(point_set, bitmap):
                 return False
     return True
 
-def get_rotation_matrix(theta, deg):
-    if deg:
-        theta = theta / 180 * np.pi
-    return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-
-def constrain_heading_to_pm_180(heading):
-    heading = heading % 360
-    if heading > 180:
-        heading = -(360-heading)
-    return heading
-
-def reflect_over_x_axis(vector):
-    return np.array([vector[0], -vector[1]])
 
 def rotate_vector(vec, theta, deg=False):
     rot_mat = get_rotation_matrix(theta, deg=deg)
@@ -288,11 +276,6 @@ def convert_to_nx_graph(digraph):
             G.add_weighted_edges_from([(edge[0], edge[1], weight)])
     return G
 
-def manhattan_distance(p1, p2):
-    p1_xy = np.array([p1[0], p1[1]])
-    p2_xy = np.array([p2[0], p2[1]])
-    return np.sum(np.abs(p1_xy-p2_xy))
-
 def find_closest_point(p1, graph):
     def angle_similarity_scores(a_diff):
         c_diff = []
@@ -341,22 +324,7 @@ if __name__ == '__main__':
         planning_graph = planning_graph['graph']
         ps = []
         ps.append((120, 60, 0, 0))
-        plt.plot(120, 60, 'c.')
-#        ps.append((190, 210, 0, 0))
-#        ps.append((210, 80, 90, 0))
-#        ps.append((80, 150, 180, 0))
-#        ps.append((40, 220, 0, 0))
-#        ps.append((140, 220, 0, 0))
-        for p in range(len(ps)-1):
-            start = ps[p]
-            end = ps[p+1]
-            traj = astar_trajectory(planning_graph, start, end)
-            for start, end in zip(traj, traj[1:]):
-                segment = np.array(edge_info[(tuple(start), tuple(end))])
-                plt.plot(segment[0,0], segment[0,1], 'b.')
-                plt.plot(segment[-1,0], segment[-1,1], 'rx')
-                plt.plot(segment[:,0], segment[:,1], 'k--')
-                plt.plot(segment[:,0], segment[:,1], 'k--')
+        plt.plot(ps[0][0], ps[0][1], 'c.')
         img = plt.imread('imglib/AVP_planning_300p.png')
         fig = plt.figure(1)
         plt.imshow(img)
@@ -393,7 +361,7 @@ if __name__ == '__main__':
                             plt.plot(segment[0,0], segment[0,1], 'b.')
                             plt.plot(segment[-1,0], segment[-1,1], 'rx')
                             plt.plot(segment[:,0], segment[:,1], 'k--')
-                            plt.pause(0.1)
+                            plt.pause(0.3)
                         print('trajectory plotted!')
                         print('click to set desired xy')
                         clickok = True
