@@ -5,7 +5,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from tools import get_rotation_matrix, reflect_over_x_axis, constrain_heading_to_pm_180
+from tools import get_rotation_matrix, reflect_over_x_axis, constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe
 
 class EndPlanner:
     def __init__(self, planning_graph, end_states, contract):
@@ -20,13 +20,19 @@ class EndPlanner:
         return planning_graph
 
 class EndStateContract:
-    def __init__(self, assm, guart):
+    def __init__(self, assm, guart, bitmap):
         self.assm = assm
         self.guart = guart
-    def check_assumption(self, start_state, end_state):
-        return self.assm.check_assumption(start_state, end_state)
-    def generate_guarantee(self, start_state, end_state):
-        return self.guart.generate_guarantee(start_state, end_state)
+        self.bitmap = bitmap.transpose()
+    def check_assumption(self, assume_state, end_state):
+        if self.assm.check_assumption(assume_state, end_state):
+            node_sequence = self.guart.generate_guarantee(assume_state, end_state)
+            tube = get_tube_for_lines(node_sequence, r=self.guart.uncertainty)
+            return point_set_is_safe(tube, self.bitmap)
+        else:
+            return False
+    def generate_guarantee(self, assume_state, end_state):
+        return self.guart.generate_guarantee(assume_state, end_state)
 
 class PrimitiveAssumption:
     def __init__(self, scan_radius):
@@ -35,7 +41,7 @@ class PrimitiveAssumption:
         assume_loc = np.array([[assume_state[0], assume_state[1]]]).transpose()
         end_loc = np.array([[end_state[0], end_state[1]]]).transpose()
         dist = np.linalg.norm(assume_loc - end_loc)
-        return dist <= scan_radius
+        return dist <= self.scan_radius
     def check_assumption(self, assume_state, end_state):
         raise NotImplementedError
 
@@ -46,7 +52,8 @@ class PrimitiveGuarantee:
         raise NotImplementedError
 
 class TwoPointTurnAssumption(PrimitiveAssumption):
-    def __init__(self, max_angle_diff, min_dist):
+    def __init__(self, scan_radius, max_angle_diff, min_dist):
+        super(TwoPointTurnAssumption, self).__init__(scan_radius)
         self.max_angle_diff = max_angle_diff
         self.min_dist = min_dist
     def check_assumption(self, assume_state, end_state):
@@ -68,7 +75,7 @@ class TwoPointTurnAssumption(PrimitiveAssumption):
         else:
             return False
 
-class TwoPointGuarantee(PrimitiveGuarantee):
+class TwoPointTurnGuarantee(PrimitiveGuarantee):
     def __init__(self, uncertainty):
         self.uncertainty = uncertainty
     def generate_guarantee(self, assume_state, end_state):
@@ -89,11 +96,17 @@ class TwoPointGuarantee(PrimitiveGuarantee):
                          [int(end_loc[0]), int(end_loc[1])]]
         return node_sequence
 
-a = TwoPointTurnAssumption(max_angle_diff=45, min_dist=20)
-g = TwoPointGuarantee(uncertainty=3)
-c = EndStateContract(a, g)
 end_states = [(35, 122, 120, 0)]
-EndPlanner
+a = TwoPointTurnAssumption(scan_radius = 200, max_angle_diff=45, min_dist=20)
+g = TwoPointTurnGuarantee(uncertainty=3)
+bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
+c = EndStateContract(a, g, bitmap)
+c.check_assumption(end_state = end_states[0], assume_state=(20, 10, 90, 0))
 #print(a.check_assumption(assume_state=(20, 10, 90, 0), end_state=end_states[0]))
 #print(g.generate_guarantee(assume_state=(4, 40, 90, 0), end_state=end_states[0]))
 #st()
+#            plt.plot(tube[:,0], tube[:,1], '.')
+#            plt.axis('equal')
+#            plt.gca().invert_xaxis()
+#            plt.show()
+#            st()
