@@ -3,7 +3,6 @@
 # California Institute of Technology
 # February 10th, 2020
 
-import networkx as nx
 from typing import List, Any, Tuple
 import itertools
 from collections import namedtuple
@@ -16,13 +15,7 @@ import json
 from collections import OrderedDict as od
 from ipdb import set_trace as st
 from prim_json_maker import import_json
-from tools import rotate_vector, reflect_over_x_axis, constrain_heading_to_pm_180, manhattan_distance, img_to_csv_bitmap, get_tube_for_lines, get_ball_neighbors, in_range, point_set_is_safe
-
-def csv_bitmap_to_numpy_bitmap(file_name):
-    with open('{}.csv'.format(file_name), 'rt') as f:
-        np_bitmap = np.array(list(csv.reader(f, delimiter=','))).astype('bool')
-    return np_bitmap
-
+from tools import rotate_vector, reflect_over_x_axis, constrain_heading_to_pm_180, manhattan_distance, img_to_csv_bitmap, get_tube_for_lines, get_ball_neighbors, in_range, point_set_is_safe, compute_sequence_weight, astar_trajectory
 
 class Node:
     def __init__(self, x, y, heading, v):
@@ -141,12 +134,6 @@ class GridPlanner:
         grid = Grid(sampled_points=np.array(sampled_points), grid_size = grid_size)
         return grid
 
-    def compute_sequence_weight(self, sequence):
-        weight = 0
-        for n1, n2 in zip(sequence, sequence[1:]):
-            weight += manhattan_distance(n1, n2)
-        return weight
-
     def get_planning_graph(self, verbose=True):
         bitmap = self.bitmap.transpose()
         if not self.planning_graph:
@@ -168,7 +155,7 @@ class GridPlanner:
                 for edge in self.prim_set.get_edges_for_xy(xy):
                     tube = get_tube_for_lines(edge['node_sequence'], r=self.uncertainty)
                     if point_set_is_safe(tube, bitmap):
-                        graph.add_edges([[edge['start_node'], edge['end_node'], self.compute_sequence_weight(edge['node_sequence'])]])
+                        graph.add_edges([[edge['start_node'], edge['end_node'], compute_sequence_weight(edge['node_sequence'])]])
                         edge_info[edge['start_node'], edge['end_node']] = edge['node_sequence']
 
             planning_graph['graph'] = graph
@@ -189,43 +176,6 @@ def plot_planning_graph(planning_graph, plt, verbose=True):
     for idx, edge in enumerate(edges):
         print('plotting graph edges progress: {0:.1f}%'.format(idx/len(edges)*100))
         plt.plot([edge[0][0], edge[1][0]], [edge[0][1], edge[1][1]])
-
-def convert_to_nx_graph(digraph):
-    G = nx.DiGraph()
-    for start in digraph._edges:
-        for end in digraph._edges[start]:
-            edge = (start, end)
-            weight = digraph._weights[edge]
-            G.add_weighted_edges_from([(edge[0], edge[1], weight)])
-    return G
-
-def find_closest_point(p1, graph):
-    def angle_similarity_scores(a_diff):
-        c_diff = []
-        for diff in a_diff:
-            diff = constrain_heading_to_pm_180(diff)
-            c_diff.append(diff)
-        return np.array(c_diff)
-    diff = np.array(graph._nodes)-p1
-    if (diff.shape[1] == 4):
-        return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
-            diff[:,1]**2) + 0.001 * angle_similarity_scores(diff[:,2])**2 + 0.001 * diff[:,3]**2)]
-    if (diff.shape[1] == 3):
-        return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
-            diff[:,1]**2 + 0.1 * diff[0:,2]**2))]
-    if (diff.shape[1] == 2):
-        return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
-            diff[:,1]**2))]
-
-def astar_trajectory(planning_graph,start,end,heuristic=None):
-    closest_start = find_closest_point(start, planning_graph)
-    closest_end = find_closest_point(end, planning_graph)
-    nx_graph = convert_to_nx_graph(planning_graph)
-    if heuristic:
-        path = np.array(nx.astar_path(nx_graph, closest_start, closest_end, heuristic))
-    else:
-        path = np.array(nx.astar_path(nx_graph, closest_start, closest_end))
-    return path
 
 if __name__ == '__main__':
     remap = False

@@ -7,8 +7,8 @@ ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
 if ros_path in sys.path:
     sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import cv2
-import cv2
 import numpy as np
+import networkx as nx
 
 def img_to_csv_bitmap(img_path, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
@@ -100,4 +100,52 @@ def point_set_is_safe(point_set, bitmap):
             if not bitmap[point[0]][point[1]]:
                 return False
     return True
+
+def compute_sequence_weight(sequence):
+    weight = 0
+    for n1, n2 in zip(sequence, sequence[1:]):
+        weight += manhattan_distance(n1, n2)
+    return weight
+
+def astar_trajectory(planning_graph,start,end,heuristic=None):
+    closest_start = find_closest_point(start, planning_graph)
+    closest_end = find_closest_point(end, planning_graph)
+    nx_graph = convert_to_nx_graph(planning_graph)
+    if heuristic:
+        path = np.array(nx.astar_path(nx_graph, closest_start, closest_end, heuristic))
+    else:
+        path = np.array(nx.astar_path(nx_graph, closest_start, closest_end))
+    return path
+
+def find_closest_point(p1, graph):
+    def angle_similarity_scores(a_diff):
+        c_diff = []
+        for diff in a_diff:
+            diff = constrain_heading_to_pm_180(diff)
+            c_diff.append(diff)
+        return np.array(c_diff)
+    diff = np.array(graph._nodes)-p1
+    if (diff.shape[1] == 4):
+        return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
+            diff[:,1]**2) + 0.001 * angle_similarity_scores(diff[:,2])**2 + 0.001 * diff[:,3]**2)]
+    if (diff.shape[1] == 3):
+        return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
+            diff[:,1]**2 + 0.1 * diff[0:,2]**2))]
+    if (diff.shape[1] == 2):
+        return graph._nodes[np.argmin(np.sqrt(diff[:,0]**2 +
+            diff[:,1]**2))]
+
+def convert_to_nx_graph(digraph):
+    G = nx.DiGraph()
+    for start in digraph._edges:
+        for end in digraph._edges[start]:
+            edge = (start, end)
+            weight = digraph._weights[edge]
+            G.add_weighted_edges_from([(edge[0], edge[1], weight)])
+    return G
+
+def csv_bitmap_to_numpy_bitmap(file_name):
+    with open('{}.csv'.format(file_name), 'rt') as f:
+        np_bitmap = np.array(list(csv.reader(f, delimiter=','))).astype('bool')
+    return np_bitmap
 
