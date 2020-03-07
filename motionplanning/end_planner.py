@@ -5,7 +5,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from tools import get_rotation_matrix, reflect_over_x_axis, constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe
+from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe
 
 class EndPlanner:
     def __init__(self, planning_graph, end_states, contract):
