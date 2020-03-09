@@ -3,6 +3,14 @@ from ipdb import set_trace as st
 import numpy as np
 import trio
 import random
+# Animation
+import sys
+sys.path.append('..') # enable importing modules from an upper directory:
+sys.path.append('../demo') # enable importing modules from demo
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+from prepare.helper import *
+import component.pedestrian as Pedestrian
 
 average_arrival_rate = 0.5 # per second
 beta = 1/average_arrival_rate
@@ -13,6 +21,8 @@ START_X = 0
 START_Y = 0
 START_YAW = 0
 OPEN_TIME = 500 # not yet working
+
+list_of_cars = []
 
 
 def get_current_time():
@@ -40,19 +50,120 @@ class BoxComponent:
     def __init__(self):
         self.in_channels = dict()
         self.out_channels = dict()
+        
 
-#    def _initialize_channels(self, num_channels):
-#        channels = []
-#        for _ in range(num_channels):
-#            channels.append(None)
-#        return channels
-#
-#    def _find_open_channel(self, channel_list):
-#        for idx in range(len(channel_list)):
-#            if channel_list[idx] == None:
-#                return idx
-#        # all channels are closed!
-#        return -1
+class Simulation(BoxComponent):
+    def __init__(self):
+        super().__init__()
+        self.name = self.__class__.__name__
+        self.cars = []
+        self.peds = []
+        self.ax = []
+        self.fig = []
+        self.background = []
+        self.start_walk_lane = (2908,665)
+        self.end_walk_lane = (3160,665)
+    
+    async def add_car_to_sim(self):
+        async with self.in_channels['Game']:
+            async for car in self.in_channels['Game']:
+                print('Simulation System - Adding new car to Map')
+                self.cars.append(car)
+                # print(self.cars)
+                # for car in self.cars:
+                #     print('Position:'+str(car.x)+','+str(car.y))
+
+    def animate(self, frame_idx): # update animation by dt
+        #global background, path_idx, current_loc
+        #await trio.sleep(0)
+        self.ax.clear()
+        # scale to the large topo
+        xscale = 10.5
+        yscale = 10.3
+        xoffset = 0
+        yoffset = 225
+
+        # for car in global_vars.cars_to_show:
+        #     if car.state_idx < 18:
+        #         x,y,theta = car.find_state()
+        #         x = x*xscale+xoffset
+        #         y = y*yscale+yoffset
+        #         theta = -theta*pi/180 # deg to rad
+        #         draw_car(background,x,y,theta) # draw cars to background
+        #         car.state_idx +=1
+        dt = 0.1
+        # add one pedestrian to test simulation
+        pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
+        pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
+        if pedestrian.state[0] < self.end_walk_lane[0]: # if not at the destination
+            pedestrian.prim_next(dt)
+            draw_pedestrian(pedestrian,self.background)
+
+        # Just add cars to image to test simulation
+        #self.add_car_to_sim
+        for car in self.cars:
+            draw_car(self.background, car.x,car.y,car.yaw)
+        # update background
+        the_parking_lot = [self.ax.imshow(self.background)] # update the stage
+        self.background.close()
+        self.background = parking_lot.get_background()
+        all_artists = the_parking_lot
+        return all_artists
+
+    async def update_simulation(self):
+        await trio.sleep(0)
+        self.fig = plt.figure()
+        self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
+        plt.axis('off')
+        self.background = parking_lot.get_background()
+        #pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
+        #pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
+        await trio.sleep(0)
+        ani = animation.FuncAnimation(self.fig, self.animate, frames=200, interval=10**3, blit=True, repeat=False)
+        plt.pause(0.001)
+        plt.draw()
+        await trio.sleep(0)
+
+    async def show_figure(self):
+        plt.show()
+    
+    async def run(self):
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self.add_car_to_sim)
+            await trio.sleep(5) # test to see if drawing cars works
+            nursery.start_soon(self.update_simulation)
+            await trio.sleep(0)
+
+class Game(BoxComponent):
+    def __init__(self):
+        super().__init__()
+        self.name = self.__class__.__name__
+        self.cars = []
+        self.peds = []
+        self.lot_status = []
+
+    async def keep_track_influx(self):
+        async with self.in_channels['GameEnter']:
+            async for car in self.in_channels['GameEnter']:
+                print('Game System - Adding new car to Game')
+                await self.out_channels['Enter'].send(car)
+                await self.out_channels['Simulation'].send(car)
+                self.cars.append(car)
+    
+
+    async def keep_track_outflux(self):
+        async with self.in_channels['GameExit']:
+            async for car in self.in_channels['GameExit']:
+                print('Game System - Removing car to Game')
+                self.cars.remove(car)
+                await self.out_channels['Exit'].send(car)
+
+    async def run(self):
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self.keep_track_influx)
+            nursery.start_soon(self.keep_track_outflux)
+
+
 
 class Map(BoxComponent): 
     def __init__(self):
@@ -64,14 +175,14 @@ class Map(BoxComponent):
         print('Map System - sending car position to Planner')
         for key, value in self.car_positions.items():
             if (key==car.name):
-                pos = value
+                pos = (value.x , value.y)
         await self.out_channels['Planner'].send((car,pos))
 
     async def add_car_to_map(self):
         async with self.in_channels['Enter']:
             async for car in self.in_channels['Enter']:
                 print('Map System - Adding new car to Map')
-                self.car_positions.update({car.name: (car.x,car.y,car.yaw)})
+                self.car_positions.update({car.name: (car)})
                 print(self.car_positions)
 
     async def send_camera_data_to_planner(self):
@@ -80,11 +191,6 @@ class Map(BoxComponent):
                 await self.send_position(car)
                 print(self.car_positions)
             
-    async def get_camera_data(self, receive_update_channel):
-        async with receive_update_channel:
-            async for car in receive_update_channel:
-                self.car_positions.update({car.name: (car.x,car.y,car.yaw)})
-
     async def rmv_car_from_map(self):
         async with self.in_channels['Exit']:
             async for car in self.in_channels['Exit']:
@@ -92,11 +198,10 @@ class Map(BoxComponent):
                 self.car_positions.pop(car.name)
                 print(self.car_positions)
 
-    async def run(self, receive_update_channel):
+    async def run(self):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.add_car_to_map)
             nursery.start_soon(self.rmv_car_from_map)
-            nursery.start_soon(self.get_camera_data,receive_update_channel)
             nursery.start_soon(self.send_camera_data_to_planner)
 
     
@@ -106,7 +211,7 @@ class Planner(BoxComponent):
         self.name = self.__class__.__name__
         self.nursery = nursery
         self.cars = []
-        self.parking_spots = dict([ (i, (i, i, np.pi)) for i in range(0,MAX_NO_PARKING_SPOTS) ]) # example coordinates for parking spots
+        self.parking_spots = dict([ (i, (i*100, i*100, np.pi)) for i in range(0,MAX_NO_PARKING_SPOTS) ]) # example coordinates for parking spots
 
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
@@ -138,16 +243,15 @@ class Planner(BoxComponent):
         await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
     
-    async def check_supervisor(self,send_response_channel,send_update_channel):
+    async def check_supervisor(self,send_response_channel):
         async for directive in self.in_channels['Supervisor']:
             car = directive[0]
             todo = directive[1]
-            #print(todo)
             if todo[0] == 'Park':
                 print('Planner - receiving directive from Supervisor to park {0} in Lot {1}'.format(car.name,todo[1]))
                 self.cars.append(car)
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
-                self.nursery.start_soon(car.run,send_response_channel,send_update_channel)
+                self.nursery.start_soon(car.run,send_response_channel)
                 ref = await self.find_spot_coordinates(todo[1])
                 
             elif todo == 'Pickup':
@@ -155,10 +259,10 @@ class Planner(BoxComponent):
                 ref = [0,0,0]
             await self.send_directive_to_car(car, ref)
 
-    async def run(self,send_update_channel):
+    async def run(self):
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.check_supervisor,send_response_channel,send_update_channel)
+            nursery.start_soon(self.check_supervisor,send_response_channel)
             await trio.sleep(1)
             nursery.start_soon(self.update_car_response,receive_response_channel)
 
@@ -174,22 +278,21 @@ class Car(BoxComponent):
         self.y = None
         self.yaw = None
 
-    async def update_planner_command(self,send_response_channel,send_update_channel):
+    async def update_planner_command(self,send_response_channel):
         async for directive in self.in_channels['Planner']:
             self.ref = directive
             print('{0} - Receiving Directive from Planner'.format(self.name))
             ref=self.ref
-            await self.track_reference(ref,send_update_channel)
+            await self.track_reference(ref)
             await trio.sleep(1)
             await self.send_response(send_response_channel)
  
-    async def track_reference(self,ref,send_update_channel):
+    async def track_reference(self,ref):
         #self.ref = await self.in_channels['Planner'].receive()
         print('{0} - Tracking reference... {1}'.format(self.name,ref))
         self.x = ref[0]
         self.y = ref[1]
         self.yaw = ref[2]
-        await self.send_update_to_map(send_update_channel)
         await trio.sleep(1)
 
     async def send_response(self,send_response_channel):
@@ -199,18 +302,10 @@ class Car(BoxComponent):
         await send_response_channel.send((self,response))
         await trio.sleep(1)
 
-    async def send_update_to_map(self,send_update_channel):
-        print('{0} - sending position update to Map'.format(self.name))
-        await send_update_channel.send(self)
-
-    async def run(self,send_response_channel,send_update_channel):
+    async def run(self,send_response_channel):
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.update_planner_command,send_response_channel,send_update_channel)
+            nursery.start_soon(self.update_planner_command,send_response_channel)
             await trio.sleep(0)
-            #nursery.start_soon(self.send_update_to_map,send_update_channel)
-            #await trio.sleep(0)
-            #nursery.start_soon(self.track_reference)
-            #nursery.start_soon(self.send_response,send_response_channel)
 
 
 class Supervisor(BoxComponent):
@@ -232,7 +327,8 @@ class Supervisor(BoxComponent):
                         self.parking_spots[spot]=(('Occupied',car.name))
                     elif (status[0] == 'Occupied'):
                         self.parking_spots[spot]=(('Vacant','None'))
-                        await self.out_channels['Exit'].send(car)
+                        #await self.out_channels['Exit'].send(car)
+                        await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1
 
     async def update_planner_response(self):
@@ -261,9 +357,7 @@ class Supervisor(BoxComponent):
                 print('{} has been accepted!'.format(car.name))
                 await self.out_channels['Customer'].send(True)
                 self.spot_no=self.spot_no-1
-                await self.out_channels['Enter'].send(car)
-                #map_sys.car_positions.update({car.name: (car.x,car.y)})
-                #await trio.sleep(0)
+                await self.out_channels['GameEnter'].send(car)
                 spot = self.pick_spot(car)
                 await self.send_directive_to_planner(car,('Park',spot))
             else:
@@ -334,25 +428,32 @@ async def main():
     print('--- Starting Parking Garage ---')
     async with trio.open_nursery() as nursery:
         map_sys = Map()
-        #all_components.append(map_sys)
+        all_components.append(map_sys)
+        simulation = Simulation()
+        all_components.append(simulation)
         supervisor = Supervisor()
         all_components.append(supervisor)
+        game = Game()
+        all_components.append(game)
         planner = Planner(nursery=nursery)
-        #all_components.append(planner)
+        all_components.append(planner)
         customer = Customer(average_arrival_rate = average_arrival_rate, average_park_time = average_park_time)
         #all_components.append(customer)
         # create communication channels
         create_bidirectional_channel(supervisor,planner,max_buffer_size=np.inf)
         create_bidirectional_channel(customer, supervisor, max_buffer_size=np.inf)
         create_unidirectional_channel(sender=customer, receiver=supervisor, max_buffer_size=np.inf, name='Request')
-        create_unidirectional_channel(sender=supervisor, receiver=map_sys, max_buffer_size=np.inf, name='Enter')
-        create_unidirectional_channel(sender=supervisor, receiver=map_sys, max_buffer_size=np.inf, name='Exit')
+        create_unidirectional_channel(sender=game, receiver=map_sys, max_buffer_size=np.inf, name='Enter')
+        create_unidirectional_channel(sender=game, receiver=map_sys, max_buffer_size=np.inf, name='Exit')
         create_bidirectional_channel(map_sys, planner, max_buffer_size=np.inf)
-        send_update_channel, receive_update_channel = trio.open_memory_channel(25) # to track car positions
+        create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameEnter')
+        create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameExit')
+        create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf)
+        
         for comp in all_components:
-            nursery.start_soon(comp.run)        
+            nursery.start_soon(comp.run)  
+            await trio.sleep(0)      
         nursery.start_soon(customer.run,end_time)
-        nursery.start_soon(map_sys.run,receive_update_channel)
-        nursery.start_soon(planner.run,send_update_channel)
+        
 
 trio.run(main)
