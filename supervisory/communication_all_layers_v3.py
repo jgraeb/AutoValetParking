@@ -9,7 +9,8 @@ sys.path.append('..') # enable importing modules from an upper directory:
 sys.path.append('../demo') # enable importing modules from demo
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from prepare.helper import *
+from prepare.helper import draw_car, draw_pedestrian
+from component import parking_lot
 import component.pedestrian as Pedestrian
 
 average_arrival_rate = 0.5 # per second
@@ -23,7 +24,6 @@ START_YAW = 0
 OPEN_TIME = 500 # not yet working
 
 list_of_cars = []
-
 
 def get_current_time():
     return trio.current_time() - start_time
@@ -65,13 +65,14 @@ class Simulation(BoxComponent):
         self.end_walk_lane = (3160,665)
     
     async def add_car_to_sim(self):
-        async with self.in_channels['Game']:
-            async for car in self.in_channels['Game']:
-                print('Simulation System - Adding new car to Map')
-                self.cars.append(car)
-                # print(self.cars)
-                # for car in self.cars:
-                #     print('Position:'+str(car.x)+','+str(car.y))
+        while True:
+            async with self.in_channels['Game']:
+                async for car in self.in_channels['Game']:
+                    print('Simulation System - Adding new car to Map')
+                    self.cars.append(car)
+                    # print(self.cars)
+                    # for car in self.cars:
+                    #     print('Position:'+str(car.x)+','+str(car.y))
 
     def animate(self, frame_idx): # update animation by dt
         #global background, path_idx, current_loc
@@ -111,26 +112,24 @@ class Simulation(BoxComponent):
         return all_artists
 
     async def update_simulation(self):
-        await trio.sleep(0)
         self.fig = plt.figure()
-        self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
-        plt.axis('off')
-        self.background = parking_lot.get_background()
-        #pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
-        #pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
-        await trio.sleep(0)
-        ani = animation.FuncAnimation(self.fig, self.animate, frames=200, interval=10**3, blit=True, repeat=False)
-        plt.pause(0.001)
-        plt.draw()
-        await trio.sleep(0)
+        while True:
+            self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
+            plt.axis('off')
+            self.background = parking_lot.get_background()
+            #pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
+            #pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
+            await trio.sleep(0)
+            ani = animation.FuncAnimation(self.fig, self.animate, frames=1, interval=1**3, blit=True, repeat=False)
+            plt.pause(0.001)
+            plt.draw()
+            await trio.sleep(0)
+            print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
 
-    async def show_figure(self):
-        plt.show()
-    
     async def run(self):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.add_car_to_sim)
-            await trio.sleep(5) # test to see if drawing cars works
+            await trio.sleep(0) # test to see if drawing cars works
             nursery.start_soon(self.update_simulation)
             await trio.sleep(0)
 
@@ -451,9 +450,8 @@ async def main():
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf)
         
         for comp in all_components:
-            nursery.start_soon(comp.run)  
-            await trio.sleep(0)      
+            nursery.start_soon(comp.run)
+            await trio.sleep(0)
         nursery.start_soon(customer.run,end_time)
-        
 
 trio.run(main)
