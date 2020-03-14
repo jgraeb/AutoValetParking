@@ -20,9 +20,19 @@ def find_end_states_from_image(img_path):
             if not (r == 255 and g == 255 and b == 255):
                 if r == 0:
                     if g == 0:
-                        end_states.append((j, i, -int(b), 0)) # need to recast b to an integer
+                        angle = -int(b) # need to recast b to an integer
+                        end_states.append((j, i, angle, 0))
+                        # reverse parking
+#                        ell = 1
+#                        i_r, j_r = j + ell * np.cos(angle / 180 * np.pi), i + ell * -np.sin(angle / 180 * np.pi)
+#                        end_states.append((i_r, j_r, constrain_heading_to_pm_180(-angle), 0)) # need to recast b to an integer
                     elif b == 0:
-                        end_states.append((j, i, g, 0))
+                        angle = int(g)
+                        end_states.append((j, i, angle, 0))
+                        # reverse parking
+#                        ell = 1
+#                        i_r, j_r = j + ell * np.cos(angle / 180 * np.pi), i + ell * -np.sin(angle / 180 * np.pi)
+#                        end_states.append((i_r, j_r, constrain_heading_to_pm_180(-angle), 0))
     print('found {} end states!'.format(len(end_states)))
     return end_states
 
