@@ -6,7 +6,7 @@ import _pickle as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
+from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
 import cv2
 
 def find_end_states_from_image(img_path):

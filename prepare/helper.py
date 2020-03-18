@@ -46,7 +46,7 @@ def find_corner_coordinates(x_state_center_before, y_state_center_before, x_desi
 
     R = np.array([[cos(theta), sin(theta)], [-sin(theta), cos(theta)]])
     x_corner_center_before, y_corner_center_before = -w/2., -h/2. # lower left corner before rotation
-    x_corner_center_after, y_corner_center_after = -w/2., -h/2. # doesn't change since figure size remains unchanged
+    x_corner_center_after, y_corner_center_after = -w/2., -h*3/4. # doesn't change since figure size remains unchanged
 
     x_state_center_after, y_state_center_after = R.dot(np.array([[x_state_center_before], [y_state_center_before]])) # relative coordinates after rotation by theta
 

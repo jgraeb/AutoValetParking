@@ -3,6 +3,8 @@ from ipdb import set_trace as st
 import numpy as np
 import trio
 import random
+import math
+import pdb
 # Animation
 import sys
 sys.path.append('..') # enable importing modules from an upper directory:
@@ -12,17 +14,28 @@ import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian
 from component import parking_lot
 import component.pedestrian as Pedestrian
+from variables.data import parking_spots, pathspot0
+# planning
+import _pickle as pickle
+from motionplanning.tools import astar_trajectory
+import motionplanning.end_planner as path_planner
+# tracking
+import motiontracking.mpc_tracking as tracking
 
-average_arrival_rate = 0.5 # per second
+average_arrival_rate = 1 # per second
 beta = 1/average_arrival_rate
-average_park_time = 10 # seconds
+average_park_time = 200 # seconds
 MAX_BUFFER_SIZE = np.inf
-MAX_NO_PARKING_SPOTS = 3
-START_X = 0
-START_Y = 0
-START_YAW = 0
+MAX_NO_PARKING_SPOTS = 1
 OPEN_TIME = 500 # not yet working
-
+ped_startpos = (2908,665)
+ped_endpos = (3160,665)
+TARGET_SPEED = 10/3.6 # 10 km/h
+SCALE_FACTOR_SIM = 3173/90 # scale from meters to pixels in simulation
+SCALE_FACTOR_PLAN = 90/300 # scale from pixels to meters in grid planner
+START_X = 120*SCALE_FACTOR_PLAN # m
+START_Y = 60*SCALE_FACTOR_PLAN # m
+START_YAW = 0 # rad
 list_of_cars = []
 
 def get_current_time():
@@ -70,40 +83,23 @@ class Simulation(BoxComponent):
                 async for car in self.in_channels['Game']:
                     print('Simulation System - Adding new car to Map')
                     self.cars.append(car)
-                    # print(self.cars)
-                    # for car in self.cars:
-                    #     print('Position:'+str(car.x)+','+str(car.y))
 
     def animate(self, frame_idx): # update animation by dt
-        #global background, path_idx, current_loc
-        #await trio.sleep(0)
         self.ax.clear()
         # scale to the large topo
-        xscale = 10.5
-        yscale = 10.3
-        xoffset = 0
-        yoffset = 225
-
-        # for car in global_vars.cars_to_show:
-        #     if car.state_idx < 18:
-        #         x,y,theta = car.find_state()
-        #         x = x*xscale+xoffset
-        #         y = y*yscale+yoffset
-        #         theta = -theta*pi/180 # deg to rad
-        #         draw_car(background,x,y,theta) # draw cars to background
-        #         car.state_idx +=1
+        #xscale = 10.5
+        #yscale = 10.3
+        xoffset = 5
+        yoffset = 200
         dt = 0.1
         # add one pedestrian to test simulation
-        pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
-        pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
-        if pedestrian.state[0] < self.end_walk_lane[0]: # if not at the destination
-            pedestrian.prim_next(dt)
-            draw_pedestrian(pedestrian,self.background)
-
-        # Just add cars to image to test simulation
-        #self.add_car_to_sim
+        #pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
+        #pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
+        #if pedestrian.state[0] < self.end_walk_lane[0]: # if not at the destination
+            #pedestrian.prim_next(dt)
+            #draw_pedestrian(pedestrian,self.background)
         for car in self.cars:
-            draw_car(self.background, car.x,car.y,car.yaw)
+            draw_car(self.background, car.x*SCALE_FACTOR_SIM,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
         # update background
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
@@ -117,19 +113,17 @@ class Simulation(BoxComponent):
             self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
             plt.axis('off')
             self.background = parking_lot.get_background()
-            #pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
-            #pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
-            await trio.sleep(0)
+            #await trio.sleep(0)
             ani = animation.FuncAnimation(self.fig, self.animate, frames=1, interval=1**3, blit=True, repeat=False)
             plt.pause(0.001)
             plt.draw()
             await trio.sleep(0)
-            print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+            print('------------Figure updating-------------')
 
     async def run(self):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.add_car_to_sim)
-            await trio.sleep(0) # test to see if drawing cars works
+            await trio.sleep(0)
             nursery.start_soon(self.update_simulation)
             await trio.sleep(0)
 
@@ -148,7 +142,6 @@ class Game(BoxComponent):
                 await self.out_channels['Enter'].send(car)
                 await self.out_channels['Simulation'].send(car)
                 self.cars.append(car)
-    
 
     async def keep_track_outflux(self):
         async with self.in_channels['GameExit']:
@@ -161,7 +154,6 @@ class Game(BoxComponent):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.keep_track_influx)
             nursery.start_soon(self.keep_track_outflux)
-
 
 
 class Map(BoxComponent): 
@@ -210,7 +202,6 @@ class Planner(BoxComponent):
         self.name = self.__class__.__name__
         self.nursery = nursery
         self.cars = []
-        self.parking_spots = dict([ (i, (i*100, i*100, np.pi)) for i in range(0,MAX_NO_PARKING_SPOTS) ]) # example coordinates for parking spots
 
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
@@ -218,15 +209,31 @@ class Planner(BoxComponent):
         pos = await self.in_channels['Map'].receive()
         return pos
 
-    async def find_spot_coordinates(self, spot):
-        print(self.parking_spots)
-        return self.parking_spots[spot]
+    async def find_spot_coordinates(self, spot): # gives example trajectory currently
+        path = pathspot0[:,:-1]
+        path[:,2] = np.deg2rad(path[:,2])
+        ref = np.vstack([path, parking_spots[spot]])
+        return ref
 
     async def send_directive_to_car(self, car, ref):
         await self.get_car_position(car)
+        # get trajectory from Planning Graph
+        #ref = await self.get_path() 
         print('Planner - sending Directive to {0}'.format(car.name))
         await self.out_channels[car.name].send(ref)
         await trio.sleep(1)
+
+    async def get_path(self): # not yet used
+        sys.path.append('../motionplanning')
+        with open('planning_graph_refined.pkl', 'rb') as f:
+            planning_graph = pickle.load(f)
+        #end_states = path_planner.find_end_states_from_image('AVP_planning_300p_end_states.xcf')
+        #print(end_states)
+        start = (120, 60, 0, 0)
+        end = (240, 50, 0, 0)
+        traj = astar_trajectory(planning_graph, start, end)
+        print(traj)
+        return traj
 
     async def update_car_response(self, receive_response_channel):
         async with receive_response_channel:
@@ -255,7 +262,7 @@ class Planner(BoxComponent):
                 
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
-                ref = [0,0,0]
+                ref = [2640,774,0]
             await self.send_directive_to_car(car, ref)
 
     async def run(self):
@@ -265,6 +272,27 @@ class Planner(BoxComponent):
             await trio.sleep(1)
             nursery.start_soon(self.update_car_response,receive_response_channel)
 
+class Ped(BoxComponent): # not used yet !!
+    def __init__(self, arrive_time, depart_time):
+        super().__init__()
+        self.name = 'Pedestrian {}'.format(id(self))
+        self.x = None
+        self.y = None
+        self.yaw = None
+        self.gait_length = 4
+
+    async def ped_start(self):
+        self.x = ped_startpos[0]
+        self.y = ped_startpos[1]
+
+    async def ped_walk(self):
+        if (self.x <= ped_endpos):
+            self.x = self.x+self.gait_length
+
+    async def run(self,send_response_channel):
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self.ped_walk)
+            await trio.sleep(0)
 
 class Car(BoxComponent):
     def __init__(self, arrive_time, depart_time):
@@ -273,9 +301,10 @@ class Car(BoxComponent):
         self.arrive_time = arrive_time
         self.depart_time = depart_time
         self.ref = None
-        self.x = None
-        self.y = None
-        self.yaw = None
+        self.x = START_X
+        self.y = START_Y
+        self.yaw = START_YAW
+        self.v = 0.0
 
     async def update_planner_command(self,send_response_channel):
         async for directive in self.in_channels['Planner']:
@@ -283,16 +312,82 @@ class Car(BoxComponent):
             print('{0} - Receiving Directive from Planner'.format(self.name))
             ref=self.ref
             await self.track_reference(ref)
-            await trio.sleep(1)
+            await trio.sleep(0)
             await self.send_response(send_response_channel)
+
+    async def iterative_linear_mpc_control(self, xref, x0, dref, oa, od):
+        if oa is None or od is None:
+            oa = [0.0] * tracking.T
+            od = [0.0] * tracking.T
+        for i in range(tracking.MAX_ITER):
+            xbar = tracking.predict_motion(x0, oa, od, xref)
+            poa, pod = oa[:], od[:]
+            oa, od, _, _, _, _ = tracking.linear_mpc_control(xref, xbar, x0, dref)
+            du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
+            if du <= tracking.DU_TH:
+                break
+        return oa, od
+
+    async def track_async(self, cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed): # modified from MPC
+        goal = [cx[-1], cy[-1]]
+        tracking.state = initial_state
+        # initial yaw compensation
+        if tracking.state.yaw - cyaw[0] >= math.pi:
+            tracking.state.yaw -= math.pi * 2.0
+        elif tracking.state.yaw - cyaw[0] <= -math.pi:
+            tracking.state.yaw += math.pi * 2.0
+        time = 0.0
+        x = [tracking.state.x]
+        y = [tracking.state.y]
+        yaw = [tracking.state.yaw]
+        v = [tracking.state.v]
+        t = [0.0]
+        d = [0.0]
+        a = [0.0]
+        target_ind, _ = tracking.calc_nearest_index(tracking.state, cx, cy, cyaw, 0)
+        odelta, oa = None, None
+        cyaw = tracking.smooth_yaw(cyaw)
+        while tracking.MAX_TIME >= time:
+            xref, target_ind, dref = tracking.calc_ref_trajectory(tracking.state, cx, cy, cyaw, ck, sp, dl, target_ind)
+            x0 = [tracking.state.x, tracking.state.y, tracking.state.v, tracking.state.yaw]  # current state
+            oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
+            if odelta is not None:
+                di, ai = odelta[0], oa[0]
+            tracking.state = tracking.update_state(tracking.state, ai, di)
+            time = time + tracking.DT
+            #print(self.x)
+            #print(tracking.state.x)
+            #pdb.set_trace()
+            self.x = tracking.state.x[0]
+            self.y = tracking.state.y[0]
+            self.yaw = tracking.state.yaw[0]
+            self.v = tracking.state.v
+            await trio.sleep(0)
+            if tracking.check_goal(tracking.state, goal, target_ind, len(cx),goalspeed): # modified goal speed
+                break
  
     async def track_reference(self,ref):
-        #self.ref = await self.in_channels['Planner'].receive()
-        print('{0} - Tracking reference... {1}'.format(self.name,ref))
-        self.x = ref[0]
-        self.y = ref[1]
-        self.yaw = ref[2]
-        await trio.sleep(1)
+        print('{0} - Tracking reference...'.format(self.name))
+        #state = np.array([self.x, self.y,self.yaw])
+        cx = ref[:-1,0]
+        cx = cx.reshape(len(ref)-1,1)
+        cy = ref[:-1,1]
+        cy= cy.reshape(len(ref)-1,1)
+        cyaw = ref[:-1,2].reshape(len(ref)-1,1)
+        ck = 0 
+        dl = 1.0  # course tick
+        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,0.0,1)
+        initial_state = tracking.State(x=cx[0], y=cy[0], yaw=cyaw[0], v=self.v) # change to current position
+        await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
+        await trio.sleep(0)
+        cx = ref[-1:,0]
+        cx = cx.reshape(1,1)
+        cy = ref[-1:,1]
+        cy= cy.reshape(1,1)
+        cyaw = ref[-1:,2].reshape(1,1)
+        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/4,0.0,1)
+        initial_state = tracking.State(x=self.x, y=self.y, yaw=self.yaw, v=self.v)
+        await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
 
     async def send_response(self,send_response_channel):
         await trio.sleep(1)
@@ -326,7 +421,6 @@ class Supervisor(BoxComponent):
                         self.parking_spots[spot]=(('Occupied',car.name))
                     elif (status[0] == 'Occupied'):
                         self.parking_spots[spot]=(('Vacant','None'))
-                        #await self.out_channels['Exit'].send(car)
                         await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1
 
@@ -396,7 +490,7 @@ class Customer(BoxComponent):
             # spawns cars according to exponential distribution
             await trio.sleep(np.random.exponential(1/self.average_arrival_rate))
             car = self.generate_car()
-            self.cars.append(car)
+            #self.cars.append(car)
             car.x = START_X
             car.y = START_Y
             car.yaw = START_YAW
@@ -406,11 +500,12 @@ class Customer(BoxComponent):
             if (accept == False):
                 self.cars.pop()
             now = get_current_time()
-            for i,car in enumerate(self.cars): # checks for requested cars
-                if car.depart_time <= now:
-                    print('{0} is requested at {1:.3f}'.format(car.name,car.depart_time))
-                    await self.out_channels['Request'].send(car)
+            for i,cars in enumerate(self.cars): # checks for requested cars
+                if cars.depart_time <= now:
+                    print('{0} is requested at {1:.3f}'.format(cars.name,cars.depart_time))
+                    await self.out_channels['Request'].send(cars)
                     self.cars.pop(i)
+            self.cars.append(car)
             #if (now>=end_time):
             #    garage_open = False
             # Random sleeps help trigger the problem more reliably
@@ -437,7 +532,6 @@ async def main():
         planner = Planner(nursery=nursery)
         all_components.append(planner)
         customer = Customer(average_arrival_rate = average_arrival_rate, average_park_time = average_park_time)
-        #all_components.append(customer)
         # create communication channels
         create_bidirectional_channel(supervisor,planner,max_buffer_size=np.inf)
         create_bidirectional_channel(customer, supervisor, max_buffer_size=np.inf)

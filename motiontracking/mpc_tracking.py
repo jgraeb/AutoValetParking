@@ -16,7 +16,27 @@ import numpy as np
 import sys
 sys.path.append("../PathPlanning/CubicSpline/")
 sys.path.append("../motionplanning")
-import grid_planner
+#sys.path.append("..")
+#import grid_planner
+#from data import parking_spots, exampletraj
+
+exampletraj = np.array([[120*0.30,  60*0.30,   0,   0],
+ [130*0.30,  60*0.30,   0,   0],
+ [140*0.30,  60*0.30,   0,  10],
+ [150*0.30,  60*0.30,   0,   0],
+ [160*0.30,  60*0.30,   45,  0],
+ [170*0.30,  70*0.30,   90,  0],
+ [170*0.3,  80*0.30, 90,  10],
+ [170*0.30,  90*0.30, 90,   0],
+ [170*0.30, 100*0.30, 90,   0],
+ [170*0.30, 110*0.30, 45,   0],
+ [180*0.30, 120*0.30, 90,   0],
+ [180*0.30, 130*0.30, 90,  10],
+ [180*0.30, 140*0.30, 135,  10],
+ [170*0.30, 150*0.30, 180,   0],
+ [160*0.30, 150*0.30, -120,   0],
+ [144*0.30, 129*0.30, -120,   0]])
+
 
 try:
     import cubic_spline_planner
@@ -29,16 +49,16 @@ GOAL_SPEED = 0.0
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
-T = 5  # horizon length
+T = 3  # horizon length
 
 # mpc parameters
 R = np.diag([0.01, 0.01])  # input cost matrix
 Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
-GOAL_DIS = 0.5  # goal distance
+GOAL_DIS = 1.0  # goal distance
 STOP_SPEED = 1.0 / 3.6  # stop speed
-MAX_TIME = 20.0  # max simulation time
+MAX_TIME = 200.0  # max simulation time
 
 # iterative paramter
 MAX_ITER = 3  # Max iteration
@@ -64,7 +84,7 @@ MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
 MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
 MAX_ACCEL = 1.0  # maximum accel [m/ss]
 
-show_animation = False
+show_animation = True
 
 
 class State:
@@ -251,8 +271,8 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od):
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
         if du <= DU_TH:
             break
-    else:
-        print("Iterative is max iter")
+    #else:
+        #print("Iterative is max iter")
 
     return oa, od, ox, oy, oyaw, ov
 
@@ -812,6 +832,73 @@ def get_heading(x,y): # find heading towards the next point from x,y positions f
                 heading[i,k] = heading[i,k-1] # keep the same heading for last point
     return heading
 
+async def track_async(cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed):
+    """
+    Simulation
+
+    cx: course x position list
+    cy: course y position list
+    cy: course yaw position list
+    ck: course curvature list
+    sp: speed profile
+    dl: course tick [m]
+
+    """
+
+    goal = [cx[-1], cy[-1]]
+
+    state = initial_state
+
+    # initial yaw compensation
+    if state.yaw - cyaw[0] >= math.pi:
+        state.yaw -= math.pi * 2.0
+    elif state.yaw - cyaw[0] <= -math.pi:
+        state.yaw += math.pi * 2.0
+
+    time = 0.0
+    x = [state.x]
+    y = [state.y]
+    yaw = [state.yaw]
+    v = [state.v]
+    vkmh = [state.v*3.6] # mod storing speed in km/h
+    t = [0.0]
+    d = [0.0]
+    a = [0.0]
+    target_ind, _ = calc_nearest_index(state, cx, cy, cyaw, 0)
+
+    odelta, oa = None, None
+
+    cyaw = smooth_yaw(cyaw)
+
+    while MAX_TIME >= time:
+        xref, target_ind, dref = calc_ref_trajectory(
+            state, cx, cy, cyaw, ck, sp, dl, target_ind)
+
+        x0 = [state.x, state.y, state.v, state.yaw]  # current state
+
+        oa, odelta, ox, oy, oyaw, ov = iterative_linear_mpc_control(
+            xref, x0, dref, oa, odelta)
+
+        if odelta is not None:
+            di, ai = odelta[0], oa[0]
+
+        state = update_state(state, ai, di)
+        time = time + DT
+
+        x.append(state.x)
+        y.append(state.y)
+        yaw.append(state.yaw)
+        v.append(state.v)
+        t.append(time)
+        d.append(di)
+        a.append(ai)
+        #vkmh.append(state.v*3.6) # mod storing speed in km/h
+
+        if check_goal(state, goal, target_ind, len(cx),goalspeed): # modified goal speed
+            print("Goal")
+            break
+
+    return t, x, y, yaw, v, d, a
 
 def guarantee_reverse(x_d,dl):
     num_sim = 50
@@ -1022,11 +1109,15 @@ def main_guarantee():
     f.close()
 
 
-def track_path_forward(cx,cy,cyaw):
+def track_path_forward(ref):
     dl = 1
     ck = 0
     #cx, cy, cyaw, ck = get_switch_back_course(dl)
-
+    cx = ref[:,0]
+    cx = cx.reshape(len(ref),1)
+    cy = ref[:,1]
+    cy= cy.reshape(len(ref),1)
+    cyaw = ref[:,2].reshape(len(ref),1)
     sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,0.0,1)
 
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
@@ -1055,4 +1146,5 @@ def track_path_forward(cx,cy,cyaw):
 
 if __name__ == '__main__':
     #main()
-    main_guarantee()
+    #main_guarantee()
+    track_path_forward(exampletraj)

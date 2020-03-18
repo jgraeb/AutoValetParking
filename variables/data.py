@@ -1,0 +1,92 @@
+import numpy as np
+
+SCALE_FACTOR_SIM = 3173/90 # scale from meters to pixels in simulation
+
+parking_spots= {0: (1510/SCALE_FACTOR_SIM, 1498/SCALE_FACTOR_SIM, -2/3*np.pi),
+1: (1009/SCALE_FACTOR_SIM, 1498/SCALE_FACTOR_SIM, -2/3*np.pi), 
+2: (393/SCALE_FACTOR_SIM, 1498/SCALE_FACTOR_SIM, -2/3*np.pi),
+3: (1390/SCALE_FACTOR_SIM, 2020/SCALE_FACTOR_SIM, 2/3*np.pi),
+4: (1140/SCALE_FACTOR_SIM, 2020/SCALE_FACTOR_SIM, 2/3*np.pi),
+5: (1015/SCALE_FACTOR_SIM, 2020/SCALE_FACTOR_SIM, 2/3*np.pi),
+6: (895/SCALE_FACTOR_SIM, 2020/SCALE_FACTOR_SIM, 2/3*np.pi),
+7: (768/SCALE_FACTOR_SIM, 2020/SCALE_FACTOR_SIM, 2/3*np.pi), 
+8: (525/SCALE_FACTOR_SIM, 2020/SCALE_FACTOR_SIM, 2/3*np.pi),
+9: (1458/SCALE_FACTOR_SIM, 2768/SCALE_FACTOR_SIM, 1/3*np.pi),
+10: (595/SCALE_FACTOR_SIM, 2768/SCALE_FACTOR_SIM, 1/3*np.pi),
+11:(2069/SCALE_FACTOR_SIM, 2768/SCALE_FACTOR_SIM, 1/3*np.pi)}
+
+exampletraj = np.array([[1424/SCALE_FACTOR_SIM, 784/SCALE_FACTOR_SIM, 0],
+[1730/SCALE_FACTOR_SIM,784/SCALE_FACTOR_SIM, 1/4*np.pi],
+[1860/SCALE_FACTOR_SIM,963/SCALE_FACTOR_SIM, 1/2*np.pi],
+[1860/SCALE_FACTOR_SIM,1095/SCALE_FACTOR_SIM, 1/2*np.pi],
+[1860/SCALE_FACTOR_SIM,1272/SCALE_FACTOR_SIM,1/2*np.pi],
+[1860/SCALE_FACTOR_SIM, 1444/SCALE_FACTOR_SIM, 1/2*np.pi],
+[1860/SCALE_FACTOR_SIM, 1628/SCALE_FACTOR_SIM, 3/4*np.pi],
+[1714/SCALE_FACTOR_SIM,1763/SCALE_FACTOR_SIM, np.pi],
+[1619/SCALE_FACTOR_SIM,1692/SCALE_FACTOR_SIM, -2/3*np.pi],
+[1510/SCALE_FACTOR_SIM, 1498/35, -2/3*np.pi]])
+
+pathspot0 = np.array([[120*0.30,  60*0.30,   0,   0],
+ [130*0.30,  60*0.30,   0,   0],
+ [140*0.30,  60*0.30,   0,  10],
+ [150*0.30,  60*0.30,   0,   0],
+ [160*0.30,  60*0.30,   45,  0],
+ [170*0.30,  70*0.30,   90,  0],
+ [170*0.3,  80*0.30, 90,  10],
+ [170*0.30,  90*0.30, 90,   0],
+ [170*0.30, 100*0.30, 90,   0],
+ [170*0.30, 110*0.30, 45,   0],
+ [180*0.30, 120*0.30, 90,   0],
+ [180*0.30, 130*0.30, 90,  10],
+ [180*0.30, 140*0.30, 135,  10],
+ [170*0.30, 150*0.30, 180,   0],
+ [160*0.30, 150*0.30, -120,   0]])#,
+ #[144*0.30, 129*0.30, -120,   0]])
+
+
+#  retrievespot0 = np.array([[144 129 120   0]
+#  [160 150 180   0]
+#  [150 150 180  10]
+#  [140 150 180   0]
+#  [130 150 180  10]
+#  [120 150 180  10]
+#  [110 150 180  10]
+#  [100 150 180  10]
+#  [ 90 150 180   0]
+#  [ 80 150 180  10]
+#  [ 70 150 180   0]
+#  [ 60 150 180   0]
+#  [ 50 150 180  10]
+#  [ 40 150 180   0]
+#  [ 20 170 -90  10]
+#  [ 20 180 -90   0]
+#  [ 20 180 -90   0]
+#  [ 20 190 -90  10]
+#  [ 20 200 -90   0]
+#  [ 40 220   0  10]
+#  [ 50 220   0  10]
+#  [ 60 220   0   0]
+#  [ 70 220   0  10]
+#  [ 80 220   0   0]
+#  [ 90 220   0  10]
+#  [100 220   0  10]
+#  [110 220   0   0]
+#  [120 220   0  10]
+#  [130 220   0   0]
+#  [140 220   0  10]
+#  [150 220   0  10]
+#  [160 220   0   0]
+#  [170 220   0   0]
+#  [170 220   0   0]
+#  [190 200  90  10]
+#  [190 190  90  10]
+#  [190 180  90  10]
+#  [190 170  90  10]
+#  [190 160  90  10]
+#  [190 150  90   0]
+#  [190 140  90   0]
+#  [200 110  90   0]
+#  [210  80  90   0]
+#  [230  60   0  10]
+#  [240  60   0  10]
+#  [250  60   0   0]])
