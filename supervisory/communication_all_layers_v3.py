@@ -17,7 +17,7 @@ import component.pedestrian as Pedestrian
 from variables.data import parking_spots, pathspot0
 # planning
 import _pickle as pickle
-from motionplanning.tools import astar_trajectory
+#from motionplanning.tools import astar_trajectory
 import motionplanning.end_planner as path_planner
 # tracking
 import motiontracking.mpc_tracking as tracking
@@ -229,10 +229,15 @@ class Planner(BoxComponent):
         with open('planning_graph_refined.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
         edge_info_dict = planning_graph['edge_info']
+        simple_graph = planning_graph['graph']
         start = [120, 60, 0, 0]
         end = [144, 129, -120,   0]
-        traj = path_planner.segment_to_mpc_inputs(start, end, edge_info_dict)
+        traj = path_planner.astar_trajectory(simple_graph, start, end)
         print(traj)
+        segment=[]
+        for start, end in zip(traj, traj[1:]):
+            segment.append(path_planner.segment_to_mpc_inputs(start, end, edge_info_dict))
+        print(segment)
         return traj
 
     async def update_car_response(self, receive_response_channel):
@@ -388,7 +393,6 @@ class Car(BoxComponent):
         print('Tracking last segment from'+str(state)+'to'+str(ref[-1,:]))
         await self.track_async(cx[-2:], cy[-2:], cyaw[-2:], ck, sp, dl, initial_state,0.0)
         print('Arrived at'+str(state))
-
 
     async def send_response(self,send_response_channel):
         await trio.sleep(1)
