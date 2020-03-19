@@ -155,6 +155,16 @@ def segment_to_mpc_inputs(start, end, edge_info_dict):
     mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
     return mpc_inputs
 
+def get_mpc_path(start, end, planning_graph):
+    edge_info_dict = planning_graph['edge_info']
+    simple_graph = planning_graph['graph']
+    traj = astar_trajectory(simple_graph, start, end)
+    all_segments = []
+    for start, end in zip(traj, traj[1:]):
+        all_segments.append(segment_to_mpc_inputs(start, end, edge_info))
+    return all_segments
+
+
 # TODO: make separate planner class
 if __name__ == '__main__':
     remap = False
