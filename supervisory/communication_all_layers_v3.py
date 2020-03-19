@@ -87,9 +87,7 @@ class Simulation(BoxComponent):
     def animate(self, frame_idx): # update animation by dt
         self.ax.clear()
         # scale to the large topo
-        #xscale = 10.5
-        #yscale = 10.3
-        xoffset = 5
+        xoffset = 0
         yoffset = 200
         dt = 0.1
         # add one pedestrian to test simulation
@@ -99,8 +97,9 @@ class Simulation(BoxComponent):
             #pedestrian.prim_next(dt)
             #draw_pedestrian(pedestrian,self.background)
         for car in self.cars:
-            draw_car(self.background, car.x*SCALE_FACTOR_SIM,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
+            draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
         # update background
+        #draw_car(self.background,  144*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, 129*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(-120))
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
         self.background = parking_lot.get_background()
@@ -211,9 +210,11 @@ class Planner(BoxComponent):
 
     async def find_spot_coordinates(self, spot): # gives example trajectory currently
         path = pathspot0[:,:-1]
+        print(path)
         path[:,2] = np.deg2rad(path[:,2])
-        ref = np.vstack([path, parking_spots[spot]])
-        return ref
+        #ref = np.vstack([path, parking_spots[spot]])
+        #print(ref)
+        return path
 
     async def send_directive_to_car(self, car, ref):
         await self.get_car_position(car)
@@ -358,9 +359,9 @@ class Car(BoxComponent):
             #print(self.x)
             #print(tracking.state.x)
             #pdb.set_trace()
-            self.x = tracking.state.x[0]
-            self.y = tracking.state.y[0]
-            self.yaw = tracking.state.yaw[0]
+            self.x = tracking.state.x
+            self.y = tracking.state.y
+            self.yaw = tracking.state.yaw
             self.v = tracking.state.v
             await trio.sleep(0)
             if tracking.check_goal(tracking.state, goal, target_ind, len(cx),goalspeed): # modified goal speed
@@ -368,26 +369,28 @@ class Car(BoxComponent):
  
     async def track_reference(self,ref):
         print('{0} - Tracking reference...'.format(self.name))
-        #state = np.array([self.x, self.y,self.yaw])
-        cx = ref[:-1,0]
-        cx = cx.reshape(len(ref)-1,1)
-        cy = ref[:-1,1]
-        cy= cy.reshape(len(ref)-1,1)
-        cyaw = ref[:-1,2].reshape(len(ref)-1,1)
+        print(ref)
+        cx = ref[:,0]
+        cx = cx.reshape(len(ref),1)
+        cy = ref[:,1]
+        cy= cy.reshape(len(ref),1)
+        cyaw = ref[:,2].reshape(len(ref),1)
         ck = 0 
         dl = 1.0  # course tick
-        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,0.0,1)
-        initial_state = tracking.State(x=cx[0], y=cy[0], yaw=cyaw[0], v=self.v) # change to current position
-        await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
-        await trio.sleep(0)
-        cx = ref[-1:,0]
-        cx = cx.reshape(1,1)
-        cy = ref[-1:,1]
-        cy= cy.reshape(1,1)
-        cyaw = ref[-1:,2].reshape(1,1)
-        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/4,0.0,1)
-        initial_state = tracking.State(x=self.x, y=self.y, yaw=self.yaw, v=self.v)
-        await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
+        for i in range(0,len(cx)-1):
+            print('Going to'+str(ref[i,:]))
+            state = np.array([self.x, self.y,self.yaw])
+            sp = tracking.calc_speed_profile(cx[i:i+1], cy[i:i+1], cyaw[i:i+1], TARGET_SPEED,TARGET_SPEED,1)
+            initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+            await self.track_async(cx[i:i+1], cy[i:i+1], cyaw[i:i+1], ck, sp, dl, initial_state,TARGET_SPEED)
+            await trio.sleep(0)
+        state = np.array([self.x, self.y,self.yaw])
+        initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+        sp = tracking.calc_speed_profile(cx[i:], cy[i:], cyaw[i:], TARGET_SPEED/2,0.0,1)
+        print('Tracking last segment from'+str(state)+'to'+str(ref[-1,:]))
+        await self.track_async(cx[-2:], cy[-2:], cyaw[-2:], ck, sp, dl, initial_state,0.0)
+        print('Arrived at'+str(state))
+
 
     async def send_response(self,send_response_channel):
         await trio.sleep(1)
