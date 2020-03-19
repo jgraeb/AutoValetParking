@@ -6,7 +6,7 @@ import _pickle as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
+from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
 import cv2
 
 def find_end_states_from_image(img_path):
@@ -144,6 +144,18 @@ class TwoPointTurnGuarantee(PrimitiveGuarantee):
                          [int(end_loc[0]), int(end_loc[1])]]
         return node_sequence
 
+def segment_to_mpc_inputs(start, end, edge_info_dict):
+    waypoints = edge_info_dict[tuple(start), tuple(end)]
+    headings = []
+    for point1, point2 in zip(waypoints, waypoints[1:]):
+        dys = point2[1] - point1[1]
+        dxs = point2[0] - point1[0]
+        headings.append(np.arctan2(-dys, dxs) / np.pi * 180)
+    headings.append(headings[-1])
+    mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
+    return mpc_inputs
+
+# TODO: make separate planner class
 if __name__ == '__main__':
     remap = False
     if remap:
@@ -162,7 +174,7 @@ if __name__ == '__main__':
         with open('planning_graph_refined.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
         edge_info = planning_graph['edge_info']
-        planning_graph = planning_graph['graph']
+        simple_graph = planning_graph['graph']
         ps = []
         ps.append((120, 60, 0, 0))
         plt.plot(ps[0][0], ps[0][1], 'c.')
@@ -195,9 +207,9 @@ if __name__ == '__main__':
                         coords = []
                         start = ps[-2]
                         end = ps[-1]
-                        traj = astar_trajectory(planning_graph, start, end)
+                        traj = astar_trajectory(simple_graph, start, end)
                         for start, end in zip(traj, traj[1:]):
-                            segment = np.array(edge_info[(tuple(start), tuple(end))])
+                            segment = segment_to_mpc_inputs(start, end, edge_info)
                             plt.plot(segment[0,0], segment[0,1], 'b.')
                             plt.plot(segment[-1,0], segment[-1,1], 'rx')
                             plt.plot(segment[:,0], segment[:,1], 'k--')
