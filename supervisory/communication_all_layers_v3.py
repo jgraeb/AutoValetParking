@@ -210,7 +210,7 @@ class Planner(BoxComponent):
 
     async def find_spot_coordinates(self, spot): # gives example trajectory currently
         path = pathspot0[:,:-1]
-        print(path)
+        #print(path)
         path[:,2] = np.deg2rad(path[:,2])
         #ref = np.vstack([path, parking_spots[spot]])
         #print(ref)
@@ -219,20 +219,19 @@ class Planner(BoxComponent):
     async def send_directive_to_car(self, car, ref):
         await self.get_car_position(car)
         # get trajectory from Planning Graph
-        #ref = await self.get_path() 
+        traj = await self.get_path() 
         print('Planner - sending Directive to {0}'.format(car.name))
         await self.out_channels[car.name].send(ref)
         await trio.sleep(1)
 
-    async def get_path(self): # not yet used
+    async def get_path(self): 
         sys.path.append('../motionplanning')
         with open('planning_graph_refined.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
-        #end_states = path_planner.find_end_states_from_image('AVP_planning_300p_end_states.xcf')
-        #print(end_states)
-        start = (120, 60, 0, 0)
-        end = (240, 50, 0, 0)
-        traj = astar_trajectory(planning_graph, start, end)
+        edge_info_dict = planning_graph['edge_info']
+        start = [120, 60, 0, 0]
+        end = [144, 129, -120,   0]
+        traj = path_planner.segment_to_mpc_inputs(start, end, edge_info_dict)
         print(traj)
         return traj
 
@@ -260,7 +259,6 @@ class Planner(BoxComponent):
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 self.nursery.start_soon(car.run,send_response_channel)
                 ref = await self.find_spot_coordinates(todo[1])
-                
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
                 ref = [2640,774,0]
