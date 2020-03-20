@@ -22,7 +22,7 @@ import motionplanning.end_planner as path_planner
 # tracking
 import motiontracking.mpc_tracking as tracking
 
-average_arrival_rate = 1 # per second
+average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate
 average_park_time = 200 # seconds
 MAX_BUFFER_SIZE = np.inf
@@ -99,7 +99,8 @@ class Simulation(BoxComponent):
         for car in self.cars:
             draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
         # update background
-        #draw_car(self.background,  144*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, 129*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(-120))
+        # for key,value in parking_spots.items():
+        #     draw_car(self.background,  value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(value[2]))
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
         self.background = parking_lot.get_background()
@@ -165,7 +166,7 @@ class Map(BoxComponent):
         print('Map System - sending car position to Planner')
         for key, value in self.car_positions.items():
             if (key==car.name):
-                pos = (value.x , value.y)
+                pos = (value.x , value.y, value.yaw)
         await self.out_channels['Planner'].send((car,pos))
 
     async def add_car_to_map(self):
@@ -205,39 +206,33 @@ class Planner(BoxComponent):
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
         await self.out_channels['Map'].send(car)
-        pos = await self.in_channels['Map'].receive()
+        car, pos = await self.in_channels['Map'].receive()
         return pos
 
     async def find_spot_coordinates(self, spot): # gives example trajectory currently
-        path = pathspot0[:,:-1]
-        #print(path)
-        path[:,2] = np.deg2rad(path[:,2])
-        #ref = np.vstack([path, parking_spots[spot]])
-        #print(ref)
-        return path
+        return parking_spots[spot]
 
-    async def send_directive_to_car(self, car, ref):
-        await self.get_car_position(car)
+    async def send_directive_to_car(self, car, end):
+        pos = await self.get_car_position(car)
+        start = np.zeros(4)
+        start[0] = pos[0]/SCALE_FACTOR_PLAN
+        start[1] = pos[1]/SCALE_FACTOR_PLAN
+        start[2] = np.rad2deg(pos[2])
         # get trajectory from Planning Graph
-        traj = await self.get_path() 
+        traj = await self.get_path(start,end) 
         print('Planner - sending Directive to {0}'.format(car.name))
-        await self.out_channels[car.name].send(ref)
+        await self.out_channels[car.name].send(traj)
         await trio.sleep(1)
 
-    async def get_path(self): 
+    async def get_path(self, start, end): 
         sys.path.append('../motionplanning')
         with open('planning_graph_refined.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
-        edge_info_dict = planning_graph['edge_info']
-        simple_graph = planning_graph['graph']
-        start = [120, 60, 0, 0]
-        end = [144, 129, -120,   0]
-        traj = path_planner.astar_trajectory(simple_graph, start, end)
-        print(traj)
-        segment=[]
-        for start, end in zip(traj, traj[1:]):
-            segment.append(path_planner.segment_to_mpc_inputs(start, end, edge_info_dict))
-        print(segment)
+        #start = [120, 60, 0, 0]
+        #end = [144, 129, 120, 0]
+        #end2 = [end[0], end[1], -end[2],end[3]]
+        traj = path_planner.get_mpc_path(start,end,planning_graph)
+        #print('Trajectory'+str(traj))
         return traj
 
     async def update_car_response(self, receive_response_channel):
@@ -263,11 +258,12 @@ class Planner(BoxComponent):
                 self.cars.append(car)
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 self.nursery.start_soon(car.run,send_response_channel)
-                ref = await self.find_spot_coordinates(todo[1])
+                end = await self.find_spot_coordinates(todo[1])
+                await self.send_directive_to_car(car, end)
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
-                ref = [2640,774,0]
-            await self.send_directive_to_car(car, ref)
+                end = [2640,774,0]
+                await self.send_directive_to_car(car, end)
 
     async def run(self):
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
@@ -314,8 +310,8 @@ class Car(BoxComponent):
         async for directive in self.in_channels['Planner']:
             self.ref = directive
             print('{0} - Receiving Directive from Planner'.format(self.name))
-            ref=self.ref
-            await self.track_reference(ref)
+            #ref=self.ref
+            await self.track_reference(self.ref)
             await trio.sleep(0)
             await self.send_response(send_response_channel)
 
@@ -372,27 +368,41 @@ class Car(BoxComponent):
  
     async def track_reference(self,ref):
         print('{0} - Tracking reference...'.format(self.name))
-        print(ref)
-        cx = ref[:,0]
-        cx = cx.reshape(len(ref),1)
-        cy = ref[:,1]
-        cy= cy.reshape(len(ref),1)
-        cyaw = ref[:,2].reshape(len(ref),1)
+        #print(ref)
+        #print(np.shape(ref))
+        # cx = ref[:][0]
+        # print(cx)
+        # cx = cx.reshape(len(ref),1)
+        # cy = ref[:,1]
+        # cy= cy.reshape(len(ref),1)
+        # cyaw = ref[:,2].reshape(len(ref),1)
         ck = 0 
         dl = 1.0  # course tick
-        for i in range(0,len(cx)-1):
-            print('Going to'+str(ref[i,:]))
+        for i in range(0,len(ref)-1):
+            #print('Going to'+str(ref[i,:]))
+            path = ref[:][i]
+            cx = path[:,0]*SCALE_FACTOR_PLAN
+            #print(cx)
+            cy = path[:,1]*SCALE_FACTOR_PLAN
+            #print(cy)
+            cyaw = np.deg2rad(path[:,2])*-1
+            #print(cyaw)
             state = np.array([self.x, self.y,self.yaw])
-            sp = tracking.calc_speed_profile(cx[i:i+1], cy[i:i+1], cyaw[i:i+1], TARGET_SPEED,TARGET_SPEED,1)
+            sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,1)
             initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-            await self.track_async(cx[i:i+1], cy[i:i+1], cyaw[i:i+1], ck, sp, dl, initial_state,TARGET_SPEED)
+            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED)
             await trio.sleep(0)
         state = np.array([self.x, self.y,self.yaw])
+        path = ref[:][-1]
+        cx = path[:,0]*SCALE_FACTOR_PLAN
+        #print(cx)
+        cy = path[:,1]*SCALE_FACTOR_PLAN
+        #print(cy)
+        cyaw = np.deg2rad(path[:,2])*-1
+        #print(cyaw)
         initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-        sp = tracking.calc_speed_profile(cx[i:], cy[i:], cyaw[i:], TARGET_SPEED/2,0.0,1)
-        print('Tracking last segment from'+str(state)+'to'+str(ref[-1,:]))
-        await self.track_async(cx[-2:], cy[-2:], cyaw[-2:], ck, sp, dl, initial_state,0.0)
-        print('Arrived at'+str(state))
+        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,1)
+        await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
 
     async def send_response(self,send_response_channel):
         await trio.sleep(1)
