@@ -161,15 +161,16 @@ def get_mpc_path(start, end, planning_graph):
     traj = astar_trajectory(simple_graph, start, end)
     all_segments = []
     for start, end in zip(traj, traj[1:]):
-        all_segments.append(segment_to_mpc_inputs(start, end, edge_info))
+        all_segments.append(segment_to_mpc_inputs(start, end, edge_info_dict))
     return all_segments
 
 
 # TODO: make separate planner class
 if __name__ == '__main__':
-    remap = False
+    remap = True
     if remap:
         end_states = find_end_states_from_image('AVP_planning_300p_end_states')
+        print(end_states)
         assume = TwoPointTurnAssumption(scan_radius=40,max_angle_diff=60,min_dist=15)
         guarantee = TwoPointTurnGuarantee(uncertainty=2)
         bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
@@ -219,6 +220,8 @@ if __name__ == '__main__':
                         end = ps[-1]
                         traj = astar_trajectory(simple_graph, start, end)
                         for start, end in zip(traj, traj[1:]):
+                            print('Start'+str(start))
+                            print(end)
                             segment = segment_to_mpc_inputs(start, end, edge_info)
                             plt.plot(segment[0,0], segment[0,1], 'b.')
                             plt.plot(segment[-1,0], segment[-1,1], 'rx')
