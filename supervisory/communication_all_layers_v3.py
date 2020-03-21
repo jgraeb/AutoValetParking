@@ -12,8 +12,9 @@ sys.path.append('../demo') # enable importing modules from demo
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian
+from prepare.queue import Queue
 from component import parking_lot
-import component.pedestrian as Pedestrian
+#import component.pedestrian as Pedestrian
 from variables.data import parking_spots, pathspot0
 # planning
 import _pickle as pickle
@@ -22,7 +23,7 @@ import motionplanning.end_planner as path_planner
 # tracking
 import motiontracking.mpc_tracking as tracking
 
-average_arrival_rate = 0.1 # per second
+average_arrival_rate = 0.5 # per second
 beta = 1/average_arrival_rate
 average_park_time = 200 # seconds
 MAX_BUFFER_SIZE = np.inf
@@ -36,7 +37,8 @@ SCALE_FACTOR_PLAN = 90/300 # scale from pixels to meters in grid planner
 START_X = 120*SCALE_FACTOR_PLAN # m
 START_Y = 60*SCALE_FACTOR_PLAN # m
 START_YAW = 0 # rad
-list_of_cars = []
+start_walk_lane = (1287,665)
+end_walk_lane = (3160,665)
 
 def get_current_time():
     return trio.current_time() - start_time
@@ -84,23 +86,26 @@ class Simulation(BoxComponent):
                     print('Simulation System - Adding new car to Map')
                     self.cars.append(car)
 
+    async def add_ped_to_sim(self):
+        while True:
+            async with self.in_channels['PedSimulation']:
+                async for ped in self.in_channels['PedSimulation']:
+                    print('Simulation System - Adding new pedestrian to Map')
+                    self.peds.append(ped)
+                    #print(self.peds)
+
     def animate(self, frame_idx): # update animation by dt
         self.ax.clear()
         # scale to the large topo
         xoffset = 0
         yoffset = 200
-        dt = 0.1
-        # add one pedestrian to test simulation
-        #pedestrian = Pedestrian.Pedestrian(pedestrian_type='1')
-        #pedestrian.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
-        #if pedestrian.state[0] < self.end_walk_lane[0]: # if not at the destination
-            #pedestrian.prim_next(dt)
-            #draw_pedestrian(pedestrian,self.background)
+        for pedestrian in self.peds:
+            draw_pedestrian(pedestrian,self.background)
         for car in self.cars:
             draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
-        # update background
-        # for key,value in parking_spots.items():
-        #     draw_car(self.background,  value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(value[2]))
+        # to check parking spot locations
+        #for key,value in parking_spots.items():
+        #    draw_car(self.background,  value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(value[2]))
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
         self.background = parking_lot.get_background()
@@ -113,7 +118,6 @@ class Simulation(BoxComponent):
             self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
             plt.axis('off')
             self.background = parking_lot.get_background()
-            #await trio.sleep(0)
             ani = animation.FuncAnimation(self.fig, self.animate, frames=1, interval=1**3, blit=True, repeat=False)
             plt.pause(0.001)
             plt.draw()
@@ -123,6 +127,8 @@ class Simulation(BoxComponent):
     async def run(self):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.add_car_to_sim)
+            await trio.sleep(0)
+            nursery.start_soon(self.add_ped_to_sim)
             await trio.sleep(0)
             nursery.start_soon(self.update_simulation)
             await trio.sleep(0)
@@ -150,9 +156,18 @@ class Game(BoxComponent):
                 self.cars.remove(car)
                 await self.out_channels['Exit'].send(car)
 
+    async def keep_track_influx_peds(self):
+        async with self.in_channels['GameEnterPeds']:
+            async for pedestrian in self.in_channels['GameEnterPeds']:
+                print('Game System - Adding new pedestrian to Game')
+                #await self.out_channels['PedEnter'].send(pedestrian) # for Map
+                await self.out_channels['PedSimulation'].send(pedestrian)
+                self.peds.append(pedestrian)
+
     async def run(self):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.keep_track_influx)
+            nursery.start_soon(self.keep_track_influx_peds)
             nursery.start_soon(self.keep_track_outflux)
 
 
@@ -209,7 +224,7 @@ class Planner(BoxComponent):
         car, pos = await self.in_channels['Map'].receive()
         return pos
 
-    async def find_spot_coordinates(self, spot): # gives example trajectory currently
+    async def find_spot_coordinates(self, spot):
         return parking_spots[spot]
 
     async def send_directive_to_car(self, car, end):
@@ -228,11 +243,7 @@ class Planner(BoxComponent):
         sys.path.append('../motionplanning')
         with open('planning_graph_refined.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
-        #start = [120, 60, 0, 0]
-        #end = [144, 129, 120, 0]
-        #end2 = [end[0], end[1], -end[2],end[3]]
         traj = path_planner.get_mpc_path(start,end,planning_graph)
-        #print('Trajectory'+str(traj))
         return traj
 
     async def update_car_response(self, receive_response_channel):
@@ -272,24 +283,121 @@ class Planner(BoxComponent):
             await trio.sleep(1)
             nursery.start_soon(self.update_car_response,receive_response_channel)
 
-class Ped(BoxComponent): # not used yet !!
-    def __init__(self, arrive_time, depart_time):
-        super().__init__()
+class Pedestrian(BoxComponent):
+    def __init__(self,
+                 init_state = [start_walk_lane[0],start_walk_lane[1],-np.pi/2,0], # (x, y, theta, gait)
+                 number_of_gaits = 6,
+                 gait_length = 4,
+                 gait_progress = 0,
+                 film_dim = (1, 6),
+                 prim_queue = None, # primitive queue
+                 pedestrian_type = '3',
+                 ):
+        # init_state: initial state by default 
         self.name = 'Pedestrian {}'.format(id(self))
-        self.x = None
-        self.y = None
-        self.yaw = None
-        self.gait_length = 4
+        self.state = np.array(init_state, dtype="float")
+        self.alive_time = 0
+        self.is_dead = False
+        self.number_of_gaits = film_dim[0] * film_dim[1]
+        self.gait_length = gait_length
+        self.gait_progress = gait_progress
+        self.film_dim = film_dim
+        self.pedestrian_type = random.choice(['1','2','3','4','5','6'])
+        if prim_queue == None:
+            self.prim_queue = Queue()
+        else:
+            prim_queue = prim_queue
+        self.fig =  '../imglib/pedestrians/walking' + pedestrian_type + '.png'
+        self.medic = '../imglib/pedestrians/medic' + '.png'
+        self.all_pedestrian_types = {'1','2','3','4','5','6'}
+        self.dt = 0.1
 
-    async def ped_start(self):
-        self.x = ped_startpos[0]
-        self.y = ped_startpos[1]
+    async def next(self, inputs, dt):
+        """
+        The pedestrian advances forward
+        """
+        if self.is_dead:
+            if self.fig != self.medic:
+                self.fig = self.medic
+        else:
+            dee_theta, vee = inputs
+            self.state[2] += dee_theta # update heading of pedestrian
+            self.state[0] += vee * np.cos(self.state[2]) * self.dt # update x coordinate of pedestrian
+            self.state[1] += vee * np.sin(self.state[2]) * self.dt # update y coordinate of pedestrian
+            distance_travelled = vee * self.dt # compute distance travelled during dt
+            gait_change = (self.gait_progress + distance_travelled / self.gait_length) // 1 # compute number of gait change
+            self.gait_progress = (self.gait_progress + distance_travelled / self.gait_length) % 1
+            self.state[3] = int((self.state[3] + gait_change) % self.number_of_gaits)
+            self.alive_time += self.dt
+
+    async def extract_primitive(self):
+       #TODO: rewrite the comment below
+       """
+       This function updates the primitive queue and picks the next primitive to be applied. When there is no more primitive in the queue, it will
+       return False
+
+       """
+       while self.prim_queue.len() > 0:
+           if self.prim_queue.top()[1] < 1: # if the top primitive hasn't been exhausted
+               prim_data, prim_progress = self.prim_queue.top() # extract it
+               return prim_data, prim_progress
+           else:
+               self.prim_queue.pop() # pop it
+       return False
+
+    async def prim_next(self):
+        if await self.extract_primitive() == False: # if there is no primitive to use
+            self.next((0, 0), self.dt)
+        else:
+            prim_data, prim_progress = await self.extract_primitive() # extract primitive data and primitive progress from prim
+            start, finish, vee = prim_data # extract data from primitive
+            total_distance,_ = await self.get_walking_displacement(start, finish)
+            if prim_progress == 0: # ensure that starting position is correct at start of primitive
+                self.state[0] = start[0]
+                self.state[1] = start[1]
+            if start == finish: #waiting mode
+                remaining_distance = 0
+                self.state[3] = 0 # reset gait
+                if self.prim_queue.len() > 1: # if current not at last primitive
+                    last_prim_data, last_prim_progress = self.prim_queue.bottom() # extract last primitive
+                    _, last_finish, vee = last_prim_data
+                    _,heading = await self.get_walking_displacement(self.state, last_finish)
+                    if self.state[2] != heading:
+                        self.state[2] = heading
+            else: # if in walking mode
+                remaining_distance,heading = await self.get_walking_displacement(self.state,finish)
+                if self.state[2] != heading:
+                    self.state[2] = heading
+            if vee * self.dt > remaining_distance and remaining_distance != 0:
+                await self.next((0, remaining_distance/self.dt), self.dt)
+            else:
+                await self.next((0, vee), self.dt)
+            if total_distance != 0:
+                prim_progress += self.dt / (total_distance / vee)
+            self.prim_queue.replace_top((prim_data, prim_progress)) # update primitive queue
+            
+    async def get_walking_displacement(self, start, finish):
+        dx = finish[0] - start[0]
+        dy = finish[1] - start[1]
+        distance = np.linalg.norm(np.array([dx, dy]))
+        heading = np.arctan2(dy,dx)
+        return distance, heading
+
+    async def start_ped(self,start_walk, end_walk):
+        print('Start Pedestrian')
+        self.start_walk_lane = start_walk
+        self.end_walk_lane = end_walk
+        self.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
 
     async def ped_walk(self):
-        if (self.x <= ped_endpos):
-            self.x = self.x+self.gait_length
+        while (self.state[0] < self.end_walk_lane[0]): # if not at the destination
+            print('Pedestrian is walking')
+            print(self.state)
+            await self.prim_next()
+            await trio.sleep(0)
 
-    async def run(self,send_response_channel):
+    async def run(self, start_walk, end_walk):
+        await self.start_ped(start_walk, end_walk)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.ped_walk)
             await trio.sleep(0)
@@ -310,7 +418,6 @@ class Car(BoxComponent):
         async for directive in self.in_channels['Planner']:
             self.ref = directive
             print('{0} - Receiving Directive from Planner'.format(self.name))
-            #ref=self.ref
             await self.track_reference(self.ref)
             await trio.sleep(0)
             await self.send_response(send_response_channel)
@@ -355,9 +462,6 @@ class Car(BoxComponent):
                 di, ai = odelta[0], oa[0]
             tracking.state = tracking.update_state(tracking.state, ai, di)
             time = time + tracking.DT
-            #print(self.x)
-            #print(tracking.state.x)
-            #pdb.set_trace()
             self.x = tracking.state.x
             self.y = tracking.state.y
             self.yaw = tracking.state.yaw
@@ -368,25 +472,14 @@ class Car(BoxComponent):
  
     async def track_reference(self,ref):
         print('{0} - Tracking reference...'.format(self.name))
-        #print(ref)
-        #print(np.shape(ref))
-        # cx = ref[:][0]
-        # print(cx)
-        # cx = cx.reshape(len(ref),1)
-        # cy = ref[:,1]
-        # cy= cy.reshape(len(ref),1)
-        # cyaw = ref[:,2].reshape(len(ref),1)
         ck = 0 
         dl = 1.0  # course tick
         for i in range(0,len(ref)-1):
             #print('Going to'+str(ref[i,:]))
             path = ref[:][i]
             cx = path[:,0]*SCALE_FACTOR_PLAN
-            #print(cx)
             cy = path[:,1]*SCALE_FACTOR_PLAN
-            #print(cy)
             cyaw = np.deg2rad(path[:,2])*-1
-            #print(cyaw)
             state = np.array([self.x, self.y,self.yaw])
             sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,1)
             initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
@@ -395,11 +488,8 @@ class Car(BoxComponent):
         state = np.array([self.x, self.y,self.yaw])
         path = ref[:][-1]
         cx = path[:,0]*SCALE_FACTOR_PLAN
-        #print(cx)
         cy = path[:,1]*SCALE_FACTOR_PLAN
-        #print(cy)
         cyaw = np.deg2rad(path[:,2])*-1
-        #print(cyaw)
         initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
         sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,1)
         await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
@@ -418,10 +508,11 @@ class Car(BoxComponent):
 
 
 class Supervisor(BoxComponent):
-    def __init__(self):
+    def __init__(self, nursery):
         super().__init__()
         self.name = self.__class__.__name__
         self.cars = []
+        self.nursery = nursery
         self.spot_no = MAX_NO_PARKING_SPOTS
         self.parking_spots = dict([ (i, ("Vacant", "None")) for i in range(0,self.spot_no) ])
 
@@ -468,6 +559,10 @@ class Supervisor(BoxComponent):
                 await self.out_channels['GameEnter'].send(car)
                 spot = self.pick_spot(car)
                 await self.send_directive_to_planner(car,('Park',spot))
+                ped = Pedestrian(pedestrian_type='1')
+                self.nursery.start_soon(ped.run,start_walk_lane,end_walk_lane)
+                await self.out_channels['GameEnterPeds'].send(ped)
+
             else:
                 await self.out_channels['Customer'].send(False)
                 print('Garage fully occupied - A car has been rejected!')
@@ -483,6 +578,7 @@ class Supervisor(BoxComponent):
             nursery.start_soon(self.process_queue)
             nursery.start_soon(self.request_queue)
             nursery.start_soon(self.update_planner_response)
+
 
 class Customer(BoxComponent):
     def __init__(self, average_arrival_rate, average_park_time):
@@ -540,7 +636,7 @@ async def main():
         all_components.append(map_sys)
         simulation = Simulation()
         all_components.append(simulation)
-        supervisor = Supervisor()
+        supervisor = Supervisor(nursery = nursery)
         all_components.append(supervisor)
         game = Game()
         all_components.append(game)
@@ -553,10 +649,13 @@ async def main():
         create_unidirectional_channel(sender=customer, receiver=supervisor, max_buffer_size=np.inf, name='Request')
         create_unidirectional_channel(sender=game, receiver=map_sys, max_buffer_size=np.inf, name='Enter')
         create_unidirectional_channel(sender=game, receiver=map_sys, max_buffer_size=np.inf, name='Exit')
+        #create_unidirectional_channel(sender=game, receiver=map_sys, max_buffer_size=np.inf, name='PedEnter')
         create_bidirectional_channel(map_sys, planner, max_buffer_size=np.inf)
         create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameEnter')
         create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameExit')
+        create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameEnterPeds')
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf)
+        create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf, name='PedSimulation')
         
         for comp in all_components:
             nursery.start_soon(comp.run)
