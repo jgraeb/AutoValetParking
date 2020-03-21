@@ -1,6 +1,5 @@
 import numpy as np
-
-SCALE_FACTOR_SIM = 3173/90 # scale from meters to pixels in simulation
+from variables.global_vars import *
 
 parking_spots_discrete= {0: (1510/SCALE_FACTOR_SIM, 1498/SCALE_FACTOR_SIM, -2/3*np.pi),
 1: (1009/SCALE_FACTOR_SIM, 1498/SCALE_FACTOR_SIM, -2/3*np.pi), 
@@ -60,31 +59,3 @@ parking_spots = {0: (51, 166, 120, 0),
 21: (189, 234, 60, 0), 
 22: (201, 234, 60, 0)}
 # 19: (212, 234, 60, 0), 
-
-exampletraj = np.array([[1424/SCALE_FACTOR_SIM, 784/SCALE_FACTOR_SIM, 0],
-[1730/SCALE_FACTOR_SIM,784/SCALE_FACTOR_SIM, 1/4*np.pi],
-[1860/SCALE_FACTOR_SIM,963/SCALE_FACTOR_SIM, 1/2*np.pi],
-[1860/SCALE_FACTOR_SIM,1095/SCALE_FACTOR_SIM, 1/2*np.pi],
-[1860/SCALE_FACTOR_SIM,1272/SCALE_FACTOR_SIM,1/2*np.pi],
-[1860/SCALE_FACTOR_SIM, 1444/SCALE_FACTOR_SIM, 1/2*np.pi],
-[1860/SCALE_FACTOR_SIM, 1628/SCALE_FACTOR_SIM, 3/4*np.pi],
-[1714/SCALE_FACTOR_SIM,1763/SCALE_FACTOR_SIM, np.pi],
-[1619/SCALE_FACTOR_SIM,1692/SCALE_FACTOR_SIM, -2/3*np.pi],
-[1510/SCALE_FACTOR_SIM, 1498/35, -2/3*np.pi]])
-
-pathspot0 = np.array([[120*0.30,  60*0.30,   0,   0],
- [130*0.30,  60*0.30,   0,   0],
- [140*0.30,  60*0.30,   0,  10],
- [150*0.30,  60*0.30,   0,   0],
- [160*0.30,  60*0.30,   45,  0],
- [170*0.30,  70*0.30,   90,  0],
- [170*0.3,  80*0.30, 90,  10],
- [170*0.30,  90*0.30, 90,   0],
- [170*0.30, 100*0.30, 90,   0],
- [170*0.30, 110*0.30, 45,   0],
- [180*0.30, 120*0.30, 90,   0],
- [180*0.30, 130*0.30, 90,  10],
- [180*0.30, 140*0.30, 135,  10],
- [170*0.30, 150*0.30, 180,   0],
- [160*0.30, 150*0.30, -120,   0],
- [144*0.30, 129*0.30, -120,   0]])
