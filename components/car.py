@@ -4,6 +4,18 @@ from variables.global_vars import *
 import motiontracking.mpc_tracking as tracking
 import math
 
+class State:
+    """
+    vehicle state class
+    """
+
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
+        self.x = x
+        self.y = y
+        self.yaw = yaw
+        self.v = v
+        self.predelta = None
+
 class Car(BoxComponent):
     def __init__(self, arrive_time, depart_time):
         super().__init__()
@@ -15,6 +27,7 @@ class Car(BoxComponent):
         self.y = START_Y
         self.yaw = START_YAW
         self.v = 0.0
+        self.state = State(x=self.x, y=self.y, yaw=self.yaw, v=self.v)
 
     async def update_planner_command(self,send_response_channel):
         async for directive in self.in_channels['Planner']:
@@ -39,37 +52,37 @@ class Car(BoxComponent):
 
     async def track_async(self, cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed): # modified from MPC
         goal = [cx[-1], cy[-1]]
-        tracking.state = initial_state
+        self.state = initial_state
         # initial yaw compensation
-        if tracking.state.yaw - cyaw[0] >= math.pi:
-            tracking.state.yaw -= math.pi * 2.0
-        elif tracking.state.yaw - cyaw[0] <= -math.pi:
-            tracking.state.yaw += math.pi * 2.0
+        if self.state.yaw - cyaw[0] >= math.pi:
+            self.state.yaw -= math.pi * 2.0
+        elif self.state.yaw - cyaw[0] <= -math.pi:
+            self.state.yaw += math.pi * 2.0
         time = 0.0
-        x = [tracking.state.x]
-        y = [tracking.state.y]
-        yaw = [tracking.state.yaw]
-        v = [tracking.state.v]
+        x = [self.state.x]
+        y = [self.state.y]
+        yaw = [self.state.yaw]
+        v = [self.state.v]
         t = [0.0]
         d = [0.0]
         a = [0.0]
-        target_ind, _ = tracking.calc_nearest_index(tracking.state, cx, cy, cyaw, 0)
+        target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
         odelta, oa = None, None
         cyaw = tracking.smooth_yaw(cyaw)
         while tracking.MAX_TIME >= time:
-            xref, target_ind, dref = tracking.calc_ref_trajectory(tracking.state, cx, cy, cyaw, ck, sp, dl, target_ind)
-            x0 = [tracking.state.x, tracking.state.y, tracking.state.v, tracking.state.yaw]  # current state
+            xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
+            x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
             oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
             if odelta is not None:
                 di, ai = odelta[0], oa[0]
-            tracking.state = tracking.update_state(tracking.state, ai, di)
+            self.state = tracking.update_state(self.state, ai, di)
             time = time + tracking.DT
-            self.x = tracking.state.x
-            self.y = tracking.state.y
-            self.yaw = tracking.state.yaw
-            self.v = tracking.state.v
+            self.x = self.state.x
+            self.y = self.state.y
+            self.yaw = self.state.yaw
+            self.v = self.state.v
             await trio.sleep(0)
-            if tracking.check_goal(tracking.state, goal, target_ind, len(cx),goalspeed): # modified goal speed
+            if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed): # modified goal speed
                 break
  
     async def track_reference(self,ref):
@@ -84,7 +97,7 @@ class Car(BoxComponent):
             cyaw = np.deg2rad(path[:,2])*-1
             state = np.array([self.x, self.y,self.yaw])
             sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,1)
-            initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+            initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
             await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED)
             await trio.sleep(0)
         state = np.array([self.x, self.y,self.yaw])
@@ -92,7 +105,7 @@ class Car(BoxComponent):
         cx = path[:,0]*SCALE_FACTOR_PLAN
         cy = path[:,1]*SCALE_FACTOR_PLAN
         cyaw = np.deg2rad(path[:,2])*-1
-        initial_state = tracking.State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+        initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
         sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,1)
         await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
 
