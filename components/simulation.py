@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian
 from component import parking_lot
 from variables.global_vars import *
+from variables.data import parking_spots
 
 class Simulation(BoxComponent):
     def __init__(self):
@@ -45,8 +46,8 @@ class Simulation(BoxComponent):
         for car in self.cars:
             draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
         # to check parking spot locations
-        #for key,value in parking_spots.items():
-        #    draw_car(self.background,  value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(value[2]))
+        for key,value in parking_spots.items():
+            draw_car(self.background,  value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(value[2]))
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
         self.background = parking_lot.get_background()
