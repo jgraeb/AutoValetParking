@@ -6,7 +6,7 @@ import _pickle as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
+from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
 import cv2
 
 def find_end_states_from_image(img_path):
@@ -17,7 +17,7 @@ def find_end_states_from_image(img_path):
     for i in range(m):
         for j in range(n):
             b,g,r = img[i][j] # format is BGR, positive integer types!
-            if not (r == 255 and g == 255 and b == 255):
+            if not (r == 255 and g == 255 and b == 255): # if not white color
                 if r == 0:
                     if g == 0:
                         angle = -int(b) # need to recast b to an integer
@@ -34,6 +34,7 @@ def find_end_states_from_image(img_path):
 #                        i_r, j_r = j + ell * np.cos(angle / 180 * np.pi), i + ell * -np.sin(angle / 180 * np.pi)
 #                        end_states.append((i_r, j_r, constrain_heading_to_pm_180(-angle), 0))
     print('found {} end states!'.format(len(end_states)))
+    print(end_states)
     return end_states
 
 class EndPlanner:
@@ -238,3 +239,4 @@ if __name__ == '__main__':
                             ps = ps[:-1]
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
+
