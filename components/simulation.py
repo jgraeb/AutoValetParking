@@ -7,10 +7,11 @@ import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian
 from component import parking_lot
 from variables.global_vars import *
-from motionplanning.parking_data import parking_spots
+from variables.parking_data import parking_spots
+#from motionplanning.parking_data import parking_spots
 from ipdb import set_trace as st
 
-show_all_spots = True
+show_all_spots = False
 
 class Simulation(BoxComponent):
     def __init__(self):
