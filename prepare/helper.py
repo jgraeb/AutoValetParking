@@ -17,8 +17,8 @@ dir_path = os.path.dirname(os.path.realpath("__file__"))
 car_fig = os.path.dirname(dir_path) + '/imglib/blue_car.png'
 vehicle_fig = Image.open(car_fig)
 
-car_scale_factor = 0.24
-center_to_axle_dist = 234
+car_scale_factor = 0.2
+center_to_axle_dist = 200
 
 cell_coordinates = {'X0': (1412,460,pi),
 'X1': (1850,1170,pi/2),
@@ -38,15 +38,15 @@ def find_corner_coordinates(x_state_center_before, y_state_center_before, x_desi
     If we'd like to put the point specfied by (x_state_center_before, y_state_center_before) at (x_desired, y_desired),
     this function returns the coordinates of the lower left corner of the new image
     """
-    w, h = square_fig.size
     theta = -theta
+    w, h = square_fig.size
     if abs(w - h) > 1:
         print('Warning: Figure has to be square! Otherwise, clipping or unexpected behavior may occur')
 #        warnings.warn("Warning: Figure has to be square! Otherwise, clipping or unexpected behavior may occur")
 
     R = np.array([[cos(theta), sin(theta)], [-sin(theta), cos(theta)]])
     x_corner_center_before, y_corner_center_before = -w/2., -h/2. # lower left corner before rotation
-    x_corner_center_after, y_corner_center_after = -w/2., -h*3/4. # doesn't change since figure size remains unchanged
+    x_corner_center_after, y_corner_center_after = -w/2., -h/2. # doesn't change since figure size remains unchanged
 
     x_state_center_after, y_state_center_after = R.dot(np.array([[x_state_center_before], [y_state_center_before]])) # relative coordinates after rotation by theta
 
@@ -59,7 +59,7 @@ def find_corner_coordinates(x_state_center_before, y_state_center_before, x_desi
     y_corner_unknown = int(y_desired - y_state_center_after + y_corner_center_after)
     return x_corner_unknown, y_corner_unknown
 
-def draw_car(background,x,y,theta):  
+def draw_car(background,x,y,theta):
     vehicle_fig = Image.open(car_fig)
     w_orig, h_orig = vehicle_fig.size
     # convert angle to degrees and positive counter-clockwise
@@ -71,7 +71,7 @@ def draw_car(background,x,y,theta):
     vehicle_fig = vehicle_fig.resize(scaled_vehicle_fig_size, Image.ANTIALIAS)
     
     # at (full scale) the relative coordinates of the center of the rear axle w.r.t. the center of the figure is center_to_axle_dist
-    x_corner, y_corner = find_corner_coordinates(car_scale_factor * center_to_axle_dist, 0, x, y, theta, vehicle_fig)
+    x_corner, y_corner = find_corner_coordinates(-car_scale_factor * center_to_axle_dist, 0, x, y, theta, vehicle_fig)
     background.paste(vehicle_fig, (x_corner, y_corner), vehicle_fig)
     #background.paste(vehicle_fig, (x, y), vehicle_fig)
     

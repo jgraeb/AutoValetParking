@@ -6,7 +6,10 @@ import _pickle as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
+if __name__ == '__main__':
+    from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
+else:
+    from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
 import cv2
 
 def find_end_states_from_image(img_path):
@@ -43,6 +46,7 @@ class EndPlanner:
         self.end_states = end_states
         self.contract = contract
     def get_planning_graph(self):
+        the_planning_graph = dict()
         for idx, end_state in enumerate(self.end_states):
             print('planning graph progress: {0:.1f}%'.format(idx/(len(self.end_states)-1)*100))
             for assume_state in self.graph._nodes:
@@ -57,9 +61,10 @@ class EndPlanner:
                         self.edge_info[end_state, assume_state] = reversed_node_sequence
         coverage = sum([int(end_state in self.graph._nodes) for end_state in self.end_states])/len(self.end_states)
         print('end state coverage is {0:.1f}%'.format(coverage*100))
-        planning_graph['graph'] = self.graph
-        planning_graph['edge_info'] = self.edge_info
-        return planning_graph
+        the_planning_graph['graph'] = self.graph
+        the_planning_graph['edge_info'] = self.edge_info
+        the_planning_graph['end_states'] = self.end_states
+        return the_planning_graph
 
 class EndStateContract:
     def __init__(self, assm, guart, bitmap):
@@ -167,7 +172,7 @@ def get_mpc_path(start, end, planning_graph):
 
 # TODO: make separate planner class
 if __name__ == '__main__':
-    remap = True
+    remap = False
     if remap:
         end_states = find_end_states_from_image('AVP_planning_300p_end_states')
         print(end_states)
