@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian
 from component import parking_lot
 from variables.global_vars import *
-from variables.data import parking_spots
+from motionplanning.parking_data import parking_spots
+from ipdb import set_trace as st
 
 show_all_spots = True
 
@@ -42,7 +43,7 @@ class Simulation(BoxComponent):
         self.ax.clear()
         # scale to the large topo
         xoffset = 0
-        yoffset = 200
+        yoffset = 0
         for pedestrian in self.peds:
             draw_pedestrian(pedestrian,self.background)
         for car in self.cars:
@@ -50,7 +51,12 @@ class Simulation(BoxComponent):
         # to check parking spot locations
         if show_all_spots:
             for key,value in parking_spots.items():
-                draw_car(self.background,  value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset, value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset,np.deg2rad(value[2]))
+                xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
+                yd = int(value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset)
+#                print(value[0], value[1])
+#                print(xd, yd)
+                hd = np.deg2rad(-value[2])
+                draw_car(self.background,xd,yd,hd)
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
         self.background = parking_lot.get_background()

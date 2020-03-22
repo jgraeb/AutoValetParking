@@ -4,7 +4,7 @@ import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import *
 from variables.global_vars import *
-from variables.data import parking_spots
+from motionplanning.parking_data import parking_spots
 
 class Planner(BoxComponent):
     def __init__(self, nursery):
