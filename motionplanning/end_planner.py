@@ -11,6 +11,7 @@ if __name__ == '__main__':
 else:
     from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
 import cv2
+import components.game as game
 
 def find_end_states_from_image(img_path):
     end_states = []
@@ -171,6 +172,45 @@ def get_mpc_path(start, end, planning_graph):
     return all_segments
 
 
+# check whether the path is blocked
+def subpath_is_safe(start, end):
+    is_safe = True
+    subpath = [[start[0],start[1]], [end[0],end[1]]]
+    for car in game.cars:
+        if distance([car.x,car.y],subpath) <= 10: # minimum allowed distance
+            is_safe = False
+            return is_safe
+    for ped in game.peds:
+        if distance([ped.state[0],ped.state[1]],subpath) <= 10: # minimum allowed distance
+            is_safe = False
+            return is_safe
+    return is_safe
+
+def distance(a, b):
+    b0 = b[0]
+    b1 = b[1]
+    return min(((a[0] - b0[0])**2 + (a[1] - b0[1])**2)**0.5,((a[0] - b1[0])**2 + (a[1] - b1[1])**2)**0.5)
+
+def complete_path_is_safe(traj):                 
+    # check whether the subpath is safe
+    is_safe = True
+    for sub_start, sub_end in zip(traj, traj[1:]):
+        if not subpath_is_safe(sub_start, sub_end): # if someone blocks the subpath
+            is_safe = False
+            return is_safe
+    return is_safe     
+       
+
+def longest_safe_subpath(traj):
+    idx = -1
+    for sub_start, sub_end in zip(traj, traj[1:]):
+        idx += 1 
+        if not subpath_is_safe(sub_start, sub_end):
+            safe_subpath = traj[0:idx]
+            safe_start = traj[idx]   
+            return safe_subpath, safe_start
+                    
+
 # TODO: make separate planner class
 if __name__ == '__main__':
     remap = False
@@ -225,6 +265,13 @@ if __name__ == '__main__':
                         start = ps[-2]
                         end = ps[-1]
                         traj = astar_trajectory(simple_graph, start, end)
+                        
+                        while not complete_path_is_safe(traj):
+                            safe_subpath, safe_start = longest_safe_subpath(traj)
+                             # TODO: not sure how to generate the path
+                            new_subpath = astar_trajectory(simple_graph, safe_start, end)
+                            traj = safe_subpath + new_subpath
+                
                         for start, end in zip(traj, traj[1:]):
                             print('Start'+str(start))
                             print(end)
