@@ -3,6 +3,7 @@
 # California Institute of Technology
 # March 5th, 2020
 import _pickle as pickle
+from ipdb import set_trace as st
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
@@ -11,6 +12,8 @@ if __name__ == '__main__':
 else:
     from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
 import cv2
+import sys
+sys.path.append('..')
 import components.game as game
 
 def find_end_states_from_image(img_path):
@@ -265,16 +268,16 @@ if __name__ == '__main__':
                         start = ps[-2]
                         end = ps[-1]
                         traj = astar_trajectory(simple_graph, start, end)
-                        
-                        while not complete_path_is_safe(traj):
-                            safe_subpath, safe_start = longest_safe_subpath(traj)
-                             # TODO: not sure how to generate the path
-                            new_subpath = astar_trajectory(simple_graph, safe_start, end)
-                            traj = safe_subpath + new_subpath
+                        #print(traj)
+                        # while not complete_path_is_safe(traj):
+                        #     safe_subpath, safe_start = longest_safe_subpath(traj)
+                        #      # TODO: not sure how to generate the path
+                        #     new_subpath = astar_trajectory(simple_graph, safe_start, end)
+                        #     traj = safe_subpath + new_subpath
                 
                         for start, end in zip(traj, traj[1:]):
-                            print('Start'+str(start))
-                            print(end)
+                            #print('Start'+str(start))
+                            #print(end)
                             segment = segment_to_mpc_inputs(start, end, edge_info)
                             plt.plot(segment[0,0], segment[0,1], 'b.')
                             plt.plot(segment[-1,0], segment[-1,1], 'rx')

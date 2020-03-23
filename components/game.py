@@ -36,7 +36,7 @@ class Game(BoxComponent):
                 self.peds.append(pedestrian)
 
     async def check_car_path(self,car):
-        # create conic region to check
+        # create cone to check
         openangle = 45
         length = 6 # m
         for cars in self.cars:

@@ -55,6 +55,18 @@ class Planner(BoxComponent):
         await self.out_channels[car.name].send(traj)
         await trio.sleep(1)
 
+    async def add_obstacle(self, x, y):
+        # add obstacle to the planning graph
+        with open('planning_graph_refined.pkl', 'rb') as f:
+            planning_graph = pickle.load(f)
+        # find nodes which correspond to location of broken car
+        # planning_graph['graph']._nodes
+        # find edges through this node
+        # planning_graph['graph']._edges
+        # give list of edges
+        # set weights to np.inf
+        # return new planning_graph
+
     async def get_path(self, start, end): 
         sys.path.append('../motionplanning')
         with open('planning_graph_refined.pkl', 'rb') as f:
@@ -71,6 +83,8 @@ class Planner(BoxComponent):
                 if response[1]=='Parked':
                     self.parked.update({car.name: (self.assigned.get(car.name))})
                     print(self.parked)
+                if response[1]=='Failure':
+                    self.add_obstacle(car.x,car.y)
                 await trio.sleep(0)
                 await self.send_response_to_supervisor(car,resp)
 
