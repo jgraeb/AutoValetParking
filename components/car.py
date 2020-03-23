@@ -92,6 +92,7 @@ class Car(BoxComponent):
         print('{0} - Tracking reference...'.format(self.name))
         ck = 0 
         dl = 1.0  # course tick
+        print(ref)
         for i in range(0,len(ref)-1):
             #print('Going to'+str(ref[i,:]))
             while not await self.check_path(Game):
@@ -103,7 +104,10 @@ class Car(BoxComponent):
             cy = path[:,1]*SCALE_FACTOR_PLAN
             cyaw = np.deg2rad(path[:,2])*-1
             state = np.array([self.x, self.y,self.yaw])
-            sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,1)
+            #  check  direction of the segment
+            direction = tracking.check_direction(path)
+            print("Direction is "+str(direction))
+            sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,direction)
             initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
             await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED)
             await trio.sleep(0)
@@ -112,8 +116,9 @@ class Car(BoxComponent):
         cx = path[:,0]*SCALE_FACTOR_PLAN
         cy = path[:,1]*SCALE_FACTOR_PLAN
         cyaw = np.deg2rad(path[:,2])*-1
+        direction = tracking.check_direction(path)
         initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,1)
+        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,direction)
         await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
         self.status = 'Parked'
 

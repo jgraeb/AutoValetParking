@@ -74,7 +74,7 @@ class Simulation(BoxComponent):
             plt.pause(0.001)
             plt.draw()
             await trio.sleep(0)
-            print('------------Figure updating-------------')
+            #print('------------Figure updating-------------')
 
     async def run(self):
         async with trio.open_nursery() as nursery:

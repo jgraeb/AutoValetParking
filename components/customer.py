@@ -33,7 +33,7 @@ class Customer(BoxComponent):
             car.x = START_X
             car.y = START_Y
             car.yaw = START_YAW
-            print("Car with ID {0} arrives at {1:.3f}".format(car.name, car.arrive_time))
+            print("Car with ID {0} arrives at {1:.3f} and will leave at {2:.3f}".format(car.name, car.arrive_time,car.depart_time))
             await self.out_channels['Supervisor'].send(car)
             accept = await self.in_channels['Supervisor'].receive() # checks if car is accepted by the garage
             if (accept == False):
@@ -47,6 +47,7 @@ class Customer(BoxComponent):
             self.cars.append(car)
             #if (now>=end_time):
             #    garage_open = False
+            # await trio.sleep(5) # give car time to start tracking
             # Random sleeps help trigger the problem more reliably
             await trio.sleep(random.random())
         print('--------- It is {} time  --------'.format(trio.current_time()))

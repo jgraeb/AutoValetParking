@@ -38,7 +38,7 @@ class Game(BoxComponent):
     async def check_car_path(self,car):
         # create conic region to check
         openangle = 45
-        length = 7 # m
+        length = 6 # m
         for cars in self.cars:
             if car.name != cars.name:
                 dx = cars.x - car.x

@@ -13,23 +13,43 @@ class Planner(BoxComponent):
         self.name = self.__class__.__name__
         self.nursery = nursery
         self.cars = []
+        self.parked = dict()
+        self.assigned = dict()
 
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
         await self.out_channels['Map'].send(car)
         car, pos = await self.in_channels['Map'].receive()
+        #if car.name in self.parked:
+        #    pos = parking_spots[spot]
+        # if self.parked.get(car.name, False):
+        #     pos = parking_spots[self.parked.get(car.name)]
+        #     start = np.zeros(4)
+        #     start[0] = pos[0]*SCALE_FACTOR_PLAN
+        #     start[1] = pos[1]*SCALE_FACTOR_PLAN
+        #     start[2] = np.deg2rad(pos[2])
+        #     print(start)
+        #     return start
+        #print(pos)
         return pos
 
     async def find_spot_coordinates(self, spot):
         return parking_spots[spot]
 
     async def send_directive_to_car(self, car, end):
-        pos = await self.get_car_position(car)
-        start = np.zeros(4)
-        start[0] = pos[0]/SCALE_FACTOR_PLAN
-        start[1] = pos[1]/SCALE_FACTOR_PLAN
-        start[2] = np.rad2deg(pos[2])
+        if self.parked.get(car.name, False):
+            start = parking_spots[self.parked.get(car.name)]
+            print(start)
+            start[2] = start[2]
+            print(start)
+        else:
+            pos = await self.get_car_position(car)
+            start = np.zeros(4)
+            start[0] = pos[0]/SCALE_FACTOR_PLAN
+            start[1] = pos[1]/SCALE_FACTOR_PLAN
+            start[2] = -np.rad2deg(pos[2])
         # get trajectory from Planning Graph
+        print(start)
         traj = await self.get_path(start,end) 
         print('Planner - sending Directive to {0}'.format(car.name))
         await self.out_channels[car.name].send(traj)
@@ -48,6 +68,9 @@ class Planner(BoxComponent):
                 car = response[0]
                 resp = response[1]
                 print('Planner - receiving "{0}" response from {1}'.format(resp,car.name))
+                if response[1]=='Parked':
+                    self.parked.update({car.name: (self.assigned.get(car.name))})
+                    print(self.parked)
                 await trio.sleep(0)
                 await self.send_response_to_supervisor(car,resp)
 
@@ -67,9 +90,12 @@ class Planner(BoxComponent):
                 self.nursery.start_soon(car.run,send_response_channel,Game)
                 end = await self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end)
+                self.assigned.update({car.name: (todo[1])})
+                #print(self.parked)
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
                 await self.send_directive_to_car(car, PICK_UP)
+                self.parked.pop(car.name)
 
     async def run(self,Game):
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)

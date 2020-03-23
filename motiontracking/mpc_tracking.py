@@ -15,10 +15,11 @@ import math
 import numpy as np
 import sys
 sys.path.append("../PathPlanning/CubicSpline/")
-sys.path.append("../motionplanning")
+sys.path.append("..")
 #sys.path.append("..")
 #import grid_planner
 #from data import parking_spots, exampletraj
+from variables.global_vars import *
 
 exampletraj = np.array([[120*0.30,  60*0.30,   0,   0],
  [130*0.30,  60*0.30,   0,   0],
@@ -36,6 +37,14 @@ exampletraj = np.array([[120*0.30,  60*0.30,   0,   0],
  [170*0.30, 150*0.30, 180,   0],
  [160*0.30, 150*0.30, -120,   0],
  [144*0.30, 129*0.30, -120,   0]])
+
+extraj2 = np.array([[ 39, 129, 120,   0],
+ [ 60, 150, 180,   0],
+ [ 50, 150, 180,  10],
+ [ 40, 150, 180,   0],
+ [ 20, 170, -90,  10],
+ [ 20, 180, -90,   0]])
+
 
 
 try:
@@ -56,7 +65,7 @@ R = np.diag([0.01, 0.01])  # input cost matrix
 Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
-GOAL_DIS = 1.0  # goal distance
+GOAL_DIS = 2.0  # goal distance
 STOP_SPEED = 1.0 / 3.6  # stop speed
 MAX_TIME = 200.0  # max simulation time
 
@@ -552,6 +561,23 @@ def Trafo(X):
     X[:,0] = X[:,0]*2.5 # scaling factor 2.5 to make AVP dimensions and car dimensions match
     X[:,1] = X[:,1]*2.5
     return X
+
+def check_direction(path):
+    cx = path[:,0]*SCALE_FACTOR_PLAN
+    cy = path[:,1]*SCALE_FACTOR_PLAN
+    cyaw = np.deg2rad(path[:,2])*-1
+    dx = cx[1] - cx[0]
+    dy = cy[1] - cy[0]
+    move_direction = math.atan2(-dy, dx)
+    #print(move_direction)
+    #print(cyaw[0])
+    dangle = abs(pi_2_pi(move_direction - cyaw[0]))
+    if dangle >= math.pi / 4.0:
+        direction = -1.0
+    else:
+        direction = 1.0
+    #print(direction)
+    return direction
 
 # split up trajectories further for simulation implementation
 def get_course_2_dropoff(dl):
@@ -1113,17 +1139,27 @@ def track_path_forward(ref):
     dl = 1
     ck = 0
     #cx, cy, cyaw, ck = get_switch_back_course(dl)
-    cx = ref[:,0]
-    cx = cx.reshape(len(ref),1)
-    cy = ref[:,1]
-    cy= cy.reshape(len(ref),1)
-    cyaw = ref[:,2].reshape(len(ref),1)
-    sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,0.0,1)
-
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
-
-    t, x, y, yaw, v, d, a = do_simulation(
-        cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
+    # cx = ref[:,0]*SCALE_FACTOR_PLAN
+    # cx = cx.reshape(len(ref),1)
+    # cy = ref[:,1]*SCALE_FACTOR_PLAN
+    # cy= cy.reshape(len(ref),1)
+    # cyaw = np.deg2rad(ref[:,2]).reshape(len(ref),1)
+    # direction = check_direction(ref)
+    print(ref)
+    for i in range(0,len(ref)-1):  
+        path = ref[i:i+2][:]
+        print(path)
+        cx = path[:,0]*SCALE_FACTOR_PLAN
+        print(cx)
+        cy = path[:,1]*SCALE_FACTOR_PLAN
+        cyaw = np.deg2rad(path[:,2])*-1
+        #state = np.array([self.x, self.y,self.yaw])
+        #  check  direction of the segment
+        direction = check_direction(cx,cy,cyaw)
+        print("Direction is "+str(direction))
+        sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,0.0,direction)
+        initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
+        t, x, y, yaw, v, d, a = do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
 
     if show_animation:  # pragma: no cover
         plt.close("all")
@@ -1144,7 +1180,14 @@ def track_path_forward(ref):
 
         plt.show()
 
+def test(path):
+    check_direction(path)
+
 if __name__ == '__main__':
     #main()
     #main_guarantee()
-    track_path_forward(exampletraj)
+    track_path_forward(extraj2)
+
+    #path = np.array([[140.,  60.,   90.],[140.,  70.,   90.]])
+    #path = np.array([[  40.,  140.,  -90.],[  40.,  150., -135.]])
+    #test(path)
