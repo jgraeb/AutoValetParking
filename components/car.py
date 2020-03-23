@@ -3,6 +3,7 @@ import trio
 from variables.global_vars import *
 import motiontracking.mpc_tracking as tracking
 import math
+from components.game import Game
 
 class State:
     """
@@ -28,12 +29,13 @@ class Car(BoxComponent):
         self.yaw = START_YAW
         self.v = 0.0
         self.state = State(x=self.x, y=self.y, yaw=self.yaw, v=self.v)
+        self.status = 'Idle'
 
-    async def update_planner_command(self,send_response_channel):
+    async def update_planner_command(self,send_response_channel,Game):
         async for directive in self.in_channels['Planner']:
             self.ref = directive
             print('{0} - Receiving Directive from Planner'.format(self.name))
-            await self.track_reference(self.ref)
+            await self.track_reference(self.ref,Game)
             await trio.sleep(0)
             await self.send_response(send_response_channel)
 
@@ -85,12 +87,17 @@ class Car(BoxComponent):
             if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed): # modified goal speed
                 break
  
-    async def track_reference(self,ref):
+    async def track_reference(self,ref,Game):
+        self.status = 'Driving'
         print('{0} - Tracking reference...'.format(self.name))
         ck = 0 
         dl = 1.0  # course tick
         for i in range(0,len(ref)-1):
             #print('Going to'+str(ref[i,:]))
+            while not await self.check_path(Game):
+                self.status = 'Stop'
+                await trio.sleep(3)   
+            self.status = 'Driving'
             path = ref[:][i]
             cx = path[:,0]*SCALE_FACTOR_PLAN
             cy = path[:,1]*SCALE_FACTOR_PLAN
@@ -108,15 +115,29 @@ class Car(BoxComponent):
         initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
         sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,1)
         await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
+        self.status = 'Parked'
 
     async def send_response(self,send_response_channel):
         await trio.sleep(1)
-        response = 'Completed'
+        response = self.status
         print('{0} - sending {1} response to Planner'.format(self.name,response))
         await send_response_channel.send((self,response))
         await trio.sleep(1)
 
-    async def run(self,send_response_channel):
+    async def check_path(self, gme):
+        #print('Checking the path')
+        is_clear = await gme.check_car_path(self)
+        return is_clear
+
+    async def stop(self,send_response_channel):
+        self.status = 'Stop'
+        await self.send_response(send_response_channel)
+
+    async def failure(self,send_response_channel):
+        self.status = 'Failure'
+        await self.send_response(send_response_channel)
+
+    async def run(self,send_response_channel,Game):
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.update_planner_command,send_response_channel)
+            nursery.start_soon(self.update_planner_command,send_response_channel,Game)
             await trio.sleep(0)

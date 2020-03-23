@@ -31,7 +31,7 @@ async def main():
         game = Game()
         all_components.append(game)
         planner = Planner(nursery=nursery)
-        all_components.append(planner)
+        #all_components.append(planner)
         customer = Customer(average_arrival_rate = average_arrival_rate, average_park_time = average_park_time)
         #create communication channels
         set_up_channels(supervisor,planner, game, map_sys, customer, simulation)
@@ -39,6 +39,7 @@ async def main():
         for comp in all_components:
             nursery.start_soon(comp.run)
             await trio.sleep(0)
-        nursery.start_soon(customer.run,end_time,start_time)
+        nursery.start_soon(planner.run, game)
+        nursery.start_soon(customer.run,end_time,start_time, game)
 
 trio.run(main)

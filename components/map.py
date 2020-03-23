@@ -11,7 +11,7 @@ class Map(BoxComponent):
         print('Map System - sending car position to Planner')
         for key, value in self.car_positions.items():
             if (key==car.name):
-                pos = (value.x , value.y, value.yaw)
+                pos = (value.x , value.y, value.yaw, value.v)
         await self.out_channels['Planner'].send((car,pos))
 
     async def add_car_to_map(self):
@@ -19,7 +19,7 @@ class Map(BoxComponent):
             async for car in self.in_channels['Enter']:
                 print('Map System - Adding new car to Map')
                 self.car_positions.update({car.name: (car)})
-                print(self.car_positions)
+                #print(self.car_positions)
 
     async def send_camera_data_to_planner(self):
         async with self.in_channels['Planner']:
@@ -32,7 +32,7 @@ class Map(BoxComponent):
             async for car in self.in_channels['Exit']:
                 print('Map System - Removing {} from Map'.format(car.name))
                 self.car_positions.pop(car.name)
-                print(self.car_positions)
+                #print(self.car_positions)
 
     async def run(self):
         async with trio.open_nursery() as nursery:

@@ -19,10 +19,13 @@ class Customer(BoxComponent):
         car = Car(arrive_time=arrive_time, depart_time=depart_time)
         return car
         
-    async def run(self,end_time,start_time):
+    async def run(self,end_time,start_time, gme):
         now = trio.current_time()
         #garage_open = True
         while True:
+            # check if dropoff spot is free
+            while not await gme.dropoff_free():
+                await trio.sleep(5)
             # spawns cars according to exponential distribution
             await trio.sleep(np.random.exponential(1/self.average_arrival_rate))
             car = self.generate_car(start_time)

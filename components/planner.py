@@ -56,7 +56,7 @@ class Planner(BoxComponent):
         await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
     
-    async def check_supervisor(self,send_response_channel):
+    async def check_supervisor(self,send_response_channel,Game):
         async for directive in self.in_channels['Supervisor']:
             car = directive[0]
             todo = directive[1]
@@ -64,17 +64,16 @@ class Planner(BoxComponent):
                 print('Planner - receiving directive from Supervisor to park {0} in Lot {1}'.format(car.name,todo[1]))
                 self.cars.append(car)
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
-                self.nursery.start_soon(car.run,send_response_channel)
+                self.nursery.start_soon(car.run,send_response_channel,Game)
                 end = await self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end)
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
-                end = [2640,774,0]
-                await self.send_directive_to_car(car, end)
+                await self.send_directive_to_car(car, PICK_UP)
 
-    async def run(self):
+    async def run(self,Game):
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.check_supervisor,send_response_channel)
+            nursery.start_soon(self.check_supervisor,send_response_channel,Game)
             await trio.sleep(1)
             nursery.start_soon(self.update_car_response,receive_response_channel)

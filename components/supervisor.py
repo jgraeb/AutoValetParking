@@ -1,5 +1,6 @@
 from components.boxcomponent import BoxComponent
 import trio
+import random
 from variables.global_vars import *
 from components.pedestrian import Pedestrian
 
@@ -56,7 +57,7 @@ class Supervisor(BoxComponent):
                 await self.out_channels['GameEnter'].send(car)
                 spot = self.pick_spot(car)
                 await self.send_directive_to_planner(car,('Park',spot))
-                ped = Pedestrian(pedestrian_type='1')
+                ped = Pedestrian(pedestrian_type=random.choice(['1','2','3','4','5','6']))
                 self.nursery.start_soon(ped.run,start_walk_lane,end_walk_lane)
                 await self.out_channels['GameEnterPeds'].send(ped)
 
@@ -66,8 +67,11 @@ class Supervisor(BoxComponent):
 
     async def request_queue(self):
         async for car in self.in_channels['Request']:
+            while car.status == 'Driving':
+                await trio.sleep(10)
             print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
             await self.send_directive_to_planner(car, 'Pickup')
+
 
     async def run(self):
         print(self.parking_spots)
