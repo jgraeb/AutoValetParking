@@ -15,14 +15,14 @@ import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian
 from component import parking_lot
 import component.pedestrian as Pedestrian
-from variables.data import parking_spots_discrete, exampletraj
+from variables.parking_data import parking_spots_discrete #, exampletraj
 # planning
 import _pickle as pickle
 from motionplanning.tools import astar_trajectory
 import motionplanning.end_planner as path_planner
 
 
-average_arrival_rate = 0.5 # per second
+average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate
 average_park_time = 20 # seconds
 MAX_BUFFER_SIZE = np.inf
@@ -84,8 +84,11 @@ class Simulation(BoxComponent):
                 async for car in self.in_channels['Game']:
                     print('Simulation System - Adding new car to Map')
                     self.cars.append(car)
-
-
+                    print(car.x)
+                    f = open('car_pos.txt','a')
+                    f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
+                    f.close()
+            
     def animate(self, frame_idx): # update animation by dt
         self.ax.clear()
         # scale to the large topo
@@ -113,10 +116,14 @@ class Simulation(BoxComponent):
         self.background = parking_lot.get_background()
         all_artists = the_parking_lot
         return all_artists
-
+#
     async def update_simulation(self):
+        frame_idx = 0
         self.fig = plt.figure()
         while True:
+            frame_idx +=1 
+            f = open('car_pos.txt','a')
+            f.write('FRAME'+str(frame_idx)+'\n')
             self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
             plt.axis('off')
             self.background = parking_lot.get_background()
@@ -130,8 +137,10 @@ class Simulation(BoxComponent):
             plt.pause(0.001)
             plt.draw()
             await trio.sleep(0)
+            f.close()
             print('------------Figure updating-------------')
 
+            
     async def run(self):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.add_car_to_sim)
@@ -492,3 +501,5 @@ async def main():
         nursery.start_soon(customer.run,end_time)
 
 trio.run(main)
+
+
