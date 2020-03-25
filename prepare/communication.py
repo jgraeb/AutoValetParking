@@ -30,3 +30,5 @@ def set_up_channels(supervisor,planner, game, map_sys, customer, simulation):
         create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameEnterPeds')
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf)
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf, name='PedSimulation')
+        create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf, name='ExitSim')
+        create_unidirectional_channel(sender=supervisor, receiver= game, max_buffer_size=np.inf,name='Failure')

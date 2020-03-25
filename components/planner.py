@@ -5,6 +5,8 @@ import motionplanning.end_planner as path_planner
 from prepare.communication import *
 from variables.global_vars import *
 from variables.parking_data import parking_spots
+import math
+from ipdb import set_trace as st
 #from motionplanning.parking_data import parking_spots
 
 class Planner(BoxComponent):
@@ -12,65 +14,61 @@ class Planner(BoxComponent):
         super().__init__()
         self.name = self.__class__.__name__
         self.nursery = nursery
-        self.cars = []
-        self.parked = dict()
-        self.assigned = dict()
+        self.cars = dict()
+        self.obstacles = dict()
 
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
         await self.out_channels['Map'].send(car)
         car, pos = await self.in_channels['Map'].receive()
-        #if car.name in self.parked:
-        #    pos = parking_spots[spot]
-        # if self.parked.get(car.name, False):
-        #     pos = parking_spots[self.parked.get(car.name)]
-        #     start = np.zeros(4)
-        #     start[0] = pos[0]*SCALE_FACTOR_PLAN
-        #     start[1] = pos[1]*SCALE_FACTOR_PLAN
-        #     start[2] = np.deg2rad(pos[2])
-        #     print(start)
-        #     return start
-        #print(pos)
         return pos
 
     async def find_spot_coordinates(self, spot):
         return parking_spots[spot]
 
     async def send_directive_to_car(self, car, end):
-        if self.parked.get(car.name, False):
-            start = parking_spots[self.parked.get(car.name)]
-            print(start)
-            start[2] = start[2]
-            print(start)
-        else:
-            pos = await self.get_car_position(car)
-            start = np.zeros(4)
-            start[0] = pos[0]/SCALE_FACTOR_PLAN
-            start[1] = pos[1]/SCALE_FACTOR_PLAN
-            start[2] = -np.rad2deg(pos[2])
-        # get trajectory from Planning Graph
-        print(start)
+        pos = await self.get_car_position(car)
+        start = np.zeros(4)
+        start[0] = pos[0]/SCALE_FACTOR_PLAN
+        start[1] = pos[1]/SCALE_FACTOR_PLAN
+        start[2] = -np.rad2deg(pos[2])
         traj = await self.get_path(start,end) 
         print('Planner - sending Directive to {0}'.format(car.name))
         await self.out_channels[car.name].send(traj)
         await trio.sleep(1)
 
-    async def add_obstacle(self, x, y):
-        # add obstacle to the planning graph
-        with open('planning_graph_refined.pkl', 'rb') as f:
-            planning_graph = pickle.load(f)
-        # find nodes which correspond to location of broken car
-        # planning_graph['graph']._nodes
-        # find edges through this node
-        # planning_graph['graph']._edges
-        # give list of edges
-        # set weights to np.inf
-        # return new planning_graph
+    async def add_obstacle(self, car):
+        self.obstacles.update({car.name: (car.x,car.y,car.yaw)})
 
-    async def get_path(self, start, end): 
+    def is_in_buffer(self,x,y,center_x,center_y):
+        # assume radius of 10 pixels (gridsize) to delete around obstacle center
+        if math.sqrt((x-center_x)**2+(y-center_y)**2)<=10:
+            return True
+
+    def get_current_planning_graph(self):
         sys.path.append('../motionplanning')
         with open('planning_graph_refined.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
+        # loop through obstacles and generate new graph
+        if self.obstacles:
+            obs = []
+            for key,value in self.obstacles.items():
+                obs.append(value)
+            obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN) for row in obs]
+            # find grid nodes around obstacle
+            print(obs)
+            nodes = planning_graph['graph']._nodes
+            del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs[0][0],obs[0][1])]
+            print(del_nodes)
+            edges = planning_graph['graph']._edges
+            # give list of edges
+            # set weights to np.inf
+            # return new planning_graph
+            #planning_graph = path_planner.update_planning_graph(del_nodes)
+        return planning_graph
+
+    async def get_path(self, start, end): 
+        planning_graph= self.get_current_planning_graph()
         traj = path_planner.get_mpc_path(start,end,planning_graph)
         return traj
 
@@ -80,12 +78,16 @@ class Planner(BoxComponent):
                 car = response[0]
                 resp = response[1]
                 print('Planner - receiving "{0}" response from {1}'.format(resp,car.name))
-                if response[1]=='Parked':
-                    self.parked.update({car.name: (self.assigned.get(car.name))})
-                    print(self.parked)
+                if response[1]=='Completed':
+                    if self.cars.get(car.name,0)=='Assigned':
+                        self.cars.update({car.name: 'Parked'})
+                    elif self.cars.get(car.name,0)=='Request':
+                        self.cars.pop(car.name)
                 if response[1]=='Failure':
-                    self.add_obstacle(car.x,car.y)
+                    await self.add_obstacle(car)
+                    self.cars.update({car.name: 'Failure'})
                 await trio.sleep(0)
+                print(self.cars)
                 await self.send_response_to_supervisor(car,resp)
 
     async def send_response_to_supervisor(self,car,response):
@@ -99,17 +101,20 @@ class Planner(BoxComponent):
             todo = directive[1]
             if todo[0] == 'Park':
                 print('Planner - receiving directive from Supervisor to park {0} in Lot {1}'.format(car.name,todo[1]))
-                self.cars.append(car)
+                self.cars.update({car.name: 'Assigned'})
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 self.nursery.start_soon(car.run,send_response_channel,Game)
                 end = await self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end)
-                self.assigned.update({car.name: (todo[1])})
-                #print(self.parked)
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
                 await self.send_directive_to_car(car, PICK_UP)
-                self.parked.pop(car.name)
+                self.cars.update({car.name : 'Request'})
+            elif todo == 'Towed':
+                # remove the car
+                print('Planner - {0} is being towed'.format(car.name))
+                self.cars.pop(car.name)
+                self.obstacles.pop(car.name)
 
     async def run(self,Game):
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)

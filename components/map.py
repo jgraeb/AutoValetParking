@@ -25,7 +25,7 @@ class Map(BoxComponent):
         async with self.in_channels['Planner']:
             async for car in self.in_channels['Planner']:
                 await self.send_position(car)
-                print(self.car_positions)
+                #print(self.car_positions)
             
     async def rmv_car_from_map(self):
         async with self.in_channels['Exit']:

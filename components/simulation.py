@@ -32,6 +32,13 @@ class Simulation(BoxComponent):
                     print('Simulation System - Adding new car to Map')
                     self.cars.append(car)
 
+    async def rmv_car_from_sim(self):
+        while True:
+            async with self.in_channels['ExitSim']:
+                async for car in self.in_channels['ExitSim']:
+                    print('Simulation System - removing car from Map')
+                    self.cars.remove(car)
+
     async def add_ped_to_sim(self):
         while True:
             async with self.in_channels['PedSimulation']:
@@ -79,6 +86,8 @@ class Simulation(BoxComponent):
     async def run(self):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.add_car_to_sim)
+            await trio.sleep(0)
+            nursery.start_soon(self.rmv_car_from_sim)
             await trio.sleep(0)
             nursery.start_soon(self.add_ped_to_sim)
             await trio.sleep(0)

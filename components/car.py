@@ -35,7 +35,7 @@ class Car(BoxComponent):
         async for directive in self.in_channels['Planner']:
             self.ref = directive
             print('{0} - Receiving Directive from Planner'.format(self.name))
-            await self.track_reference(self.ref,Game)
+            await self.track_reference(self.ref,Game,send_response_channel)
             await trio.sleep(0)
             await self.send_response(send_response_channel)
 
@@ -52,7 +52,7 @@ class Car(BoxComponent):
                 break
         return oa, od
 
-    async def track_async(self, cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed): # modified from MPC
+    async def track_async(self, cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed,Game,direction): # modified from MPC
         goal = [cx[-1], cy[-1]]
         self.state = initial_state
         # initial yaw compensation
@@ -61,17 +61,22 @@ class Car(BoxComponent):
         elif self.state.yaw - cyaw[0] <= -math.pi:
             self.state.yaw += math.pi * 2.0
         time = 0.0
-        x = [self.state.x]
-        y = [self.state.y]
-        yaw = [self.state.yaw]
-        v = [self.state.v]
-        t = [0.0]
-        d = [0.0]
-        a = [0.0]
+        # x = [self.state.x]
+        # y = [self.state.y]
+        # yaw = [self.state.yaw]
+        # v = [self.state.v]
+        # t = [0.0]
+        # d = [0.0]
+        # a = [0.0]
         target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
         odelta, oa = None, None
         cyaw = tracking.smooth_yaw(cyaw)
         while tracking.MAX_TIME >= time:
+            while not await self.check_path(Game,direction):
+                self.status = 'Stop'
+                # check for conflict
+                await self.check_conflict(Game,direction)
+                await trio.sleep(3) 
             xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
             x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
             oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
@@ -87,17 +92,20 @@ class Car(BoxComponent):
             if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed): # modified goal speed
                 break
  
-    async def track_reference(self,ref,Game):
+    async def track_reference(self,ref,Game,send_response_channel):
         self.status = 'Driving'
         print('{0} - Tracking reference...'.format(self.name))
         ck = 0 
         dl = 1.0  # course tick
-        print(ref)
+        #print(ref)
+        # including a failure
+        failidx = 5#np.random.randint(low=0, high=len(ref)-1, size=1)
+        #print(failidx)
         for i in range(0,len(ref)-1):
-            #print('Going to'+str(ref[i,:]))
-            while not await self.check_path(Game):
-                self.status = 'Stop'
-                await trio.sleep(3)   
+            if (i==failidx):
+                print('{0} Failing'.format(self.name))
+                await self.failure(send_response_channel)
+                break  
             self.status = 'Driving'
             path = ref[:][i]
             cx = path[:,0]*SCALE_FACTOR_PLAN
@@ -106,21 +114,32 @@ class Car(BoxComponent):
             state = np.array([self.x, self.y,self.yaw])
             #  check  direction of the segment
             direction = tracking.check_direction(path)
-            print("Direction is "+str(direction))
+            #print("Direction is "+str(direction))
+            # while not await self.check_path(Game,direction):
+            #     self.status = 'Stop'
+            #     # check for conflict
+            #     await self.check_conflict(Game,direction)
+            #     await trio.sleep(3)   
+                # check for conflict, if conflict stop all execution and send to planner - supervisor
             sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,direction)
             initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED)
+            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,direction)
             await trio.sleep(0)
-        state = np.array([self.x, self.y,self.yaw])
-        path = ref[:][-1]
-        cx = path[:,0]*SCALE_FACTOR_PLAN
-        cy = path[:,1]*SCALE_FACTOR_PLAN
-        cyaw = np.deg2rad(path[:,2])*-1
-        direction = tracking.check_direction(path)
-        initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-        sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,direction)
-        await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
-        self.status = 'Parked'
+        if not self.status == 'Failure':
+            state = np.array([self.x, self.y,self.yaw])
+            path = ref[:][-1]
+            cx = path[:,0]*SCALE_FACTOR_PLAN
+            cy = path[:,1]*SCALE_FACTOR_PLAN
+            cyaw = np.deg2rad(path[:,2])*-1
+            direction = tracking.check_direction(path)
+            while not await self.check_path(Game,direction):
+                self.status = 'Stop'
+                await self.check_conflict(Game,direction)
+                await trio.sleep(3)
+            initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+            sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,direction)
+            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
+            self.status = 'Completed'
 
     async def send_response(self,send_response_channel):
         await trio.sleep(1)
@@ -129,10 +148,15 @@ class Car(BoxComponent):
         await send_response_channel.send((self,response))
         await trio.sleep(1)
 
-    async def check_path(self, gme):
+    async def check_path(self, gme, direction):
         #print('Checking the path')
-        is_clear = await gme.check_car_path(self)
+        is_clear = await gme.check_car_path(self, direction)
         return is_clear
+
+    async def check_conflict(self,gme,direction): # finish this
+        #is_conflict = await gme.check_car_conflicts(self, direction)
+        is_conflict = False
+        return is_conflict
 
     async def stop(self,send_response_channel):
         self.status = 'Stop'
@@ -141,6 +165,7 @@ class Car(BoxComponent):
     async def failure(self,send_response_channel):
         self.status = 'Failure'
         await self.send_response(send_response_channel)
+        await trio.sleep(1000) # freeze
 
     async def run(self,send_response_channel,Game):
         async with trio.open_nursery() as nursery:

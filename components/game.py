@@ -23,9 +23,10 @@ class Game(BoxComponent):
     async def keep_track_outflux(self):
         async with self.in_channels['GameExit']:
             async for car in self.in_channels['GameExit']:
-                print('Game System - Removing car to Game')
+                print('Game System - Removing car from Game')
                 self.cars.remove(car)
                 await self.out_channels['Exit'].send(car)
+                await self.out_channels['ExitSim'].send(car)
 
     async def keep_track_influx_peds(self):
         async with self.in_channels['GameEnterPeds']:
@@ -35,7 +36,7 @@ class Game(BoxComponent):
                 await self.out_channels['PedSimulation'].send(pedestrian)
                 self.peds.append(pedestrian)
 
-    async def check_car_path(self,car):
+    async def check_car_path(self,car, direction):
         # create cone to check
         openangle = 45
         length = 6 # m
@@ -43,15 +44,46 @@ class Game(BoxComponent):
             if car.name != cars.name:
                 dx = cars.x - car.x
                 dy = cars.y - car.y
-                angle = np.rad2deg(np.arctan2(-dy, dx))
+                angle = np.rad2deg(np.arctan2(dy, dx))
                 #print('Dist'+str(math.sqrt((dx)**2 + (dy)**2)))
                 if (math.sqrt((dx)**2 + (dy)**2)<= length): 
                     # print('Other car is close')
-                    # print('My yaw'+str(car.yaw))
+                    # print('My yaw'+str(np.rad2deg(car.yaw)))
                     # print('Angle'+str(angle))
-                    if (np.rad2deg(car.yaw)-openangle/2<=angle<=np.rad2deg(car.yaw)+openangle/2):
+                    if (np.rad2deg(direction*car.yaw)-openangle/2<=angle<=np.rad2deg(direction*car.yaw)+openangle/2):
+                        print('{0} stops because other car is in the path'.format(car.name))
                         return False
         return True
+
+    async def check_car_conflicts(self, car, direction):
+        openangle = 45
+        length = 6 # m
+        conflict_cars = []
+        conflict_with = []
+        failed = []
+        conflict = False
+        # check which cars I have a conflict with
+        for cars in self.cars:
+            if cars.name != car.name:
+                dx = cars.x - car.x
+                dy = cars.y - car.y
+                angle = np.rad2deg(np.arctan2(-dy, dx))
+                if (math.sqrt((dx)**2 + (dy)**2)<= length): 
+                    if (np.rad2deg(direction*car.yaw)-openangle/2<=angle<=np.rad2deg(direction*car.yaw)+openangle/2):
+                        conflict_cars.append(cars)
+                        if cars.status=='Failed':
+                            failed.append(cars)
+        # check if they have a conflict with me
+        for cars in conflict_cars:
+            dx = car.x - cars.x
+            dy = car.y - cars.y
+            angle = np.rad2deg(np.arctan2(-dy, dx))
+            if (math.sqrt((dx)**2 + (dy)**2)<= length): 
+                    if (np.rad2deg(direction*cars.yaw)-openangle/2<=angle<=np.rad2deg(direction*cars.yaw)+openangle/2):
+                        conflict_with.append(cars)
+                        conflict = True
+        return failed, conflict, conflict_with
+
 
     async def dropoff_free(self):
         for cars in self.cars:

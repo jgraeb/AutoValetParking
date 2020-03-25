@@ -11,7 +11,7 @@ average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate
 average_park_time = 50 # seconds
 MAX_BUFFER_SIZE = np.inf
-MAX_NO_PARKING_SPOTS = 2
+MAX_NO_PARKING_SPOTS = 5
 OPEN_TIME = 500 # not yet working
 TARGET_SPEED = 10/3.6 # 10 km/h
 meters = 90
@@ -23,10 +23,11 @@ START_Y = 55*SCALE_FACTOR_PLAN # m
 START_YAW = 0 # rad
 DROP_OFF = (START_X,START_Y,0)
 # Pickup Position
-PICK_UP = (200,50,0,0) # in pixels
+PICK_UP = (260,60,0,0) # in pixels
 # Pedestrian Pathway Dropoff
 start_walk_lane = (1600,509)
 end_walk_lane = (3412,509)
 # Pedestrian lower crosswalk
 start_walk_lane_2 = (3428,2088)
 end_walk_lane_2 = (458,2088)
+TOW_TIME = 50

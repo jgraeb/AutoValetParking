@@ -65,7 +65,7 @@ R = np.diag([0.01, 0.01])  # input cost matrix
 Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
-GOAL_DIS = 2.0  # goal distance
+GOAL_DIS = 3.0  # goal distance
 STOP_SPEED = 1.0 / 3.6  # stop speed
 MAX_TIME = 200.0  # max simulation time
 
@@ -565,14 +565,14 @@ def Trafo(X):
 def check_direction(path):
     cx = path[:,0]*SCALE_FACTOR_PLAN
     cy = path[:,1]*SCALE_FACTOR_PLAN
-    cyaw = np.deg2rad(path[:,2])*-1
+    cyaw = np.deg2rad(path[:,2])
     dx = cx[1] - cx[0]
     dy = cy[1] - cy[0]
     move_direction = math.atan2(-dy, dx)
-    #print(move_direction)
-    #print(cyaw[0])
+    # print(move_direction)
+    # print(cyaw[0])
     dangle = abs(pi_2_pi(move_direction - cyaw[0]))
-    if dangle >= math.pi / 4.0:
+    if dangle >= math.pi / 2.0:
         direction = -1.0
     else:
         direction = 1.0
