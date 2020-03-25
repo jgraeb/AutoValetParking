@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian
 from component import parking_lot
 import component.pedestrian as Pedestrian
-from variables.parking_data import parking_spots_discrete #, exampletraj
+from variables.parking_data import parking_spots_discrete as parking_spots #, exampletraj
 # planning
 import _pickle as pickle
 from motionplanning.tools import astar_trajectory
