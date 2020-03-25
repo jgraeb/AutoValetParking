@@ -28,7 +28,7 @@ from component import parking_lot
 import component.pedestrian as Pedestrian
     
 # set to True to save video
-save_video = False
+save_video = True
 SCALE_FACTOR = 35 # scale from meters to pixels in simulation
 
 # creates figure
@@ -81,12 +81,12 @@ def animate(frame_idx): # update animation by dt
     all_artists = the_parking_lot
     return all_artists
 
-ani = animation.FuncAnimation(fig, animate, frames=30, interval=10**3, blit=True, repeat=False) # by default the animation function loops so set repeat to False in order to limit the number of frames generated to num_frames
+ani = animation.FuncAnimation(fig, animate, frames=300, interval=10**3, blit=True, repeat=False) # by default the animation function loops so set repeat to False in order to limit the number of frames generated to num_frames
 if save_video:
     #Writer = animation.writers['ffmpeg']
     writer = animation.FFMpegWriter(fps = 1, metadata=dict(artist='Auto Park Simulator'), bitrate=None)
     now = str(datetime.datetime.now())
     ani.save('../movies/' + now + '.mp4', dpi=200, writer=writer)
 plt.show()
-t2 = time.time()
-print('Total elapsed time: ' + str(t2-t0))
+#t2 = time.time()
+#print('Total elapsed time: ' + str(t2-t0))

@@ -84,10 +84,7 @@ class Simulation(BoxComponent):
                 async for car in self.in_channels['Game']:
                     print('Simulation System - Adding new car to Map')
                     self.cars.append(car)
-                    print(car.x)
-                    f = open('car_pos.txt','a')
-                    f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
-                    f.close()
+                    
             
     def animate(self, frame_idx): # update animation by dt
         self.ax.clear()
@@ -109,6 +106,10 @@ class Simulation(BoxComponent):
         for car in self.cars:
             # print('car.x'+str(car.x))
             # print('car.x'+str(car.y))
+            print(car.x)
+            f = open('car_pos.txt','a')
+            f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
+            f.close()
             draw_car(self.background, car.x*SCALE_FACTOR,car.y*SCALE_FACTOR+yoffset,car.yaw)
         # update background
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
@@ -129,11 +130,6 @@ class Simulation(BoxComponent):
             self.background = parking_lot.get_background()
             await trio.sleep(0)
             ani = animation.FuncAnimation(self.fig, self.animate, frames=1, interval=1**3, blit=True, repeat=False)
-            if save_video:
-                #Writer = animation.writers['ffmpeg']
-                writer = animation.FFMpegWriter(fps = 1, metadata=dict(artist='Easy Park Simulator'), bitrate=None)
-                now = str(datetime.datetime.now())
-                ani.save('../movies/' + now + '.mp4', dpi=200, writer=writer)
             plt.pause(0.001)
             plt.draw()
             await trio.sleep(0)
