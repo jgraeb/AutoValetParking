@@ -157,12 +157,18 @@ class TwoPointTurnGuarantee(PrimitiveGuarantee):
 def segment_to_mpc_inputs(start, end, edge_info_dict):
     waypoints = edge_info_dict[tuple(start), tuple(end)]
     headings = []
+    previous_heading = start[2]
     for point1, point2 in zip(waypoints, waypoints[1:]):
         dys = point2[1] - point1[1]
         dxs = point2[0] - point1[0]
-        headings.append(np.arctan2(-dys, dxs) / np.pi * 180)
+        new_heading = np.arctan2(-dys, dxs) / np.pi * 180
+        if np.abs(constrain_heading_to_pm_180(new_heading-previous_heading)) >= 90:
+            new_heading = constrain_heading_to_pm_180(new_heading + 180)
+        headings.append(new_heading)
+        previous_heading = new_heading
     headings.append(headings[-1])
     mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
+    print(mpc_inputs)
     return mpc_inputs
 
 def get_mpc_path(start, end, planning_graph):
@@ -173,7 +179,6 @@ def get_mpc_path(start, end, planning_graph):
     for start, end in zip(traj, traj[1:]):
         all_segments.append(segment_to_mpc_inputs(start, end, edge_info_dict))
     return all_segments
-
 
 # check whether the path is blocked
 def subpath_is_safe(start, end):
@@ -274,7 +279,6 @@ if __name__ == '__main__':
                         #      # TODO: not sure how to generate the path
                         #     new_subpath = astar_trajectory(simple_graph, safe_start, end)
                         #     traj = safe_subpath + new_subpath
-                
                         for start, end in zip(traj, traj[1:]):
                             #print('Start'+str(start))
                             #print(end)
