@@ -168,7 +168,7 @@ def segment_to_mpc_inputs(start, end, edge_info_dict):
         previous_heading = new_heading
     headings.append(headings[-1])
     mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
-    print(mpc_inputs)
+    #print(mpc_inputs)
     return mpc_inputs
 
 def get_mpc_path(start, end, planning_graph):

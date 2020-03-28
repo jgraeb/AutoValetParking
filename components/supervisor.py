@@ -29,7 +29,7 @@ class Supervisor(BoxComponent):
                         self.parking_spots[spot]=(('Vacant','None'))
                         await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1
-                        self.cars.pop({car.name})
+                        self.cars.pop(car.name)
 
     async def update_planner_response(self,Planner):
         async with self.in_channels['Planner']:
@@ -103,8 +103,8 @@ class Supervisor(BoxComponent):
 
     async def request_queue(self):
         async for car in self.in_channels['Request']:
-            while not self.cars.get(car.name, 0)=='Parked':#car.status == 'Driving' or car.status == 'Stop':
-                await trio.sleep(10)
+            #while not self.cars.get(car.name, 0)=='Parked':#car.status == 'Driving' or car.status == 'Stop':
+            #    await trio.sleep(10)
             print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
             await self.send_directive_to_planner(car, 'Pickup')
 
