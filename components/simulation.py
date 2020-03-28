@@ -16,6 +16,8 @@ import pickle
 
 show_all_spots = False
 
+ind = 0
+
 class Simulation(BoxComponent):
     def __init__(self):
         super().__init__()
@@ -51,21 +53,24 @@ class Simulation(BoxComponent):
                     #print(self.peds)
 
     def animate(self, frame_idx): # update animation by dt
+        global ind
+        ind = ind + 1
         self.ax.clear()
         # scale to the large topo
         xoffset = 0
         yoffset = 0
-        with open('pedestrain_file','ab') as f:
-            for pedestrian in self.peds:
-                draw_pedestrian(pedestrian,self.background)
-                pickle.dump(pedestrian,f)
+        f = open('pedestrain_file','ab')
+        for pedestrian in self.peds:
+            draw_pedestrian(pedestrian,self.background)
+            pickle.dump(pedestrian,f)
         f.close()
         
         f = open('car_pos.txt','a')
+        f.write('FRAME'+str(ind)+'\n')
         for car in self.cars: 
+            draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
             f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
         f.close()
-            draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
         # to check parking spot locations
         if show_all_spots:
             for key,value in parking_spots.items():
@@ -86,8 +91,6 @@ class Simulation(BoxComponent):
         self.fig = plt.figure()
         while True:
             frame_idx +=1 
-            f1 = open('car_pos.txt','a')
-            f1.write('FRAME'+str(frame_idx)+'\n')
             #ped = pickle.load( open('pedestrain_file', "rb" ) )
             self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
             plt.axis('off')
@@ -96,7 +99,6 @@ class Simulation(BoxComponent):
             plt.pause(0.001)
             plt.draw()
             await trio.sleep(0)
-            f1.close()
             print('------------Figure updating-------------')
 
     async def run(self):
