@@ -10,6 +10,9 @@ from variables.global_vars import *
 from variables.parking_data import parking_spots
 #from motionplanning.parking_data import parking_spots
 from ipdb import set_trace as st
+import time
+import datetime
+import pickle
 
 show_all_spots = False
 
@@ -52,9 +55,16 @@ class Simulation(BoxComponent):
         # scale to the large topo
         xoffset = 0
         yoffset = 0
-        for pedestrian in self.peds:
-            draw_pedestrian(pedestrian,self.background)
-        for car in self.cars:
+        with open('pedestrain_file','ab') as f:
+            for pedestrian in self.peds:
+                draw_pedestrian(pedestrian,self.background)
+                pickle.dump(pedestrian,f)
+        f.close()
+        
+        f = open('car_pos.txt','a')
+        for car in self.cars: 
+            f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
+        f.close()
             draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
         # to check parking spot locations
         if show_all_spots:
@@ -72,8 +82,13 @@ class Simulation(BoxComponent):
         return all_artists
 
     async def update_simulation(self):
+        frame_idx = 0
         self.fig = plt.figure()
         while True:
+            frame_idx +=1 
+            f1 = open('car_pos.txt','a')
+            f1.write('FRAME'+str(frame_idx)+'\n')
+            #ped = pickle.load( open('pedestrain_file', "rb" ) )
             self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
             plt.axis('off')
             self.background = parking_lot.get_background()
@@ -81,7 +96,8 @@ class Simulation(BoxComponent):
             plt.pause(0.001)
             plt.draw()
             await trio.sleep(0)
-            #print('------------Figure updating-------------')
+            f1.close()
+            print('------------Figure updating-------------')
 
     async def run(self):
         async with trio.open_nursery() as nursery:

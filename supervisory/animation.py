@@ -7,6 +7,7 @@ Created in Mar 2020
 
 """
 import sys
+import pickle
 sys.path.append('..') # enable importing modules from an upper directory:
 from PIL import Image
 from prepare.helper import *
@@ -25,6 +26,7 @@ else: # if the operating system is Linux or Windows
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from component import parking_lot
+import components
 import component.pedestrian as Pedestrian
     
 # set to True to save video
@@ -73,6 +75,16 @@ def animate(frame_idx): # update animation by dt
              car = car.split(' ')          
              draw_car(background, float(car[0])*SCALE_FACTOR,float(car[1])*SCALE_FACTOR+yoffset,float(car[2]))
         f.close() 
+        
+    with open('pedestrain_file','rb') as f:
+        while True:
+            try:
+                pedestrian=pickle.load(f)
+                #print(type(pedestrian))
+                #if type(pedestrian) == components.pedestrian.Pedestrian:
+                draw_pedestrian(pedestrian,background)
+            except EOFError:
+                break
                 
     # update background
     the_parking_lot = [ax.imshow(background)] # update the stage
