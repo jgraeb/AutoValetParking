@@ -11,6 +11,7 @@ class DirectedGraph():
         self._edges = dict() # set of edges is a dictionary of sets (of nodes)
         self._sources = []
         self._sinks = []
+        self._predecessors = dict() # predecessors of nodes
 
     def add_node(self, node): # add a node
             self._nodes.append(node)
@@ -31,6 +32,9 @@ class DirectedGraph():
             try: self._edges[edge[0]].add(edge[1])
             except KeyError:
                 self._edges[edge[0]] = {edge[1]}
+            try: self._predecessors[edge[1]].add(edge[0])
+            except KeyError:
+                self._predecessors[edge[1]] = {edge[0]}
 
     def add_double_edges(self, edge_set): # add two edges (of the same weight) for two nodes
         for edge in edge_set:
@@ -65,6 +69,9 @@ class WeightedDirectedGraph(DirectedGraph):
                 try: self._edges[edge[0]].add(edge[1])
                 except KeyError:
                     self._edges[edge[0]] = {edge[1]}
+                try: self._predecessors[edge[1]].add(edge[0])
+                except KeyError:
+                    self._predecessors[edge[1]] = {edge[0]}
                 x = np.array([edge[0][-2], edge[0][-1]], float) # need to cast to float, otherwise numerical precision errors may occur
                 y = np.array([edge[1][-2], edge[1][-1]], float) # same as above
                 self._weights[(edge[0], edge[1])] = np.linalg.norm(x-y)  # add Euclidean distance as weight
@@ -77,6 +84,9 @@ class WeightedDirectedGraph(DirectedGraph):
                 try: self._edges[edge[0]].add(edge[1])
                 except KeyError:
                     self._edges[edge[0]] = {edge[1]}
+                try: self._predecessors[edge[1]].add(edge[0])
+                except KeyError:
+                    self._predecessors[edge[1]] = {edge[0]}
                 self._weights[(edge[0], edge[1])] = edge[2] # add weight
             if label_edges:
                 if len(edge) == 3:

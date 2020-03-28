@@ -9,6 +9,7 @@ if ros_path in sys.path:
 import cv2
 import numpy as np
 import networkx as nx
+from ipdb import set_trace as st
 
 def img_to_csv_bitmap(img_path, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
@@ -100,6 +101,41 @@ def point_set_is_safe(point_set, bitmap):
             if not bitmap[point[0]][point[1]]:
                 return False
     return True
+
+def waypoints_to_headings(waypoints, initial_heading):
+    headings = []
+    previous_heading = initial_heading
+    for point1, point2 in zip(waypoints, waypoints[1:]):
+        dys = point2[1] - point1[1]
+        dxs = point2[0] - point1[0]
+        new_heading = np.arctan2(-dys, dxs) / np.pi * 180
+        if np.abs(constrain_heading_to_pm_180(new_heading-previous_heading)) >= 90:
+            new_heading = constrain_heading_to_pm_180(new_heading + 180)
+        headings.append(new_heading)
+        previous_heading = new_heading
+    headings.append(headings[-1])
+    return headings
+
+def compute_edge_weight(edge):
+    weight = 0
+    sequence = edge['node_sequence']
+    start = edge['start_node']
+    end = edge['end_node']
+    dxs, dys = np.array(end[0:2]) - np.array(start[0:2])
+    displacement_angle = np.arctan2(-dys, dxs) / np.pi * 180
+    initial_heading = start[2]
+    reversing = abs(constrain_heading_to_pm_180(displacement_angle - initial_heading)) >= 90
+    reverse_penalty = 0
+    if reversing:
+        reverse_penalty = 10 # play with this
+    velocity_change = abs(end[3] - start[3])
+    headings = np.abs(waypoints_to_headings(sequence, initial_heading))
+    heading_change = np.sum(headings)
+    man_distance = 0
+    for n1, n2 in zip(sequence, sequence[1:]):
+        man_distance += manhattan_distance(n1, n2)
+    weight = man_distance + heading_change * 0.1 + velocity_change + reverse_penalty
+    return weight
 
 def compute_sequence_weight(sequence):
     weight = 0
