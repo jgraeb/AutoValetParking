@@ -51,12 +51,23 @@ class Game(BoxComponent):
                 angle = np.rad2deg(np.arctan2(dy, dx))
                 #print('Dist'+str(math.sqrt((dx)**2 + (dy)**2)))
                 if (math.sqrt((dx)**2 + (dy)**2)<= length): 
-                    # print('Other car is close')
-                    # print('My yaw'+str(np.rad2deg(car.yaw)))
-                    # print('Angle'+str(angle))
-                    if (np.rad2deg(direction*car.yaw)-openangle/2<=direction*angle<=np.rad2deg(direction*car.yaw)+openangle/2):
-                        print('{0} stops because other car is in the path'.format(car.name))
-                        return False
+                    print('Other car is close')
+                    print('My yaw'+str(np.rad2deg(direction*car.yaw)))
+                    print('Angle'+str(direction*angle))
+                    if direction == 1:
+                        lowb = np.rad2deg(car.yaw)-openangle/2
+                        upb = np.rad2deg(car.yaw)+openangle/2
+                        print('Check if Angle is between '+str(lowb)+'and '+str(upb))
+                        if lowb <= angle <= upb:
+                            print('{0} stops because other car is in the path'.format(car.name))
+                            return False
+                    elif direction == -1:
+                        lowb = np.rad2deg(car.yaw+np.pi)-openangle/2
+                        upb = np.rad2deg(car.yaw+np.pi)+openangle/2
+                        print('Check if Angle is between '+str(lowb)+'and '+str(upb))
+                        if lowb <= angle <= upb:
+                            print('{0} stops because other car is in the path'.format(car.name))
+                            return False
         return True
 
     async def check_car_conflicts(self, car, direction):
