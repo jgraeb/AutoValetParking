@@ -36,10 +36,14 @@ class Game(BoxComponent):
                 await self.out_channels['PedSimulation'].send(pedestrian)
                 self.peds.append(pedestrian)
 
-    async def check_car_path(self,car, direction):
+    async def check_car_path(self,car, direction, last_segment):
         # create cone to check
-        openangle = 45
-        length = 6 # m
+        if last_segment:
+            openangle = 45
+            length = 3 # m
+        else:
+            openangle = 45
+            length = 6 # m
         for cars in self.cars:
             if car.name != cars.name:
                 dx = cars.x - car.x
@@ -50,7 +54,7 @@ class Game(BoxComponent):
                     # print('Other car is close')
                     # print('My yaw'+str(np.rad2deg(car.yaw)))
                     # print('Angle'+str(angle))
-                    if (np.rad2deg(direction*car.yaw)-openangle/2<=angle<=np.rad2deg(direction*car.yaw)+openangle/2):
+                    if (np.rad2deg(direction*car.yaw)-openangle/2<=direction*angle<=np.rad2deg(direction*car.yaw)+openangle/2):
                         print('{0} stops because other car is in the path'.format(car.name))
                         return False
         return True

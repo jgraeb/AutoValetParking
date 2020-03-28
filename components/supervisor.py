@@ -3,7 +3,7 @@ import trio
 import random
 from variables.global_vars import *
 from components.pedestrian import Pedestrian
-
+from components.planner import Planner
 
 class Supervisor(BoxComponent):
     def __init__(self, nursery):
@@ -31,7 +31,7 @@ class Supervisor(BoxComponent):
                         self.spot_no=self.spot_no+1
                         self.cars.pop({car.name})
 
-    async def update_planner_response(self):
+    async def update_planner_response(self,Planner):
         async with self.in_channels['Planner']:
             async for response in self.in_channels['Planner']:
                 car = response[0]
@@ -45,6 +45,15 @@ class Supervisor(BoxComponent):
                     self.cars.update({car.name: 'Failure'})
                     print('Supervisor initiating towing of {0}'.format(car.name))
                     await self.tow(car)
+                elif resp == 'NoPath':
+                    spot = self.pick_spot(car,Planner)
+                    for key, value in self.parking_spots.items(): 
+                        if value == ('Assigned',car.name): 
+                            val = key
+                    self.parking_spots[val]=(('Vacant','None'))
+                    self.parking_spots[spot]=(('Assigned',car.name))
+                    self.cars.update({car.name: 'Assigned'})
+                    await self.send_directive_to_planner(car,('Park',spot))
                 await trio.sleep(0)
     
     async def tow(self,car):
@@ -62,13 +71,13 @@ class Supervisor(BoxComponent):
         self.spot_no=self.spot_no+1
         print(str(self.spot_no)+' parking Spots vacant')
 
-    def pick_spot(self,car):
+    def pick_spot(self,car,pln):
         for spot, status in self.parking_spots.items():
-            if (status[0]=='Vacant'):
-                self.parking_spots[spot]=(('Assigned',car.name))
+            if (status[0]=='Vacant') and pln.check_reachability(spot):
+                # self.parking_spots[spot]=(('Assigned',car.name))
                 return spot
 
-    async def process_queue(self):
+    async def process_queue(self,Planner):
         async for car in self.in_channels['Customer']:
             accept_condition = False
             print(str(self.spot_no)+' parking Spots vacant')
@@ -80,7 +89,8 @@ class Supervisor(BoxComponent):
                 await self.out_channels['Customer'].send(True)
                 self.spot_no=self.spot_no-1
                 await self.out_channels['GameEnter'].send(car)
-                spot = self.pick_spot(car)
+                spot = self.pick_spot(car,Planner)
+                self.parking_spots[spot]=(('Assigned',car.name))
                 self.cars.update({car.name: 'Assigned'})
                 await self.send_directive_to_planner(car,('Park',spot))
                 ped = Pedestrian(pedestrian_type=random.choice(['1','2','3','4','5','6']))
@@ -99,9 +109,9 @@ class Supervisor(BoxComponent):
             await self.send_directive_to_planner(car, 'Pickup')
 
 
-    async def run(self):
+    async def run(self, Planner):
         print(self.parking_spots)
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.process_queue)
+            nursery.start_soon(self.process_queue, Planner)
             nursery.start_soon(self.request_queue)
-            nursery.start_soon(self.update_planner_response)
+            nursery.start_soon(self.update_planner_response,Planner)

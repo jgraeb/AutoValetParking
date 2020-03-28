@@ -27,7 +27,7 @@ async def main():
         simulation = Simulation()
         all_components.append(simulation)
         supervisor = Supervisor(nursery = nursery)
-        all_components.append(supervisor)
+        #all_components.append(supervisor)
         game = Game()
         all_components.append(game)
         planner = Planner(nursery=nursery)
@@ -40,6 +40,7 @@ async def main():
             nursery.start_soon(comp.run)
             await trio.sleep(0)
         nursery.start_soon(planner.run, game)
+        nursery.start_soon(supervisor.run, planner)
         nursery.start_soon(customer.run,end_time,start_time, game)
 
 trio.run(main)
