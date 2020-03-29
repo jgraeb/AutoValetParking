@@ -107,16 +107,18 @@ class Planner(BoxComponent):
                         self.cars.update({car.name: 'Parked'})
                     elif self.cars.get(car.name,0)=='Request':
                         self.cars.pop(car.name)
+                    await self.send_response_to_supervisor((resp,car))
                 if response[1]=='Failure':
                     await self.add_obstacle(car)
                     self.cars.update({car.name: 'Failure'})
+                    await self.send_response_to_supervisor((resp,car))
                 elif response[1]=='Blocked':
                     spot = self.spots.get(car.name)
                     end = await self.find_spot_coordinates(spot)
                     await self.send_directive_to_car(car, end)
                 await trio.sleep(0)
                 print(self.cars)
-                await self.send_response_to_supervisor((resp,car))
+                # await self.send_response_to_supervisor((resp,car))
 
     async def send_response_to_supervisor(self,resp):
         response = resp[0]
@@ -147,8 +149,11 @@ class Planner(BoxComponent):
                 # remove the car
                 print('Planner - {0} is being towed'.format(car.name))
                 self.cars.pop(car.name)
-                await self.rmv_obstacle()
+                await self.rmv_obstacle(car)
                 self.spots.update({self.spots.get(car.name): 0})
+            elif todo == 'Wait':
+                print('Planner - {0} has to wait until path clears'.format(car.name))
+                self.send_directive_to_car(car, todo)
 
     def check_reachability(self,spot):
         if self.reachable[spot]:
