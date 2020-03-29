@@ -60,6 +60,7 @@ class Simulation(BoxComponent):
         xoffset = 0
         yoffset = 0
         f = open('pedestrain_file','ab')
+        pickle.dump('FRAME'+str(ind)+'\n',f)
         for pedestrian in self.peds:
             draw_pedestrian(pedestrian,self.background)
             pickle.dump(pedestrian,f)
