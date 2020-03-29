@@ -26,13 +26,13 @@ else: # if the operating system is Linux or Windows
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from component import parking_lot
+from variables.global_vars import *
+from variables.parking_data import parking_spots
 import components
 import component.pedestrian as Pedestrian
     
 # set to True to save video
 save_video = True
-SCALE_FACTOR = 35 # scale from meters to pixels in simulation
-
 # creates figure
 fig = plt.figure()
 ax = fig.add_axes([0,0,1,1]) # get rid of white border
@@ -51,10 +51,8 @@ def animate(frame_idx): # update animation by dt
     ax.clear()
     car_at_this_frame = []
     # scale to the large topo
-    xscale = 10.5
-    yscale = 10.3
     xoffset = 0
-    yoffset = 40
+    yoffset = 0
     dt = 0.1
 
     with open('car_pos.txt') as f:
@@ -74,7 +72,7 @@ def animate(frame_idx): # update animation by dt
         for car in car_at_this_frame:
              car = car.split(' ')     
              try:
-                 draw_car(background, float(car[0])*SCALE_FACTOR,float(car[1])*SCALE_FACTOR+yoffset,float(car[2]))
+                 draw_car(background, float(car[0])*SCALE_FACTOR_SIM,float(car[1])*SCALE_FACTOR_SIM+yoffset,float(car[2]))
              except EOFError:
                  break    
         f.close() 
