@@ -3,6 +3,10 @@ import trio
 import numpy as np
 import math
 from variables.global_vars import *
+import sys
+sys.path.append('/anaconda3/lib/python3.7/site-packages')
+from shapely.geometry import Polygon
+from shapely import affinity
 
 class Game(BoxComponent):
     def __init__(self):
@@ -11,6 +15,8 @@ class Game(BoxComponent):
         self.cars = []
         self.peds = []
         self.lot_status = []
+        self.car_boxes = dict()
+        self.dropoff_box = Polygon([(40, 18), (40, 15), (47, 18), (47, 15), (40, 18)])
 
     async def keep_track_influx(self):
         async with self.in_channels['GameEnter']:
@@ -36,74 +42,61 @@ class Game(BoxComponent):
                 await self.out_channels['PedSimulation'].send(pedestrian)
                 self.peds.append(pedestrian)
 
-    async def check_car_path(self,car, direction, last_segment):
-        # create cone to check
-        if last_segment:
+    def get_vision_cone(self,car):
+        if car.last_segment:
             openangle = 45
             length = 3 # m
         else:
             openangle = 45
             length = 6 # m
-        for cars in self.cars:
-            if car.name != cars.name:
-                dx = cars.x - car.x
-                dy = cars.y - car.y
-                angle = np.rad2deg(np.arctan2(dy, dx))
-                #print('Dist'+str(math.sqrt((dx)**2 + (dy)**2)))
-                if (math.sqrt((dx)**2 + (dy)**2)<= length): 
-                    print('Other car is close')
-                    print('My yaw'+str(np.rad2deg(direction*car.yaw)))
-                    print('Angle'+str(direction*angle))
-                    if direction == 1:
-                        lowb = np.rad2deg(car.yaw)-openangle/2
-                        upb = np.rad2deg(car.yaw)+openangle/2
-                        print('Check if Angle is between '+str(lowb)+'and '+str(upb))
-                        if lowb <= angle <= upb:
-                            print('{0} stops because other car is in the path'.format(car.name))
-                            return False
-                    elif direction == -1:
-                        lowb = np.rad2deg(car.yaw+np.pi)-openangle/2
-                        upb = np.rad2deg(car.yaw+np.pi)+openangle/2
-                        print('Check if Angle is between '+str(lowb)+'and '+str(upb))
-                        if lowb <= angle <= upb:
-                            print('{0} stops because other car is in the path'.format(car.name))
-                            return False
-        return True
+        cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
+        rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
+        if car.direction == -1:
+            rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
+        return rotated_cone
 
-    async def check_car_conflicts(self, car, direction):
-        openangle = 45
-        length = 6 # m
+    async def check_car_path(self,car):
         conflict_cars = []
-        conflict_with = []
         failed = []
+        clear = True
         conflict = False
-        # check which cars I have a conflict with
+        mycone = self.get_vision_cone(car)
+        self.car_boxes.clear()
         for cars in self.cars:
-            if cars.name != car.name:
-                dx = cars.x - car.x
-                dy = cars.y - car.y
-                angle = np.rad2deg(np.arctan2(-dy, dx))
-                if (math.sqrt((dx)**2 + (dy)**2)<= length): 
-                    if (np.rad2deg(direction*car.yaw)-openangle/2<=angle<=np.rad2deg(direction*car.yaw)+openangle/2):
+            box = Polygon([(cars.x-0.5,cars.y+1),(cars.x-0.5,cars.y-1),(cars.x+3,cars.y+1),(cars.x+3,cars.y-1)])
+            rot_box = affinity.rotate(box, np.rad2deg(cars.yaw), origin = (cars.x,cars.y))
+            self.car_boxes.update({cars.name: rot_box})
+        #print(self.car_boxes)
+        # Now check if car box and vision cone intersect
+        for key,val in self.car_boxes.items():
+            if key != car.name:
+                if mycone.intersects(val):
+                    clear = False
+                    print('{0} stops because other car is in the path'.format(car.name))
+                    if cars.status=='Failed':
+                        failed.append(cars)
+                    else:
                         conflict_cars.append(cars)
-                        if cars.status=='Failed':
-                            failed.append(cars)
         # check if they have a conflict with me
+        mybox = self.car_boxes.get(car.name,0)
         for cars in conflict_cars:
-            dx = car.x - cars.x
-            dy = car.y - cars.y
-            angle = np.rad2deg(np.arctan2(-dy, dx))
-            if (math.sqrt((dx)**2 + (dy)**2)<= length): 
-                    if (np.rad2deg(direction*cars.yaw)-openangle/2<=angle<=np.rad2deg(direction*cars.yaw)+openangle/2):
-                        conflict_with.append(cars)
-                        conflict = True
-        return failed, conflict, conflict_with
-
+            cone = self.get_vision_cone(cars)
+            if not cone.intersects(mybox):
+                conflict_cars.remove(cars)
+            else:
+                conflict = True
+        return clear, conflict_cars, failed
 
     async def dropoff_free(self):
+        # update car boxes
+        self.car_boxes.clear()
         for cars in self.cars:
-            dist = math.sqrt((cars.x-DROP_OFF[0])**2 + (cars.y-DROP_OFF[1])**2)
-            if dist<=2:
+            box = Polygon([(cars.x-0.5,cars.y+1),(cars.x-0.5,cars.y-1),(cars.x+3,cars.y+1),(cars.x+3,cars.y-1)])
+            rot_box = affinity.rotate(box, np.rad2deg(cars.yaw), origin = (cars.x,cars.y))
+            self.car_boxes.update({cars.name: rot_box})
+        for key,val in self.car_boxes.items():
+            if self.dropoff_box.intersects(val):
+                #print('DROPOFF OCCUPIED')
                 return False
         return True
 
