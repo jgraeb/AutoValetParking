@@ -14,6 +14,7 @@ class Supervisor(BoxComponent):
         self.spot_no = MAX_NO_PARKING_SPOTS
         self.parking_spots = dict([ (i, ("Vacant", "None")) for i in range(0,self.spot_no) ])
         self.failures = dict()
+        self.priority = dict()
 
     async def send_directive_to_planner(self, car,ref):
         directive = [car,ref]
@@ -29,7 +30,7 @@ class Supervisor(BoxComponent):
                         self.parking_spots[spot]=(('Vacant','None'))
                         await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1
-                        self.cars.pop({car.name})
+                        self.cars.pop(car.name)
 
     async def update_planner_response(self,Planner):
         async with self.in_channels['Planner']:
@@ -54,6 +55,24 @@ class Supervisor(BoxComponent):
                     self.parking_spots[spot]=(('Assigned',car.name))
                     self.cars.update({car.name: 'Assigned'})
                     await self.send_directive_to_planner(car,('Park',spot))
+                elif resp == 'Conflict':
+                    prio_1 = self.priority.get(car.name)
+                    car_2 = response[2]
+                    prio_2 = self.priority.get(car_2.name)
+                    if prio_2>prio_1:
+                        print('Opposed car has priority')
+                    elif prio_1>prio_2:
+                        print('Car has priority')
+                    elif car_2.delay>car.delay:
+                        print('Opposed car has priority')
+                    elif car.delay>car_2.delay:
+                        print('Car has priority')
+                    else:
+                        print('Conflict resolving by ID')
+                        if id(car)>id(car_2):
+                            print('Car has priority')
+                        else:
+                            print('Opposed car has priority')
                 await trio.sleep(0)
     
     async def tow(self,car):
@@ -63,9 +82,10 @@ class Supervisor(BoxComponent):
         directive = [car, 'Towed'] 
         await self.out_channels['Planner'].send(directive)
         self.cars.pop(car.name)
+        self.priority.pop(car.name)
         self.failures.pop(car.name)
         for spot, value in self.parking_spots.items(): 
-            if value == ('Assigned',car.name): 
+            if value == ('Assigned',car.name) or value == ('Occupied', car.name): 
                 val = spot
         self.parking_spots[val]=(('Vacant','None'))
         self.spot_no=self.spot_no+1
@@ -92,6 +112,7 @@ class Supervisor(BoxComponent):
                 spot = self.pick_spot(car,Planner)
                 self.parking_spots[spot]=(('Assigned',car.name))
                 self.cars.update({car.name: 'Assigned'})
+                self.priority.update({car.name: '1'})
                 await self.send_directive_to_planner(car,('Park',spot))
                 ped = Pedestrian(pedestrian_type=random.choice(['1','2','3','4','5','6']))
                 self.nursery.start_soon(ped.run,start_walk_lane,end_walk_lane)
@@ -103,8 +124,9 @@ class Supervisor(BoxComponent):
 
     async def request_queue(self):
         async for car in self.in_channels['Request']:
-            while not self.cars.get(car.name, 0)=='Parked':#car.status == 'Driving' or car.status == 'Stop':
-                await trio.sleep(10)
+            #while not self.cars.get(car.name, 0)=='Parked':#car.status == 'Driving' or car.status == 'Stop':
+            #    await trio.sleep(10)
+            self.priority.update({car.name: '2'})
             print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
             await self.send_directive_to_planner(car, 'Pickup')
 

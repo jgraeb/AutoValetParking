@@ -15,7 +15,7 @@ import json
 from collections import OrderedDict as od
 from ipdb import set_trace as st
 from prim_json_maker import import_json
-from tools import rotate_vector, reflect_over_x_axis, constrain_heading_to_pm_180, manhattan_distance, img_to_csv_bitmap, get_tube_for_lines, get_ball_neighbors, in_range, point_set_is_safe, compute_sequence_weight, astar_trajectory
+from tools import rotate_vector, reflect_over_x_axis, constrain_heading_to_pm_180, manhattan_distance, img_to_csv_bitmap, get_tube_for_lines, get_ball_neighbors, in_range, point_set_is_safe, compute_edge_weight, astar_trajectory
 
 class Node:
     def __init__(self, x, y, heading, v):
@@ -155,7 +155,8 @@ class GridPlanner:
                 for edge in self.prim_set.get_edges_for_xy(xy):
                     tube = get_tube_for_lines(edge['node_sequence'], r=self.uncertainty)
                     if point_set_is_safe(tube, bitmap):
-                        graph.add_edges([[edge['start_node'], edge['end_node'], compute_sequence_weight(edge['node_sequence'])]])
+#                        graph.add_edges([[edge['start_node'], edge['end_node'], compute_sequence_weight(edge['node_sequence'])]])
+                        graph.add_edges([[edge['start_node'], edge['end_node'], compute_edge_weight(edge)]])
                         edge_info[edge['start_node'], edge['end_node']] = edge['node_sequence']
 
             planning_graph['graph'] = graph
@@ -178,7 +179,7 @@ def plot_planning_graph(planning_graph, plt, verbose=True):
         plt.plot([edge[0][0], edge[1][0]], [edge[0][1], edge[1][1]])
 
 if __name__ == '__main__':
-    remap = False
+    remap = True
     if remap:
         # create bitmap from parking lot image
         bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap

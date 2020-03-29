@@ -2,15 +2,16 @@
 # Tung M. Phan
 # California Institute of Technology
 # March 5th, 2020
+import copy as cp
 import _pickle as pickle
 from ipdb import set_trace as st
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
 if __name__ == '__main__':
-    from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
+    from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory, waypoints_to_headings
 else:
-    from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory
+    from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory,waypoints_to_headings
 import cv2
 import sys
 sys.path.append('..')
@@ -156,29 +157,34 @@ class TwoPointTurnGuarantee(PrimitiveGuarantee):
 
 def segment_to_mpc_inputs(start, end, edge_info_dict):
     waypoints = edge_info_dict[tuple(start), tuple(end)]
-    headings = []
-    previous_heading = start[2]
-    for point1, point2 in zip(waypoints, waypoints[1:]):
-        dys = point2[1] - point1[1]
-        dxs = point2[0] - point1[0]
-        new_heading = np.arctan2(-dys, dxs) / np.pi * 180
-        if np.abs(constrain_heading_to_pm_180(new_heading-previous_heading)) >= 90:
-            new_heading = constrain_heading_to_pm_180(new_heading + 180)
-        headings.append(new_heading)
-        previous_heading = new_heading
-    headings.append(headings[-1])
+    initial_heading = start[2]
+    headings = waypoints_to_headings(waypoints, initial_heading)
     mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
-    print(mpc_inputs)
     return mpc_inputs
+
+def update_plannning_graph(planning_graph, del_nodes):
+    new_planning_graph = cp.deepcopy(planning_graph)
+    del_edges = []
+    for node in del_nodes:
+        assert node in new_planning_graph['graph']._nodes
+        if node in new_planning_graph['graph']._predecessors:
+            for from_node in new_planning_graph['graph']._predecessors[node]:
+                del_edges.append((from_node, node))
+        if node in new_planning_graph['graph']._edges:
+            for to_node in new_planning_graph['graph']._edges:
+                del_edges.append((node, to_node))
+    for edge in del_edges:
+        new_planning_graph['graph']._weights[edge] = np.inf
+    return new_planning_graph
 
 def get_mpc_path(start, end, planning_graph):
     edge_info_dict = planning_graph['edge_info']
     simple_graph = planning_graph['graph']
-    traj = astar_trajectory(simple_graph, start, end)
+    traj, path_weight = astar_trajectory(simple_graph, start, end)
     all_segments = []
     for start, end in zip(traj, traj[1:]):
         all_segments.append(segment_to_mpc_inputs(start, end, edge_info_dict))
-    return all_segments
+    return all_segments, path_weight
 
 # check whether the path is blocked
 def subpath_is_safe(start, end):
@@ -199,25 +205,23 @@ def distance(a, b):
     b1 = b[1]
     return min(((a[0] - b0[0])**2 + (a[1] - b0[1])**2)**0.5,((a[0] - b1[0])**2 + (a[1] - b1[1])**2)**0.5)
 
-def complete_path_is_safe(traj):                 
+def complete_path_is_safe(traj):
     # check whether the subpath is safe
     is_safe = True
     for sub_start, sub_end in zip(traj, traj[1:]):
         if not subpath_is_safe(sub_start, sub_end): # if someone blocks the subpath
             is_safe = False
             return is_safe
-    return is_safe     
-       
+    return is_safe
 
 def longest_safe_subpath(traj):
     idx = -1
     for sub_start, sub_end in zip(traj, traj[1:]):
-        idx += 1 
+        idx += 1
         if not subpath_is_safe(sub_start, sub_end):
             safe_subpath = traj[0:idx]
-            safe_start = traj[idx]   
+            safe_start = traj[idx]
             return safe_subpath, safe_start
-                    
 
 # TODO: make separate planner class
 if __name__ == '__main__':
@@ -272,7 +276,7 @@ if __name__ == '__main__':
                         coords = []
                         start = ps[-2]
                         end = ps[-1]
-                        traj = astar_trajectory(simple_graph, start, end)
+                        traj, _ = astar_trajectory(simple_graph, start, end)
                         #print(traj)
                         # while not complete_path_is_safe(traj):
                         #     safe_subpath, safe_start = longest_safe_subpath(traj)

@@ -24,24 +24,26 @@ class Customer(BoxComponent):
         #garage_open = True
         while True:
             # check if dropoff spot is free
-            while not await gme.dropoff_free():
-                await trio.sleep(5)
+            # while not await gme.dropoff_free():
+            #     await trio.sleep(5)
             # spawns cars according to exponential distribution
             await trio.sleep(np.random.exponential(1/self.average_arrival_rate))
-            car = self.generate_car(start_time)
-            #self.cars.append(car)
-            car.x = START_X
-            car.y = START_Y
-            car.yaw = START_YAW
-            print("Car with ID {0} arrives at {1:.3f}".format(car.name, car.arrive_time))
-            await self.out_channels['Supervisor'].send(car)
-            accept = await self.in_channels['Supervisor'].receive() # checks if car is accepted by the garage
-            if (accept == False):
-                self.cars.pop()
+            if await gme.dropoff_free():
+                car = self.generate_car(start_time)
+                #self.cars.append(car)
+                car.x = START_X
+                car.y = START_Y
+                car.yaw = START_YAW
+                print("Car with ID {0} arrives at {1:.3f}".format(car.name, car.arrive_time))
+                await self.out_channels['Supervisor'].send(car)
+                accept = await self.in_channels['Supervisor'].receive() # checks if car is accepted by the garage
+                if (accept == False):
+                    self.cars.pop()
+                await trio.sleep(5)
             now = get_current_time(start_time)
             for i,cars in enumerate(self.cars): # checks for requested cars
-                if cars.depart_time <= now:
-                    print('{0} is requested at {1:.3f}'.format(cars.name,cars.depart_time))
+                if cars.depart_time <= now and cars.status == 'Completed':
+                    print('{0} is requested at {1:.3f}'.format(cars.name,now))
                     await self.out_channels['Request'].send(cars)
                     self.cars.pop(i)
             self.cars.append(car)
