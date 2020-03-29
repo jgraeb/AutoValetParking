@@ -72,20 +72,39 @@ def animate(frame_idx): # update animation by dt
        
         car_at_this_frame = lines[begin:end-1]
         for car in car_at_this_frame:
-             car = car.split(' ')          
-             draw_car(background, float(car[0])*SCALE_FACTOR,float(car[1])*SCALE_FACTOR+yoffset,float(car[2]))
+             car = car.split(' ')     
+             try:
+                 draw_car(background, float(car[0])*SCALE_FACTOR,float(car[1])*SCALE_FACTOR+yoffset,float(car[2]))
+             except EOFError:
+                 break    
         f.close() 
         
     with open('pedestrain_file','rb') as f:
+        i = 0
+        begin = 0
+        end = 0
         while True:
+            i += 1
+            pedestrian=pickle.load(f)
+            if pedestrian == 'FRAME'+ str(frame_idx)+'\n':
+                begin = i
+            if pedestrian == 'FRAME'+ str(frame_idx+1)+'\n':
+                end = i
+                break
+    
+    with open('pedestrain_file','rb') as f:
+        i = 0
+        while True:
+            i = i+1
             try:
                 pedestrian=pickle.load(f)
-                #print(type(pedestrian))
-                #if type(pedestrian) == components.pedestrian.Pedestrian:
-                draw_pedestrian(pedestrian,background)
+                if i > begin and i < end:
+                    draw_pedestrian(pedestrian,background)
+                if i >= end:
+                    break
             except EOFError:
                 break
-                
+    
     # update background
     the_parking_lot = [ax.imshow(background)] # update the stage
     background.close()
