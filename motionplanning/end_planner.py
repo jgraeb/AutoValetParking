@@ -180,11 +180,11 @@ def update_plannning_graph(planning_graph, del_nodes):
 def get_mpc_path(start, end, planning_graph):
     edge_info_dict = planning_graph['edge_info']
     simple_graph = planning_graph['graph']
-    traj = astar_trajectory(simple_graph, start, end)
+    traj, path_weight = astar_trajectory(simple_graph, start, end)
     all_segments = []
     for start, end in zip(traj, traj[1:]):
         all_segments.append(segment_to_mpc_inputs(start, end, edge_info_dict))
-    return all_segments
+    return all_segments, path_weight
 
 # check whether the path is blocked
 def subpath_is_safe(start, end):
@@ -276,7 +276,7 @@ if __name__ == '__main__':
                         coords = []
                         start = ps[-2]
                         end = ps[-1]
-                        traj = astar_trajectory(simple_graph, start, end)
+                        traj, _ = astar_trajectory(simple_graph, start, end)
                         #print(traj)
                         # while not complete_path_is_safe(traj):
                         #     safe_subpath, safe_start = longest_safe_subpath(traj)
