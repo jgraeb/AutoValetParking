@@ -31,6 +31,7 @@ class Supervisor(BoxComponent):
                         await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1
                         self.cars.pop(car.name)
+                        self.priority.pop(car.name)
 
     async def update_planner_response(self,Planner):
         async with self.in_channels['Planner']:
@@ -47,14 +48,17 @@ class Supervisor(BoxComponent):
                     print('Supervisor initiating towing of {0}'.format(car.name))
                     await self.tow(car)
                 elif resp == 'NoPath':
-                    spot = self.pick_spot(car,Planner)
-                    for key, value in self.parking_spots.items(): 
-                        if value == ('Assigned',car.name): 
-                            val = key
-                    self.parking_spots[val]=(('Vacant','None'))
-                    self.parking_spots[spot]=(('Assigned',car.name))
-                    self.cars.update({car.name: 'Assigned'})
-                    await self.send_directive_to_planner(car,('Park',spot))
+                    if self.cars.get(car.name)== 'Assigned':
+                        spot = self.pick_spot(car,Planner)
+                        for key, value in self.parking_spots.items(): 
+                            if value == ('Assigned',car.name): 
+                                val = key
+                        self.parking_spots[val]=(('Vacant','None'))
+                        self.parking_spots[spot]=(('Assigned',car.name))
+                        self.cars.update({car.name: 'Assigned'})
+                        await self.send_directive_to_planner(car,('Park',spot))
+                    elif self.cars.get(car.name)=='Requested':
+                        await self.send_directive_to_planner(car,('Wait'))
                 elif resp == 'Conflict':
                     prio_1 = self.priority.get(car.name)
                     car_2 = response[2]
@@ -127,6 +131,7 @@ class Supervisor(BoxComponent):
             #while not self.cars.get(car.name, 0)=='Parked':#car.status == 'Driving' or car.status == 'Stop':
             #    await trio.sleep(10)
             self.priority.update({car.name: '2'})
+            self.cars.update({car.name: 'Requested'})
             print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
             await self.send_directive_to_planner(car, 'Pickup')
 
