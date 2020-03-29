@@ -167,10 +167,12 @@ def update_plannning_graph(planning_graph, del_nodes):
     del_edges = []
     for node in del_nodes:
         assert node in new_planning_graph['graph']._nodes
-        for from_node in new_planning_graph['graph']._predecessors[node]:
-            del_edges.append((from_node, node))
-        for to_node in new_planning_graph['graph']._edges[node]:
-            del_edges.append((node, to_node))
+        if node in new_planning_graph['graph']._predecessors:
+            for from_node in new_planning_graph['graph']._predecessors[node]:
+                del_edges.append((from_node, node))
+        if node in new_planning_graph['graph']._edges:
+            for to_node in new_planning_graph['graph']._edges[node]:
+                del_edges.append((node, to_node))
     for edge in del_edges:
         new_planning_graph['graph']._weights[edge] = np.inf
     return new_planning_graph
