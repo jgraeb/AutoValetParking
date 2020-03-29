@@ -229,7 +229,7 @@ if __name__ == '__main__':
                         coords = []
                         start = ps[-2]
                         end = ps[-1]
-                        traj = astar_trajectory(planning_graph, start, end)
+                        traj, _ = astar_trajectory(planning_graph, start, end)
                         for start, end in zip(traj, traj[1:]):
                             segment = np.array(edge_info[(tuple(start), tuple(end))])
                             plt.plot(segment[0,0], segment[0,1], 'b.')

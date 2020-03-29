@@ -151,7 +151,7 @@ def astar_trajectory(planning_graph,start,end,heuristic=None):
         path = nx.astar_path(nx_graph, closest_start, closest_end, heuristic)
     else:
         path = nx.astar_path(nx_graph, closest_start, closest_end)
-    weight = sum(nx_graph[u][v].get(weight, 1) for u, v in zip(path[:-1], path[1:]))
+    weight = sum(nx_graph[u][v].get('weight', 1) for u, v in zip(path[:-1], path[1:]))
     path = np.array(path)
     return path, weight
 
