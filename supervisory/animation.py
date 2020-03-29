@@ -37,6 +37,9 @@ save_video = True
 fig = plt.figure()
 ax = fig.add_axes([0,0,1,1]) # get rid of white border
 plt.axis('off')
+frame = plt.gca()
+frame.axes.get_yaxis().set_visible(False)
+frame.axes.get_xaxis().set_visible(False)
 
 background = parking_lot.get_background()
 
