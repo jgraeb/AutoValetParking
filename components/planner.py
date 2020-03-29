@@ -15,7 +15,10 @@ class Planner(BoxComponent):
         self.name = self.__class__.__name__
         self.nursery = nursery
         self.cars = dict()
+        self.spots = dict([(i, (0)) for i in range(0,MAX_NO_PARKING_SPOTS)])
         self.obstacles = dict()
+        self.planning_graph = []
+        self.original_planning_graph = []
         self.reachable = np.ones((MAX_NO_PARKING_SPOTS,1)) # if spots can be reached from drop_off, currently all reachable
 
     async def get_car_position(self,car):
@@ -45,7 +48,21 @@ class Planner(BoxComponent):
 
     async def add_obstacle(self, car):
         self.obstacles.update({car.name: (car.x,car.y,car.yaw)})
-        # update reachability matrix here
+        await self.update_reachability_matrix()
+
+    async def rmv_obstacle(self, car):
+        self.obstacles.pop(car.name)
+        await self.update_reachability_matrix()
+
+    async def update_reachability_matrix(self):
+        start = (140,55,0) # start position on the grid
+        for i in range(0,MAX_NO_PARKING_SPOTS):
+            end = await self.find_spot_coordinates(i)
+            traj = await self.get_path(start,end) 
+            if traj:
+                self.reachable[i]=1
+            else:
+                self.reachable[i]=0
 
     def is_in_buffer(self,x,y,center_x,center_y):
         # assume radius of 10 pixels (gridsize) to delete around obstacle center
@@ -53,9 +70,9 @@ class Planner(BoxComponent):
             return True
 
     def get_current_planning_graph(self):
-        sys.path.append('../motionplanning')
-        with open('planning_graph_refined.pkl', 'rb') as f:
-            planning_graph = pickle.load(f)
+        # sys.path.append('../motionplanning')
+        # with open('planning_graph_refined.pkl', 'rb') as f:
+        #     planning_graph = pickle.load(f)
         # loop through obstacles and generate new graph
         if self.obstacles:
             obs = []
@@ -64,20 +81,17 @@ class Planner(BoxComponent):
             obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN) for row in obs]
             # find grid nodes around obstacle
             print(obs)
-            nodes = planning_graph['graph']._nodes
+            nodes = self.planning_graph['graph']._nodes
             del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs[0][0],obs[0][1])]
             print(del_nodes)
-            # edges = planning_graph['graph']._edges
-            # give list of edges
-            # set weights to np.inf
-            # return new planning_graph
-            #planning_graph = path_planner.update_planning_graph(del_nodes)
-        return planning_graph
+            self.planning_graph = path_planner.update_plannning_graph(self.original_planning_graph, del_nodes)
+        else:
+            self.planning_graph = self.original_planning_graph
 
     async def get_path(self, start, end): 
-        planning_graph= self.get_current_planning_graph()
-        traj = path_planner.get_mpc_path(start,end,planning_graph)
-        if traj:# add no traj possible to catch execption
+        self.get_current_planning_graph()
+        traj = path_planner.get_mpc_path(start,end,self.planning_graph)
+        if traj:
             return traj
         else: 
             return False
@@ -96,6 +110,10 @@ class Planner(BoxComponent):
                 if response[1]=='Failure':
                     await self.add_obstacle(car)
                     self.cars.update({car.name: 'Failure'})
+                elif response[1]=='Blocked':
+                    spot = self.spots.get(car.name)
+                    end = await self.find_spot_coordinates(spot)
+                    await self.send_directive_to_car(car, end)
                 await trio.sleep(0)
                 print(self.cars)
                 await self.send_response_to_supervisor((resp,car))
@@ -117,17 +135,20 @@ class Planner(BoxComponent):
                 self.cars.update({car.name: 'Assigned'})
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 self.nursery.start_soon(car.run,send_response_channel,Game)
+                self.spots.update({todo[1]: car.name})
                 end = await self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end)
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
                 await self.send_directive_to_car(car, PICK_UP)
                 self.cars.update({car.name : 'Request'})
+                self.spots.update({self.spots.get(car.name): 0})
             elif todo == 'Towed':
                 # remove the car
                 print('Planner - {0} is being towed'.format(car.name))
                 self.cars.pop(car.name)
-                self.obstacles.pop(car.name)
+                await self.rmv_obstacle()
+                self.spots.update({self.spots.get(car.name): 0})
 
     def check_reachability(self,spot):
         if self.reachable[spot]:
@@ -136,6 +157,10 @@ class Planner(BoxComponent):
             return False
 
     async def run(self,Game):
+        sys.path.append('../motionplanning')
+        with open('planning_graph_refined.pkl', 'rb') as f:
+            self.original_planning_graph = pickle.load(f)
+            self.planning_graph = self.original_planning_graph
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.check_supervisor,send_response_channel,Game)
