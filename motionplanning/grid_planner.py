@@ -182,7 +182,7 @@ if __name__ == '__main__':
     remap = True
     if remap:
         # create bitmap from parking lot image
-        bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
+        bitmap = img_to_csv_bitmap('AVP_planning_300p_with_lanes') # compute bitmap
         # define grid parameters
         grid_params = GridParams(grid_size = 10, grid_anchor = [0, 0])
         # load primitive set
