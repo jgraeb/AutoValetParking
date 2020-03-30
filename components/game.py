@@ -5,7 +5,7 @@ import math
 from variables.global_vars import *
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, Point
 from shapely import affinity
 
 class Game(BoxComponent):
@@ -77,6 +77,14 @@ class Game(BoxComponent):
                         failed.append(cars)
                     else:
                         conflict_cars.append(cars)
+        # check if a pedestrian is in the cone
+        for ped in self.peds:
+            x_m = ped.state[0]/SCALE_FACTOR_SIM
+            y_m = ped.state[1]/SCALE_FACTOR_SIM
+            ped_point = Point(x_m,y_m).buffer(1.0)
+            if ped_point.intersects(mycone):
+                clear = False
+                print('{0} stops because a pedestrian is in the path'.format(car.name))
         # check if they have a conflict with me
         mybox = self.car_boxes.get(car.name,0)
         for cars in conflict_cars:

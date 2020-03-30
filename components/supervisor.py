@@ -59,24 +59,26 @@ class Supervisor(BoxComponent):
                         await self.send_directive_to_planner(car,('Park',spot))
                     elif self.cars.get(car.name)=='Requested':
                         await self.send_directive_to_planner(car,('Wait'))
-                elif resp == 'Conflict':
+                elif resp[0] == 'Conflict':
+                    print(self.priority)
                     prio_1 = self.priority.get(car.name)
-                    car_2 = response[2]
-                    prio_2 = self.priority.get(car_2.name)
-                    if prio_2>prio_1:
-                        print('Opposed car has priority')
-                    elif prio_1>prio_2:
-                        print('Car has priority')
-                    elif car_2.delay>car.delay:
-                        print('Opposed car has priority')
-                    elif car.delay>car_2.delay:
-                        print('Car has priority')
-                    else:
-                        print('Conflict resolving by ID')
-                        if id(car)>id(car_2):
+                    car_list = resp[1]
+                    for cars in car_list:
+                        prio = self.priority.get(cars.name)
+                        if prio_2>prio_1:
+                            print('Opposed car has priority')
+                        elif prio_1>prio_2:
+                            print('Car has priority')
+                        elif car_2.delay>car.delay:
+                            print('Opposed car has priority')
+                        elif car.delay>car_2.delay:
                             print('Car has priority')
                         else:
-                            print('Opposed car has priority')
+                            print('Conflict resolving by ID')
+                            if id(car)>id(car_2):
+                                print('Car has priority')
+                            else:
+                                print('Opposed car has priority')
                 await trio.sleep(0)
     
     async def tow(self,car):
@@ -116,7 +118,7 @@ class Supervisor(BoxComponent):
                 spot = self.pick_spot(car,Planner)
                 self.parking_spots[spot]=(('Assigned',car.name))
                 self.cars.update({car.name: 'Assigned'})
-                self.priority.update({car.name: '1'})
+                self.priority.update({car.name: '0'})
                 await self.send_directive_to_planner(car,('Park',spot))
                 ped = Pedestrian(pedestrian_type=random.choice(['1','2','3','4','5','6']))
                 self.nursery.start_soon(ped.run,start_walk_lane,end_walk_lane)
@@ -130,7 +132,7 @@ class Supervisor(BoxComponent):
         async for car in self.in_channels['Request']:
             #while not self.cars.get(car.name, 0)=='Parked':#car.status == 'Driving' or car.status == 'Stop':
             #    await trio.sleep(10)
-            self.priority.update({car.name: '2'})
+            self.priority.update({car.name: '1'})
             self.cars.update({car.name: 'Requested'})
             print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
             await self.send_directive_to_planner(car, 'Pickup')

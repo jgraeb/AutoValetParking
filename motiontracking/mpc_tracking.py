@@ -563,9 +563,9 @@ def Trafo(X):
     return X
 
 def check_direction(path):
-    cx = path[:][0]*SCALE_FACTOR_PLAN
-    cy = path[:][1]*SCALE_FACTOR_PLAN
-    cyaw = np.deg2rad(path[:][2])
+    cx = path[:,0]*SCALE_FACTOR_PLAN
+    cy = path[:,1]*SCALE_FACTOR_PLAN
+    cyaw = np.deg2rad(path[:,2])
     dx = cx[1] - cx[0]
     dy = cy[1] - cy[0]
     move_direction = math.atan2(-dy, dx)

@@ -123,7 +123,7 @@ class Car(BoxComponent):
         # including a failure in 25% of cars
         failidx = len(self.ref)
         chance = random.randint(0,100)
-        if chance <=25:
+        if chance <=20:
             failidx = np.random.randint(low=0, high=len(self.ref)-1, size=1)
             print('Car will fail at: '+str(failidx))
         for i in range(0,len(self.ref)-1):
@@ -133,9 +133,9 @@ class Car(BoxComponent):
                 break  
             self.status = 'Driving'
             path = self.ref[:][i]
-            cx = path[:][0]*SCALE_FACTOR_PLAN
-            cy = path[:][1]*SCALE_FACTOR_PLAN
-            cyaw = np.deg2rad(path[:][2])*-1
+            cx = path[:,0]*SCALE_FACTOR_PLAN
+            cy = path[:,1]*SCALE_FACTOR_PLAN
+            cyaw = np.deg2rad(path[:,2])*-1
             state = np.array([self.x, self.y,self.yaw])
             #  check  direction of the segment
             self.direction = tracking.check_direction(path) 

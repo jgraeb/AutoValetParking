@@ -36,6 +36,7 @@ class Planner(BoxComponent):
         start[0] = pos[0]/SCALE_FACTOR_PLAN
         start[1] = pos[1]/SCALE_FACTOR_PLAN
         start[2] = -np.rad2deg(pos[2])
+        start[3] = 0
         traj = await self.get_path(start,end) 
         if traj:
             print('Planner - sending Directive to {0}'.format(car.name))
@@ -55,7 +56,7 @@ class Planner(BoxComponent):
         await self.update_reachability_matrix()
 
     async def update_reachability_matrix(self):
-        start = (140,55,0) # start position on the grid
+        start = (140,55,0,0) # start position on the grid
         for i in range(0,MAX_NO_PARKING_SPOTS):
             end = await self.find_spot_coordinates(i)
             traj = await self.get_path(start,end) 
@@ -66,7 +67,7 @@ class Planner(BoxComponent):
 
     def is_in_buffer(self,x,y,center_x,center_y):
         # assume radius of 10 pixels (gridsize) to delete around obstacle center
-        if math.sqrt((x-center_x)**2+(y-center_y)**2)<=10:
+        if math.sqrt((x-center_x)**2+(y-center_y)**2)<=15:
             return True
 
     def get_current_planning_graph(self):
@@ -80,17 +81,17 @@ class Planner(BoxComponent):
                 obs.append(value)
             obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN) for row in obs]
             # find grid nodes around obstacle
-            print(obs)
+            #print(obs)
             nodes = self.planning_graph['graph']._nodes
             del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs[0][0],obs[0][1])]
-            print(del_nodes)
+            #print(del_nodes)
             self.planning_graph = path_planner.update_plannning_graph(self.original_planning_graph, del_nodes)
         else:
             self.planning_graph = self.original_planning_graph
 
     async def get_path(self, start, end): 
         self.get_current_planning_graph()
-        traj = path_planner.get_mpc_path(start,end,self.planning_graph)
+        traj, weights = path_planner.get_mpc_path(start,end,self.planning_graph)
         if traj:
             return traj
         else: 
@@ -116,6 +117,8 @@ class Planner(BoxComponent):
                     spot = self.spots.get(car.name)
                     end = await self.find_spot_coordinates(spot)
                     await self.send_directive_to_car(car, end)
+                elif resp[0]=='Conflict':
+                    await self.send_response_to_supervisor((resp,car))
                 await trio.sleep(0)
                 print(self.cars)
                 # await self.send_response_to_supervisor((resp,car))
