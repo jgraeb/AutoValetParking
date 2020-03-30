@@ -127,10 +127,10 @@ def compute_edge_weight(edge):
     reversing = abs(constrain_heading_to_pm_180(displacement_angle - initial_heading)) >= 90
     reverse_penalty = 0
     if reversing:
-        reverse_penalty = 10 # play with this
+        reverse_penalty = 1000 # play with this
     velocity_change = abs(end[3] - start[3])
     headings = np.abs(waypoints_to_headings(sequence, initial_heading))
-    heading_change = np.sum(headings)
+    heading_change = np.sum([constrain_heading_to_pm_180(diff) for diff in np.diff(headings)])
     man_distance = 0
     for n1, n2 in zip(sequence, sequence[1:]):
         man_distance += manhattan_distance(n1, n2)
