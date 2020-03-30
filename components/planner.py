@@ -7,6 +7,9 @@ from variables.global_vars import *
 from variables.parking_data import parking_spots
 import math
 from ipdb import set_trace as st
+sys.path.append('/anaconda3/lib/python3.7/site-packages')
+from shapely.geometry import Polygon, Point
+from shapely import affinity
 #from motionplanning.parking_data import parking_spots
 
 class Planner(BoxComponent):
@@ -18,7 +21,10 @@ class Planner(BoxComponent):
         self.spots = dict([(i, (0)) for i in range(0,MAX_NO_PARKING_SPOTS)])
         self.obstacles = dict()
         self.planning_graph = []
-        self.original_planning_graph = []
+        self.original_lanes_planning_graph = []
+        self.original_free_planning_graph = []
+        self.planning_graph_in_use = []
+        self.lanes_box = Polygon([(150,50),(150,230),(230,230),(230,50),(150,50)])
         self.reachable = np.ones((MAX_NO_PARKING_SPOTS,1)) # if spots can be reached from drop_off, currently all reachable
 
     async def get_car_position(self,car):
@@ -37,6 +43,7 @@ class Planner(BoxComponent):
         start[1] = pos[1]/SCALE_FACTOR_PLAN
         start[2] = -np.rad2deg(pos[2])
         start[3] = 0
+        self.get_current_planning_graph()
         traj = await self.get_path(start,end) 
         if traj:
             print('Planner - sending Directive to {0}'.format(car.name))
@@ -57,6 +64,7 @@ class Planner(BoxComponent):
 
     async def update_reachability_matrix(self):
         start = (140,55,0,0) # start position on the grid
+        self.get_current_planning_graph()
         for i in range(0,MAX_NO_PARKING_SPOTS):
             end = await self.find_spot_coordinates(i)
             traj = await self.get_path(start,end) 
@@ -65,32 +73,45 @@ class Planner(BoxComponent):
             else:
                 self.reachable[i]=0
 
-    def is_in_buffer(self,x,y,center_x,center_y):
+    def is_in_buffer(self,node_x,node_y,obs,):
+        # get car box around x,y
+        #print(obs)
+        for i in range(0,len(obs)):
+            x = obs[i][0]
+            y = obs[i][1]
+            yaw = obs[i][2]
+            box = Polygon([(x-5, y+5),(x-5,y-5),(x+10,y-5),(x+10,y+5),(x-5, y+5)])
+            rot_box = affinity.rotate(box, np.rad2deg(yaw), origin = (x,y))
         # assume radius of 10 pixels (gridsize) to delete around obstacle center
-        if math.sqrt((x-center_x)**2+(y-center_y)**2)<=15:
-            return True
+            if Point(node_x,node_y).intersects(rot_box):
+                return True
+        return False
 
     def get_current_planning_graph(self):
-        # sys.path.append('../motionplanning')
-        # with open('planning_graph_refined.pkl', 'rb') as f:
-        #     planning_graph = pickle.load(f)
         # loop through obstacles and generate new graph
         if self.obstacles:
             obs = []
+            obs_boxes = []
             for key,value in self.obstacles.items():
                 obs.append(value)
-            obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN) for row in obs]
+                obs_boxes.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(15.0))
+            obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs]
+            # assume obs not in the lane area
+            self.planning_graph_in_use = self.original_lanes_planning_graph
+            # check if obstacle is in lanes_box
+            for obs_box in obs_boxes:
+                if not obs_box.intersects(self.lanes_box):
+                    self.planning_graph_in_use = self.original_free_planning_graph
             # find grid nodes around obstacle
-            #print(obs)
-            nodes = self.planning_graph['graph']._nodes
-            del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs[0][0],obs[0][1])]
-            #print(del_nodes)
-            self.planning_graph = path_planner.update_plannning_graph(self.original_planning_graph, del_nodes)
+            nodes = self.planning_graph_in_use['graph']._nodes
+            del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs)]
+            # print(del_nodes)
+            self.planning_graph = path_planner.update_plannning_graph(self.planning_graph_in_use, del_nodes)
         else:
-            self.planning_graph = self.original_planning_graph
+            self.planning_graph = self.original_lanes_planning_graph
 
     async def get_path(self, start, end): 
-        self.get_current_planning_graph()
+        #self.get_current_planning_graph()
         traj, weights = path_planner.get_mpc_path(start,end,self.planning_graph)
         if traj:
             return traj
@@ -114,9 +135,14 @@ class Planner(BoxComponent):
                     self.cars.update({car.name: 'Failure'})
                     await self.send_response_to_supervisor((resp,car))
                 elif response[1]=='Blocked':
-                    spot = self.spots.get(car.name)
-                    end = await self.find_spot_coordinates(spot)
-                    await self.send_directive_to_car(car, end)
+                    if self.cars.get(car.name,0)=='Assigned':
+                        for key, val in self.spots.items(): 
+                            if val == car.name: 
+                                spot = key
+                        end = await self.find_spot_coordinates(spot)
+                        await self.send_directive_to_car(car, end)
+                    elif self.cars.get(car.name,0)=='Request':
+                        await self.send_directive_to_car(car, PICK_UP)
                 elif resp[0]=='Conflict':
                     await self.send_response_to_supervisor((resp,car))
                 await trio.sleep(0)
@@ -156,7 +182,17 @@ class Planner(BoxComponent):
                 self.spots.update({self.spots.get(car.name): 0})
             elif todo == 'Wait':
                 print('Planner - {0} has to wait until path clears'.format(car.name))
-                self.send_directive_to_car(car, todo)
+                await self.send_directive_to_car(car, todo)
+            elif todo == 'Reverse':
+                print('Planner - {0} has to drive out of the way'.format(car.name))
+                await self.send_directive_to_car(car, todo)
+            elif todo == 'Back2spot':
+                print('Planner - {0} has to drive back into the spot to make space'.format(car.name))
+                for key, val in self.spots.items(): 
+                    if val == car.name: 
+                        spot = key
+                end = await self.find_spot_coordinates(spot)
+                await self.send_directive_to_car(car, end)
 
     def check_reachability(self,spot):
         if self.reachable[spot]:
@@ -166,9 +202,11 @@ class Planner(BoxComponent):
 
     async def run(self,Game):
         sys.path.append('../motionplanning')
-        with open('planning_graph_refined.pkl', 'rb') as f:
-            self.original_planning_graph = pickle.load(f)
-            self.planning_graph = self.original_planning_graph
+        with open('planning_graph_lanes.pkl', 'rb') as f:
+            self.original_lanes_planning_graph = pickle.load(f)
+        with open('planning_graph_free.pkl', 'rb') as f:
+            self.original_free_planning_graph = pickle.load(f)
+        self.planning_graph = self.original_lanes_planning_graph
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.check_supervisor,send_response_channel,Game)

@@ -7,6 +7,7 @@ import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point
 from shapely import affinity
+from variables.parking_data import parking_spots
 
 class Game(BoxComponent):
     def __init__(self):
@@ -17,6 +18,7 @@ class Game(BoxComponent):
         self.lot_status = []
         self.car_boxes = dict()
         self.dropoff_box = Polygon([(40, 18), (40, 15), (47, 18), (47, 15), (40, 18)])
+        self.park_boxes = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(1.0) for i in range(0,MAX_NO_PARKING_SPOTS)]
 
     async def keep_track_influx(self):
         async with self.in_channels['GameEnter']:
@@ -49,9 +51,12 @@ class Game(BoxComponent):
         else:
             openangle = 45
             length = 6 # m
+        if car.unparking:
+            openangle = 60
+            length = 6 # m
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
-        if car.direction == -1:
+        if car.direction == -1 or car.unparking:
             rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
         return rotated_cone
 
@@ -73,7 +78,7 @@ class Game(BoxComponent):
                 if mycone.intersects(val):
                     clear = False
                     print('{0} stops because other car is in the path'.format(car.name))
-                    if cars.status=='Failed':
+                    if cars.status=='Failure':
                         failed.append(cars)
                     else:
                         conflict_cars.append(cars)
@@ -81,7 +86,7 @@ class Game(BoxComponent):
         for ped in self.peds:
             x_m = ped.state[0]/SCALE_FACTOR_SIM
             y_m = ped.state[1]/SCALE_FACTOR_SIM
-            ped_point = Point(x_m,y_m).buffer(1.0)
+            ped_point = Point(x_m,y_m).buffer(0.5)
             if ped_point.intersects(mycone):
                 clear = False
                 print('{0} stops because a pedestrian is in the path'.format(car.name))
@@ -94,6 +99,23 @@ class Game(BoxComponent):
             else:
                 conflict = True
         return clear, conflict_cars, failed
+
+    async def clear_before_unparking(self,car):
+        await self.update_car_boxes()
+        mycone = self.get_vision_cone(car)
+        for key,val in self.car_boxes.items():
+            if key != car.name:
+                if mycone.intersects(val):
+                    print('{0} Waiting'.format(car.name))
+                    return False
+        return True
+
+    async def update_car_boxes(self):
+        self.car_boxes.clear()
+        for cars in self.cars:
+            box = Polygon([(cars.x-0.5,cars.y+1),(cars.x-0.5,cars.y-1),(cars.x+3,cars.y+1),(cars.x+3,cars.y-1)])
+            rot_box = affinity.rotate(box, np.rad2deg(cars.yaw), origin = (cars.x,cars.y))
+            self.car_boxes.update({cars.name: rot_box})
 
     async def dropoff_free(self):
         # update car boxes
@@ -108,7 +130,22 @@ class Game(BoxComponent):
                 return False
         return True
 
+    async def is_car_in_spot(self,car):
+        #print('Checking if car {0} is in spot:'.format(car.name))
+        await self.update_car_boxes()
+        mycar_box = self.car_boxes.get(car.name)
+        #print(mycar_box)
+        #print(self.park_boxes[0])
+        for park_box in self.park_boxes:
+            if mycar_box.intersects(park_box):
+                #print('AAA')
+                return True
+        return False
+
     async def run(self):
+        #print(parking_spots)
+        #print(parking_spots[1][1])
+        #print(self.park_boxes)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.keep_track_influx)
             nursery.start_soon(self.keep_track_influx_peds)

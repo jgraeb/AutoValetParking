@@ -65,20 +65,28 @@ class Supervisor(BoxComponent):
                     car_list = resp[1]
                     for cars in car_list:
                         prio = self.priority.get(cars.name)
-                        if prio_2>prio_1:
+                        if car.unparking and not cars.unparking:
                             print('Opposed car has priority')
-                        elif prio_1>prio_2:
+                            await self.send_directive_to_planner(car,('Back2spot'))
+                        elif cars.unparking and not car.unparking:
                             print('Car has priority')
-                        elif car_2.delay>car.delay:
+                        elif prio>prio_1:
                             print('Opposed car has priority')
-                        elif car.delay>car_2.delay:
+                            await self.send_directive_to_planner(car,('Reverse'))
+                        elif prio_1>prio:
+                            print('Car has priority')
+                        elif cars.delay>car.delay:
+                            print('Opposed car has priority')
+                            await self.send_directive_to_planner(car,('Reverse'))
+                        elif car.delay>cars.delay:
                             print('Car has priority')
                         else:
                             print('Conflict resolving by ID')
-                            if id(car)>id(car_2):
+                            if id(car)>id(cars):
                                 print('Car has priority')
                             else:
                                 print('Opposed car has priority')
+                                await self.send_directive_to_planner(car,('Reverse'))
                 await trio.sleep(0)
     
     async def tow(self,car):
