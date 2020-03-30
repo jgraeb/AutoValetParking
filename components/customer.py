@@ -36,6 +36,7 @@ class Customer(BoxComponent):
                 car.yaw = START_YAW
                 print("Car with ID {0} arrives at {1:.3f}".format(car.name, car.arrive_time))
                 await self.out_channels['Supervisor'].send(car)
+                self.cars.append(car)
                 accept = await self.in_channels['Supervisor'].receive() # checks if car is accepted by the garage
                 if (accept == False):
                     self.cars.pop()
@@ -46,7 +47,8 @@ class Customer(BoxComponent):
                     print('{0} is requested at {1:.3f}'.format(cars.name,now))
                     await self.out_channels['Request'].send(cars)
                     self.cars.pop(i)
-            self.cars.append(car)
+            # self.cars.append(car)
+            #print(self.cars)
             #if (now>=end_time):
             #    garage_open = False
             # await trio.sleep(5) # give car time to start tracking
