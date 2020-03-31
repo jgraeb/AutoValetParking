@@ -20,7 +20,7 @@ class Game(BoxComponent):
         self.dropoff_box = Polygon([(40, 18), (40, 15), (47, 18), (47, 15), (40, 18)])
         self.park_boxes = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(1.0) for i in list(parking_spots.keys())]
         self.park_boxes_area = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(3.0) for i in list(parking_spots.keys())]
-
+        self.accept_box = Polygon([(160*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (160*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (230*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (230*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (160*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN)])
 
     async def keep_track_influx(self):
         async with self.in_channels['GameEnter']:
@@ -54,21 +54,30 @@ class Game(BoxComponent):
             openangle = 60
             length = 6 # m
         elif car.close or car.replan:
-            openangle = 45
-            length = 3.5 # m
+            openangle = 30
+            length = 5.0 # m
         else:
             openangle = 45
             length = 6 # m
-        
+        cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
+        rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
+        if car.direction == -1 or car.unparking and not car.last_segment:
+            rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
+        return rotated_cone
+
+    def get_vision_cone_blocked(self,car):
+        openangle = 45
+        length = 8 # m
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking:
             rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
         return rotated_cone
 
-    async def check_car_path(self,car):
+    def check_car_path(self,car):
         conflict_cars = []
-        failed = []
+        failed = False
+        blocked = False
         clear = True
         conflict = False
         mycone = self.get_vision_cone(car)
@@ -79,19 +88,30 @@ class Game(BoxComponent):
             self.car_boxes.update({cars.name: rot_box})
         #print(self.car_boxes)
         # Now check if car box and vision cone intersect
+        if not car.last_segment and not car.close:
+            myblocked_cone = self.get_vision_cone_blocked(car)
+            for key,val in self.car_boxes.items():
+                if key != car.name:
+                    if myblocked_cone.intersects(val):
+                        for cars in self.cars:
+                            if cars.name == key:
+                                if cars.status=='Failure' or cars.status =='Blocked':
+                                    blocked = True 
+                                    print('Failure or blocked car ahead')
+
         for key,val in self.car_boxes.items():
             if key != car.name:
                 if mycone.intersects(val):
                     clear = False
-                    #print('{0} car.unparking'.format(car.name))
-                    # print(car.unparking)
-                    # print('{0} car.direction'.format(car.name))
-                    # print(car.direction)
                     print('{0} stops because other car is in the path'.format(car.name))
-                    if cars.status=='Failure':
-                        failed.append(cars)
-                    else:
-                        conflict_cars.append(cars)
+                    for cars in self.cars:
+                        if cars.name == key:
+                            if cars.status=='Failure':
+                                #failed_cars.append(cars)
+                                failed = True
+                                print('{0} blocked by a failed car'.format(car.name))
+                            else:
+                                conflict_cars.append(cars)
         # check if a pedestrian is in the cone
         for ped in self.peds:
             x_m = ped.state[0]/SCALE_FACTOR_SIM
@@ -104,14 +124,16 @@ class Game(BoxComponent):
         mybox = self.car_boxes.get(car.name,0)
         for cars in conflict_cars:
             cone = self.get_vision_cone(cars)
+            #print(cone)
             if not cone.intersects(mybox):
                 conflict_cars.remove(cars)
             else:
                 conflict = True
-        return clear, conflict_cars, failed
+                #print('There is a conflict')
+        return clear, conflict_cars, failed, conflict, blocked
 
-    async def clear_before_unparking(self,car):
-        await self.update_car_boxes()
+    def clear_before_unparking(self,car):
+        self.update_car_boxes()
         mycone = self.get_vision_cone(car)
         for key,val in self.car_boxes.items():
             if key != car.name:
@@ -119,7 +141,7 @@ class Game(BoxComponent):
                     print('{0} Waiting'.format(car.name))
                     return False
         # check neighbors are not in driving status
-        my_area = Point(car.x,car.y).buffer(2.0)
+        my_area = Point(car.x,car.y).buffer(3.0)
         for key,val in self.car_boxes.items():
             if key != car.name:
                 if my_area.intersects(val):
@@ -128,14 +150,14 @@ class Game(BoxComponent):
                             return False
         return True
 
-    async def update_car_boxes(self):
+    def update_car_boxes(self):
         self.car_boxes.clear()
         for cars in self.cars:
             box = Polygon([(cars.x-0.5,cars.y+1),(cars.x-0.5,cars.y-1),(cars.x+3,cars.y+1),(cars.x+3,cars.y-1)])
             rot_box = affinity.rotate(box, np.rad2deg(cars.yaw), origin = (cars.x,cars.y))
             self.car_boxes.update({cars.name: rot_box})
 
-    async def dropoff_free(self):
+    def dropoff_free(self):
         # update car boxes
         self.car_boxes.clear()
         for cars in self.cars:
@@ -148,23 +170,31 @@ class Game(BoxComponent):
                 return False
         return True
 
-    async def is_car_in_spot(self,car):
+    def is_car_in_spot(self,car):
         #print('Checking if car {0} is in spot:'.format(car.name))
-        await self.update_car_boxes()
+        self.update_car_boxes()
         mycar_box = self.car_boxes.get(car.name)
         for park_box in self.park_boxes:
             if mycar_box.intersects(park_box):
                 return True
         return False
 
-    async def is_car_close_2_spot(self,car):
+    def is_car_close_2_spot(self,car):
         #print('Checking if car {0} is in spot:'.format(car.name))
-        await self.update_car_boxes()
+        self.update_car_boxes()
         mycar_box = self.car_boxes.get(car.name)
         for park_box in self.park_boxes_area:
             if mycar_box.intersects(park_box):
                 return True
         return False
+
+    def is_failure_acceptable(self, obsdict):
+        for key,val in obsdict.items():
+            if not Point(val[0],val[1]).buffer(3).intersects(self.accept_box):
+                return False
+        return True
+
+
 
     async def run(self):
         #print(parking_spots)

@@ -4,7 +4,7 @@ import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import *
 from variables.global_vars import *
-from variables.parking_data import parking_spots
+from variables.parking_data import parking_spots,parking_spots_original
 import math
 from ipdb import set_trace as st
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
@@ -25,7 +25,7 @@ class Planner(BoxComponent):
         self.original_free_planning_graph = []
         self.planning_graph_in_use = []
         self.lanes_box = Polygon([(150,50),(150,230),(230,230),(230,50),(150,50)])
-        self.reachable = np.ones((max(list(parking_spots.keys())),1)) # if spots can be reached from drop_off, currently all reachable
+        self.reachable = np.ones((max(list(parking_spots.keys()))+1,1)) # if spots can be reached from drop_off, currently all reachable
 
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
@@ -33,10 +33,13 @@ class Planner(BoxComponent):
         car, pos = await self.in_channels['Map'].receive()
         return pos
 
-    async def find_spot_coordinates(self, spot):
-        return parking_spots[spot]
+    def find_spot_coordinates(self, spot):
+        return parking_spots_original[spot]
 
     async def send_directive_to_car(self, car, end):
+        if end == 'Reverse':
+            end = (car.x/SCALE_FACTOR_PLAN+car.direction*10, car.y/SCALE_FACTOR_PLAN+car.direction*10, car.yaw, 0)
+            print('Car moving out of the way to: '+str(end))
         pos = await self.get_car_position(car)
         start = np.zeros(4)
         start[0] = pos[0]/SCALE_FACTOR_PLAN
@@ -44,30 +47,32 @@ class Planner(BoxComponent):
         start[2] = -np.rad2deg(pos[2])
         start[3] = 0
         self.get_current_planning_graph()
-        traj = await self.get_path(start,end) 
+        print('Planning - {0} driving from {1} to {2}'.format(car.name,start,end))
+        traj = self.get_path(start,end) 
         if traj:
             print('Planner - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
         else:
             print('Planner - No Path found - sending Response to Supervisor')
-            resp = ['NoPath', car]
-            await self.out_channels['Supervisor'].send(resp)
+            resp = ('NoPath', car)
+            await self.send_response_to_supervisor(resp)
+            #await self.out_channels['Supervisor'].send((resp,car))
         await trio.sleep(1)
 
-    async def add_obstacle(self, car):
+    def add_obstacle(self, car):
         self.obstacles.update({car.name: (car.x,car.y,car.yaw)})
-        await self.update_reachability_matrix()
+        self.update_reachability_matrix()
 
-    async def rmv_obstacle(self, car):
+    def rmv_obstacle(self, car):
         self.obstacles.pop(car.name)
-        await self.update_reachability_matrix()
+        self.update_reachability_matrix()
 
-    async def update_reachability_matrix(self):
+    def update_reachability_matrix(self):
         start = (140,55,0,0) # start position on the grid
         self.get_current_planning_graph()
-        for i in range(0,MAX_NO_PARKING_SPOTS):
-            end = await self.find_spot_coordinates(i)
-            traj = await self.get_path(start,end) 
+        for i in list(parking_spots.keys()):
+            end = self.find_spot_coordinates(i)
+            traj = self.get_path(start,end) 
             if traj:
                 self.reachable[i]=1
             else:
@@ -80,7 +85,7 @@ class Planner(BoxComponent):
             x = obs[i][0]
             y = obs[i][1]
             yaw = obs[i][2]
-            box = Polygon([(x-5, y+5),(x-5,y-5),(x+10,y-5),(x+10,y+5),(x-5, y+5)])
+            box = Polygon([(x-10, y+5),(x-10,y-5),(x+15,y-5),(x+15,y+5),(x-5, y+5)])
             rot_box = affinity.rotate(box, np.rad2deg(yaw), origin = (x,y))
         # assume radius of 10 pixels (gridsize) to delete around obstacle center
             if Point(node_x,node_y).intersects(rot_box):
@@ -90,6 +95,7 @@ class Planner(BoxComponent):
     def get_current_planning_graph(self):
         # loop through obstacles and generate new graph
         if self.obstacles:
+            print('Updating Planning Graph')
             obs = []
             obs_boxes = []
             for key,value in self.obstacles.items():
@@ -105,20 +111,24 @@ class Planner(BoxComponent):
             # find grid nodes around obstacle
             nodes = self.planning_graph_in_use['graph']._nodes
             del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs)]
-            # print(del_nodes)
+            print('deleting these nodes:')
+            print(del_nodes)
             self.planning_graph = path_planner.update_plannning_graph(self.planning_graph_in_use, del_nodes)
         else:
             self.planning_graph = self.original_lanes_planning_graph
 
-    async def get_path(self, start, end): 
+    def get_path(self, start, end): 
         #self.get_current_planning_graph()
-        traj, weights = path_planner.get_mpc_path(start,end,self.planning_graph)
-        if traj:
+        try:
+            traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph)
+        except:
+            st()
+        if traj and weight < 600:
             return traj
         else: 
             return False
 
-    async def update_car_response(self, receive_response_channel):
+    async def update_car_response(self, receive_response_channel,Game):
         async with receive_response_channel:
             async for response in receive_response_channel:
                 car = response[0]
@@ -131,19 +141,26 @@ class Planner(BoxComponent):
                         self.cars.pop(car.name)
                     await self.send_response_to_supervisor((resp,car))
                 if response[1]=='Failure':
-                    await self.add_obstacle(car)
+                    self.add_obstacle(car)
                     self.cars.update({car.name: 'Failure'})
                     await self.send_response_to_supervisor((resp,car))
                 elif response[1]=='Blocked':
-                    if self.cars.get(car.name,0)=='Assigned':
-                        for key, val in self.spots.items(): 
-                            if val == car.name: 
-                                spot = key
-                        end = await self.find_spot_coordinates(spot)
-                        car.replan = True
-                        await self.send_directive_to_car(car, end)
-                    elif self.cars.get(car.name,0)=='Request':
-                        await self.send_directive_to_car(car, PICK_UP)
+                    if self.is_failure_in_acceptable_area(Game):
+                        print('Obstacles are in acceptable area.')
+                        if self.cars.get(car.name,0)=='Assigned':
+                            for key, val in self.spots.items(): 
+                                if val == car.name: 
+                                    spot = key
+                            end = self.find_spot_coordinates(spot)
+                            car.replan = True
+                            car.status = 'Replan'
+                            print('Blocked car {} receives a new directive'.format(car.name))
+                            await self.send_directive_to_car(car, end)
+                        elif self.cars.get(car.name,0)=='Request':
+                            car.status = 'Replan'
+                            await self.send_directive_to_car(car, PICK_UP)
+                    else:
+                        print('No way to plan around the failure - {0} must wait'.format(car.name))
                 elif resp[0]=='Conflict':
                     await self.send_response_to_supervisor((resp,car))
                 await trio.sleep(0)
@@ -153,7 +170,7 @@ class Planner(BoxComponent):
     async def send_response_to_supervisor(self,resp):
         response = resp[0]
         car = resp[1]
-        print(resp)
+        #print(resp)
         print('Planner - sending "{0} - {1}" response to Supervisor'.format(response,car.name))
         await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
@@ -168,7 +185,7 @@ class Planner(BoxComponent):
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 self.nursery.start_soon(car.run,send_response_channel,Game)
                 self.spots.update({todo[1]: car.name})
-                end = await self.find_spot_coordinates(todo[1])
+                end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end)
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
@@ -179,7 +196,7 @@ class Planner(BoxComponent):
                 # remove the car
                 print('Planner - {0} is being towed'.format(car.name))
                 self.cars.pop(car.name)
-                await self.rmv_obstacle(car)
+                self.rmv_obstacle(car)
                 self.spots.update({self.spots.get(car.name): 0})
             elif todo == 'Wait':
                 print('Planner - {0} has to wait until path clears'.format(car.name))
@@ -189,11 +206,17 @@ class Planner(BoxComponent):
                 await self.send_directive_to_car(car, todo)
             elif todo == 'Back2spot':
                 print('Planner - {0} has to drive back into the spot to make space'.format(car.name))
+                car.status = 'Replan'
                 for key, val in self.spots.items(): 
                     if val == car.name: 
                         spot = key
-                end = await self.find_spot_coordinates(spot)
+                end = self.find_spot_coordinates(spot)
                 await self.send_directive_to_car(car, end)
+
+    def is_failure_in_acceptable_area(self,gme):
+        is_acceptable = gme.is_failure_acceptable(self.obstacles)
+        return is_acceptable
+
 
     def check_reachability(self,spot):
         if self.reachable[spot]:
@@ -212,4 +235,4 @@ class Planner(BoxComponent):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.check_supervisor,send_response_channel,Game)
             await trio.sleep(1)
-            nursery.start_soon(self.update_car_response,receive_response_channel)
+            nursery.start_soon(self.update_car_response,receive_response_channel,Game)

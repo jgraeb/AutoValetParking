@@ -24,11 +24,11 @@ class Customer(BoxComponent):
         #garage_open = True
         while True:
             # check if dropoff spot is free
-            # while not await gme.dropoff_free():
+            # while not gme.dropoff_free():
             #     await trio.sleep(5)
             # spawns cars according to exponential distribution
             await trio.sleep(np.random.exponential(1/self.average_arrival_rate))
-            if await gme.dropoff_free():
+            if gme.dropoff_free():
                 car = self.generate_car(start_time)
                 #self.cars.append(car)
                 car.x = START_X

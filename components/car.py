@@ -39,22 +39,28 @@ class Car(BoxComponent):
         self.delay = 0
         self.unparking = False
         self.waiting = False
+        self.replan = False
+        self.close = False
 
     async def update_planner_command(self,send_response_channel,Game):
-        async for directive in self.in_channels['Planner']:
-            if directive == 'Wait':
-                print('{0} - Receiving Directive from Planner to wait'.format(self.name))
-                self.status = 'Waiting'
-            #elif directive == 'Back2spot'
-            else:
-                print('{0} - Receiving Directive from Planner'.format(self.name))
-                self.status = 'Replan'
-                self.ref = directive
-                #if directive=='Unpark':
+        async with self.in_channels['Planner']:
+            async for directive in self.in_channels['Planner']:
+                if directive == 'Wait':
+                    print('{0} - Receiving Directive from Planner to wait'.format(self.name))
+                    self.status = 'Waiting'
+                #elif directive == 'Back2spot'
+                else:
+                    print('{0} - Receiving Directive from Planner'.format(self.name))
+                    #self.status = 'Replan'
+                    self.ref = directive
+                    #if self.replan:
+                    print('Tracking this path:')
+                    print(directive)
+                    #if directive=='Unpark':
                     #self.unparking = True
-                await self.track_reference(Game,send_response_channel)
-                await trio.sleep(0)
-                #await self.send_response(send_response_channel)
+                    await self.track_reference(Game,send_response_channel)
+                    await trio.sleep(0)
+                    #await self.send_response(send_response_channel)
 
     async def iterative_linear_mpc_control(self, xref, x0, dref, oa, od):
         if oa is None or od is None:
@@ -82,19 +88,23 @@ class Car(BoxComponent):
         odelta, oa = None, None
         cyaw = tracking.smooth_yaw(cyaw)
         self.waiting = False
+        blocked = False
         while tracking.MAX_TIME >= time:
-            while not await self.path_clear(Game):
-                self.status = 'Stop'
-                _, conflict_cars, failed = await self.check_path(Game)
+            while not self.path_clear(Game) or blocked:
+                #self.status = 'Stop'
+                _, conflict_cars, failed, conflict, blocked = self.check_path(Game)
+                #print(conflict_cars)
+                #print(failed)
+                #print(self.waiting)
                 #if not self.status == 'Waiting':
-                if conflict_cars and not self.waiting:
+                if conflict and not self.waiting:
                     self.status = 'Conflict'
                     #send response to sup
                     print('We have a conflict')
                     await self.send_conflict(conflict_cars, send_response_channel)
                     self.waiting = True
                         # return
-                if failed and not not self.waiting:
+                if failed or blocked and not self.waiting and not self.replan:
                     #send response to sup
                     self.status = 'Blocked'
                     print('Blocked by a failure')
@@ -102,6 +112,7 @@ class Car(BoxComponent):
                     self.waiting = True
                     # return
                 if self.status == 'Replan':
+                    print('{0} Stopping the Tracking'.format(self.name))
                     return
                 await trio.sleep(3)
             self.status = 'Driving'
@@ -126,27 +137,35 @@ class Car(BoxComponent):
         if self.depart_time <= now:
             self.delay = self.depart_time-now
         print('{0} - Tracking reference...'.format(self.name))
+        self.close = False
         ck = 0 
         dl = 1.0  # course tick
-        if await self.check_if_car_is_in_spot(Game):
-            print('Car is in a parking spot')
-            while not await self.check_clear_before_unparking(Game):
-                await trio.sleep(1)
+        if not self.status == 'Replan':
+            if self.check_if_car_is_in_spot(Game):
+                print('Car is in a parking spot')
+                while not self.check_clear_before_unparking(Game):
+                    await trio.sleep(0.1)
         self.status = 'Driving'
         #self.unparking = False
         # including a failure in 20% of cars
         failidx = len(self.ref)
         chance = random.randint(0,100)
-        if chance <=20:
-            failidx = np.random.randint(low=0, high=len(self.ref)-1, size=1)
-            print('Car will fail at: '+str(failidx))
+        if not self.replan and chance <=25:
+            if len(self.ref)-1>4:
+                failidx = np.random.randint(low=4, high=len(self.ref)-1, size=1)
+                print('{0} will fail at: {1}'.format(self.name,failidx))
         for i in range(0,len(self.ref)-1):
+            #print('{0} self.unparking'.format(self.name))
+            #print(self.unparking)
             if (i==failidx):
                 print('{0} Failing'.format(self.name))
                 await self.failure(send_response_channel)
-                break  
-            if i >= 2:
+                return  
+            if i >= 1:
                 self.unparking = False
+            self.close = False
+            if self.check_car_close_2_spot(Game):
+                self.close = True
             self.status = 'Driving'
             path = self.ref[:][i]
             cx = path[:,0]*SCALE_FACTOR_PLAN
@@ -191,22 +210,26 @@ class Car(BoxComponent):
         await send_response_channel.send((self,response))
         await trio.sleep(1)
 
-    async def path_clear(self, gme):
-        clear, _, _ = await self.check_path(gme)
+    def path_clear(self, gme):
+        clear, _, _ ,_,_= self.check_path(gme)
         return clear
     
-    async def check_clear_before_unparking(self,gme):
+    def check_clear_before_unparking(self,gme):
         self.unparking = True
-        clear = await gme.clear_before_unparking(self)
+        clear = gme.clear_before_unparking(self)
         return clear
 
-    async def check_path(self, gme):
-        #print('Checking the path')
-        clear, conflict_cars, failed = await gme.check_car_path(self)
-        return clear, conflict_cars, failed
+    def check_car_close_2_spot(self,gme):
+        close = gme.is_car_close_2_spot(self)
+        return close
 
-    async def check_if_car_is_in_spot(self,gme):
-        in_spot = await gme.is_car_in_spot(self)
+    def check_path(self, gme):
+        #print('Checking the path')
+        clear, conflict_cars, failed, conflict, blocked = gme.check_car_path(self)
+        return clear, conflict_cars, failed, conflict, blocked
+
+    def check_if_car_is_in_spot(self,gme):
+        in_spot = gme.is_car_in_spot(self)
         return in_spot
 
     async def stop(self,send_response_channel):
