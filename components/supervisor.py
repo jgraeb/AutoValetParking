@@ -4,6 +4,7 @@ import random
 from variables.global_vars import *
 from components.pedestrian import Pedestrian
 from components.planner import Planner
+from variables.parking_data import parking_spots
 
 class Supervisor(BoxComponent):
     def __init__(self, nursery):
@@ -12,7 +13,7 @@ class Supervisor(BoxComponent):
         self.cars = dict()
         self.nursery = nursery
         self.spot_no = MAX_NO_PARKING_SPOTS
-        self.parking_spots = dict([ (i, ("Vacant", "None")) for i in range(0,self.spot_no) ])
+        self.parking_spots = dict([ (i, ("Vacant", "None")) for i in list(parking_spots.keys()) ])
         self.failures = dict()
         self.priority = dict()
 

@@ -18,7 +18,9 @@ class Game(BoxComponent):
         self.lot_status = []
         self.car_boxes = dict()
         self.dropoff_box = Polygon([(40, 18), (40, 15), (47, 18), (47, 15), (40, 18)])
-        self.park_boxes = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(1.0) for i in range(0,MAX_NO_PARKING_SPOTS)]
+        self.park_boxes = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(1.0) for i in list(parking_spots.keys())]
+        self.park_boxes_area = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(3.0) for i in list(parking_spots.keys())]
+
 
     async def keep_track_influx(self):
         async with self.in_channels['GameEnter']:
@@ -48,12 +50,16 @@ class Game(BoxComponent):
         if car.last_segment:
             openangle = 45
             length = 3 # m
+        elif car.unparking:
+            openangle = 60
+            length = 6 # m
+        elif car.close or car.replan:
+            openangle = 45
+            length = 3.5 # m
         else:
             openangle = 45
             length = 6 # m
-        if car.unparking:
-            openangle = 60
-            length = 6 # m
+        
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking:
@@ -77,6 +83,10 @@ class Game(BoxComponent):
             if key != car.name:
                 if mycone.intersects(val):
                     clear = False
+                    #print('{0} car.unparking'.format(car.name))
+                    # print(car.unparking)
+                    # print('{0} car.direction'.format(car.name))
+                    # print(car.direction)
                     print('{0} stops because other car is in the path'.format(car.name))
                     if cars.status=='Failure':
                         failed.append(cars)
@@ -108,6 +118,14 @@ class Game(BoxComponent):
                 if mycone.intersects(val):
                     print('{0} Waiting'.format(car.name))
                     return False
+        # check neighbors are not in driving status
+        my_area = Point(car.x,car.y).buffer(2.0)
+        for key,val in self.car_boxes.items():
+            if key != car.name:
+                if my_area.intersects(val):
+                    for cars in self.cars:
+                        if cars.name == key and cars.status == 'Driving':
+                            return False
         return True
 
     async def update_car_boxes(self):
@@ -134,11 +152,17 @@ class Game(BoxComponent):
         #print('Checking if car {0} is in spot:'.format(car.name))
         await self.update_car_boxes()
         mycar_box = self.car_boxes.get(car.name)
-        #print(mycar_box)
-        #print(self.park_boxes[0])
         for park_box in self.park_boxes:
             if mycar_box.intersects(park_box):
-                #print('AAA')
+                return True
+        return False
+
+    async def is_car_close_2_spot(self,car):
+        #print('Checking if car {0} is in spot:'.format(car.name))
+        await self.update_car_boxes()
+        mycar_box = self.car_boxes.get(car.name)
+        for park_box in self.park_boxes_area:
+            if mycar_box.intersects(park_box):
                 return True
         return False
 

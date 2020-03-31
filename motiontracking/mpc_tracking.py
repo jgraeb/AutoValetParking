@@ -572,11 +572,11 @@ def check_direction(path):
     # print(move_direction)
     # print(cyaw[0])
     dangle = abs(pi_2_pi(move_direction - cyaw[0]))
-    if dangle >= math.pi / 2.0:
+    if dangle >= math.pi / 4.0:
         direction = -1.0
     else:
         direction = 1.0
-    #print(direction)
+    #print('The direction is: '+str(direction))
     return direction
 
 # split up trajectories further for simulation implementation

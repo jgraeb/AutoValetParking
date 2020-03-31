@@ -18,14 +18,14 @@ class Planner(BoxComponent):
         self.name = self.__class__.__name__
         self.nursery = nursery
         self.cars = dict()
-        self.spots = dict([(i, (0)) for i in range(0,MAX_NO_PARKING_SPOTS)])
+        self.spots = dict([(i, (0)) for i in list(parking_spots.keys())])
         self.obstacles = dict()
         self.planning_graph = []
         self.original_lanes_planning_graph = []
         self.original_free_planning_graph = []
         self.planning_graph_in_use = []
         self.lanes_box = Polygon([(150,50),(150,230),(230,230),(230,50),(150,50)])
-        self.reachable = np.ones((MAX_NO_PARKING_SPOTS,1)) # if spots can be reached from drop_off, currently all reachable
+        self.reachable = np.ones((max(list(parking_spots.keys())),1)) # if spots can be reached from drop_off, currently all reachable
 
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
@@ -140,6 +140,7 @@ class Planner(BoxComponent):
                             if val == car.name: 
                                 spot = key
                         end = await self.find_spot_coordinates(spot)
+                        car.replan = True
                         await self.send_directive_to_car(car, end)
                     elif self.cars.get(car.name,0)=='Request':
                         await self.send_directive_to_car(car, PICK_UP)

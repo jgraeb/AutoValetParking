@@ -45,6 +45,7 @@ class Customer(BoxComponent):
             for i,cars in enumerate(self.cars): # checks for requested cars
                 if cars.depart_time <= now and cars.status == 'Completed':
                     print('{0} is requested at {1:.3f}'.format(cars.name,now))
+                    car.depart_time = now
                     await self.out_channels['Request'].send(cars)
                     self.cars.pop(i)
             # self.cars.append(car)
