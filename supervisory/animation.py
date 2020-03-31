@@ -13,16 +13,16 @@ from PIL import Image
 from prepare.helper import *
 import time, platform, warnings, matplotlib, random
 import datetime
-if platform.system() == 'Darwin': # if the operating system is MacOS
-#    matplotlib.use('macosx')
-    matplotlib.use('Qt5Agg')
-else: # if the operating system is Linux or Windows
-    try:
-        import PySide2 # if pyside2 is installed
-        matplotlib.use('Qt5Agg')
-    except ImportError:
-        warnings.warn('Using the TkAgg backend, this may affect performance. Consider installing pyside2 for Qt5Agg backend')
-        matplotlib.use('TkAgg') # this may be slower
+# if platform.system() == 'Darwin': # if the operating system is MacOS
+# #    matplotlib.use('macosx')
+#     matplotlib.use('Qt5Agg')
+# else: # if the operating system is Linux or Windows
+#     try:
+#         import PySide2 # if pyside2 is installed
+#         matplotlib.use('Qt5Agg')
+#     except ImportError:
+#         warnings.warn('Using the TkAgg backend, this may affect performance. Consider installing pyside2 for Qt5Agg backend')
+#         matplotlib.use('TkAgg') # this may be slower
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from component import parking_lot
@@ -80,7 +80,7 @@ def animate(frame_idx): # update animation by dt
                  break    
         f.close() 
         
-    with open('pedestrain_file','rb') as f:
+    with open('pedestrian_file.pkl','rb') as f:
         i = 0
         begin = 0
         end = 0
@@ -93,7 +93,7 @@ def animate(frame_idx): # update animation by dt
                 end = i
                 break
     
-    with open('pedestrain_file','rb') as f:
+    with open('pedestrian_file.pkl','rb') as f:
         i = 0
         while True:
             i = i+1
@@ -113,10 +113,10 @@ def animate(frame_idx): # update animation by dt
     all_artists = the_parking_lot
     return all_artists
 
-ani = animation.FuncAnimation(fig, animate, frames=300, interval=10**3, blit=True, repeat=False) # by default the animation function loops so set repeat to False in order to limit the number of frames generated to num_frames
+ani = animation.FuncAnimation(fig, animate, frames=3000, interval=10**3, blit=True, repeat=False) # by default the animation function loops so set repeat to False in order to limit the number of frames generated to num_frames
 if save_video:
     #Writer = animation.writers['ffmpeg']
-    writer = animation.FFMpegWriter(fps = 1, metadata=dict(artist='Auto Park Simulator'), bitrate=None)
+    writer = animation.FFMpegWriter(fps = 10, metadata=dict(artist='Auto Park Simulator'), bitrate=None)
     now = str(datetime.datetime.now())
     ani.save('../movies/' + now + '.mp4', dpi=200, writer=writer)
 plt.show()
