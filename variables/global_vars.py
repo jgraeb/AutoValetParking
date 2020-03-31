@@ -9,9 +9,9 @@ pedestrians_to_show = []
 ###
 average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate
-average_park_time = 50 # seconds
+average_park_time = 250 # seconds
 MAX_BUFFER_SIZE = np.inf
-MAX_NO_PARKING_SPOTS = 5
+MAX_NO_PARKING_SPOTS = 25
 OPEN_TIME = 500 # not yet working
 TARGET_SPEED = 10/3.6 # 10 km/h
 meters = 90
@@ -21,13 +21,14 @@ SCALE_FACTOR_PLAN = meters/300 # scale from pixels to meters in grid planner
 START_X = 140*SCALE_FACTOR_PLAN # m
 START_Y = 55*SCALE_FACTOR_PLAN # m
 START_YAW = 0 # rad
-DROP_OFF = (START_X,START_Y,0)
+DROP_OFF = (START_X,START_Y,0,0)
 # Pickup Position
 PICK_UP = (260,60,0,0) # in pixels
+#INT_POINT = (190,220,0,0) # in pixels
 # Pedestrian Pathway Dropoff
 start_walk_lane = (1600,509)
 end_walk_lane = (3412,509)
 # Pedestrian lower crosswalk
-start_walk_lane_2 = (3428,2088)
-end_walk_lane_2 = (458,2088)
-TOW_TIME = 50
+start_walk_lane_2 = (458,2090)
+end_walk_lane_2 = (3428,2090)
+TOW_TIME = 100
