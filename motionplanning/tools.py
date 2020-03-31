@@ -148,9 +148,15 @@ def astar_trajectory(planning_graph,start,end,heuristic=None):
     closest_end = find_closest_point(end, planning_graph)
     nx_graph = convert_to_nx_graph(planning_graph)
     if heuristic:
-        path = nx.astar_path(nx_graph, closest_start, closest_end, heuristic)
+        try:
+            path = nx.astar_path(nx_graph, closest_start, closest_end, heuristic)
+        except:
+            return None
     else:
-        path = nx.astar_path(nx_graph, closest_start, closest_end)
+        try:
+            path = nx.astar_path(nx_graph, closest_start, closest_end)
+        except:
+            return None
     weight = sum(nx_graph[u][v].get('weight', 1) for u, v in zip(path[:-1], path[1:]))
     path = np.array(path)
     return path, weight
