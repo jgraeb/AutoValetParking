@@ -13,6 +13,7 @@ from ipdb import set_trace as st
 import time
 import datetime
 import pickle
+import os
 
 show_all_spots = False
 
@@ -59,14 +60,14 @@ class Simulation(BoxComponent):
         # scale to the large topo
         xoffset = 0
         yoffset = 0
-        f = open('pedestrain_file','ab')
+        f = open('pedestrian_file_new.pkl','ab')
         pickle.dump('FRAME'+str(ind)+'\n',f)
         for pedestrian in self.peds:
             draw_pedestrian(pedestrian,self.background)
             pickle.dump(pedestrian,f)
         f.close()
         
-        f = open('car_pos.txt','a')
+        f = open('car_pos_new.txt','a')
         f.write('FRAME'+str(ind)+'\n')
         for car in self.cars: 
             draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
@@ -99,10 +100,18 @@ class Simulation(BoxComponent):
             ani = animation.FuncAnimation(self.fig, self.animate, frames=1, interval=1**3, blit=True, repeat=False)
             plt.pause(0.001)
             plt.draw()
-            await trio.sleep(0)
+            await trio.sleep(1)
             print('------------Figure updating-------------')
 
     async def run(self):
+        try:
+            os.remove("pedestrian_file_new.pkl")
+        except:
+            print('No file to delete.')
+        try:
+            os.remove("car_pos_new.txt")
+        except:
+            print('No file to delete.')
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.add_car_to_sim)
             await trio.sleep(0)
