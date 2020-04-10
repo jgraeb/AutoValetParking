@@ -9,6 +9,7 @@ import random
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon
 from shapely import affinity
+from ipdb import set_trace as st
 
 class State:
     """
@@ -41,6 +42,11 @@ class Car(BoxComponent):
         self.waiting = False
         self.replan = False
         self.close = False
+        self.parking = True
+        self.retrieving = False
+        self.is_at_pickup = False
+        self.parked = False
+        self.cancel = False
 
     async def update_planner_command(self,send_response_channel,Game):
         async with self.in_channels['Planner']:
@@ -48,14 +54,31 @@ class Car(BoxComponent):
                 if directive == 'Wait':
                     print('{0} - Receiving Directive from Planner to wait'.format(self.name))
                     self.status = 'Waiting'
-                #elif directive == 'Back2spot'
+                elif directive == 'Back2spot':
+                    print('{0} - Receiving Directive from Planner to drive back into the spot'.format(self.name))
+                    directive = self.ref[:][0]
+                    directive = [np.flip(directive, 0)]
+                    # self.ref = directive
+                    #print(directive[-1])
+                    direc = [[self.x/SCALE_FACTOR_PLAN, self.y/SCALE_FACTOR_PLAN, -1*np.rad2deg(self.yaw)]]
+                    direc.append([directive[-1][-1][0], directive[-1][-1][1], directive[-1][-1][2]] )
+                    directive = [np.array(direc)]
+                    self.ref = directive
+                    print('Tracking this path:')
+                    print(self.ref)
+                    # st()
+                    self.replan = True
+                    self.last_segment = True
+                    self.direction = 1
+                    await self.track_reference(Game,send_response_channel)
+                    await trio.sleep(0)
                 else:
                     print('{0} - Receiving Directive from Planner'.format(self.name))
                     #self.status = 'Replan'
-                    self.ref = directive
+                    self.ref = np.array(directive)
                     #if self.replan:
-                    print('Tracking this path:')
-                    print(directive)
+                    #print('Tracking this path:')
+                    #print(directive)
                     #if directive=='Unpark':
                     #self.unparking = True
                     await self.track_reference(Game,send_response_channel)
@@ -92,6 +115,7 @@ class Car(BoxComponent):
         while tracking.MAX_TIME >= time:
             while not self.path_clear(Game) or blocked:
                 #self.status = 'Stop'
+                print('{0} stops because path is blocked'.format(self.name))
                 _, conflict_cars, failed, conflict, blocked = self.check_path(Game)
                 #print(conflict_cars)
                 #print(failed)
@@ -113,6 +137,7 @@ class Car(BoxComponent):
                     # return
                 if self.status == 'Replan':
                     print('{0} Stopping the Tracking'.format(self.name))
+                    self.v = 0
                     return
                 await trio.sleep(3)
             self.status = 'Driving'
@@ -129,7 +154,7 @@ class Car(BoxComponent):
             self.yaw = self.state.yaw
             self.v = self.state.v
             await trio.sleep(0)
-            if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed): # modified goal speed
+            if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed,self.last_segment): # modified goal speed
                 break
  
     async def track_reference(self,Game,send_response_channel):
@@ -141,19 +166,34 @@ class Car(BoxComponent):
         ck = 0 
         dl = 1.0  # course tick
         if not self.status == 'Replan':
+            try:
+                self.check_if_car_is_in_spot(Game)
+            except: 
+                st()
             if self.check_if_car_is_in_spot(Game):
                 print('Car is in a parking spot')
+                self.parked = True
                 while not self.check_clear_before_unparking(Game):
                     await trio.sleep(0.1)
         self.status = 'Driving'
-        #self.unparking = False
+        self.parked = False
         # including a failure in 20% of cars
         failidx = len(self.ref)
-        chance = random.randint(0,100)
-        if not self.replan and chance <=25:
-            if len(self.ref)-1>4:
-                failidx = np.random.randint(low=4, high=len(self.ref)-1, size=1)
-                print('{0} will fail at: {1}'.format(self.name,failidx))
+        chance = random.randint(1,100) # changed to 0!!!
+        if not self.replan:
+            if len(self.ref)-1>4 and chance <=0:
+                failidx = np.random.randint(low=4, high=6, size=1)
+                if self.parking:
+                    print('{0} will fail at acceptable spot: {1}'.format(self.name,failidx))
+                else:
+                    print('{0} will fail in narrow path: {1}'.format(self.name,failidx))
+            elif len(self.ref)-1>10 and chance <=0:
+                failidx = np.random.randint(low=len(self.ref)-5, high=len(self.ref)-1, size=1)
+                if self.parking:
+                    print('{0} will fail in narrow path: {1}'.format(self.name,failidx))
+                else:
+                    print('{0} will fail at acceptable spot: {1}'.format(self.name,failidx))
+        # start tracking segments
         for i in range(0,len(self.ref)-1):
             #print('{0} self.unparking'.format(self.name))
             #print(self.unparking)
@@ -194,7 +234,13 @@ class Car(BoxComponent):
             if self.status == 'Replan':
                 return
             self.status = 'Completed'
+            self.is_at_pickup = self.check_at_pickup(Game)
+            if self.is_at_pickup:
+                self.retrieving = False
             self.last_segment = False
+            if self.check_if_car_is_in_spot(Game):
+                self.parked = True
+            self.parking = False
             await self.send_response(send_response_channel)
 
     async def send_response(self,send_response_channel):
@@ -223,6 +269,10 @@ class Car(BoxComponent):
         close = gme.is_car_close_2_spot(self)
         return close
 
+    def check_at_pickup(self,gme):
+        at_pickup = gme.is_car_at_pickup(self)
+        return at_pickup
+
     def check_path(self, gme):
         #print('Checking the path')
         clear, conflict_cars, failed, conflict, blocked = gme.check_car_path(self)
@@ -244,4 +294,7 @@ class Car(BoxComponent):
     async def run(self,send_response_channel,Game):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.update_planner_command,send_response_channel,Game)
+            if self.cancel:
+                print('Cancelling {0}'.format(self.name))
+                nursery.cancel_scope.cancel()
             await trio.sleep(0)

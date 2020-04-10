@@ -9,7 +9,7 @@ pedestrians_to_show = []
 ###
 average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate
-average_park_time = 250 # seconds
+average_park_time = 300 # seconds
 MAX_BUFFER_SIZE = np.inf
 MAX_NO_PARKING_SPOTS = 25
 OPEN_TIME = 500 # not yet working

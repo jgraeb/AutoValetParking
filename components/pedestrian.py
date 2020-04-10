@@ -38,7 +38,7 @@ class Pedestrian(BoxComponent):
         """
         The pedestrian advances forward
         """
-        await trio.sleep(0)
+        #await trio.sleep(0)
         if self.is_dead:
             if self.fig != self.medic:
                 self.fig = self.medic
@@ -53,7 +53,7 @@ class Pedestrian(BoxComponent):
             self.state[3] = int((self.state[3] + gait_change) % self.number_of_gaits)
             self.alive_time += self.dt
 
-    def extract_primitive(self):
+    async def extract_primitive(self):
        #TODO: rewrite the comment below
        """
        This function updates the primitive queue and picks the next primitive to be applied. When there is no more primitive in the queue, it will
@@ -69,13 +69,13 @@ class Pedestrian(BoxComponent):
        return False
 
     async def prim_next(self):
-        await trio.sleep(0)
-        if self.extract_primitive() == False: # if there is no primitive to use
+        #await trio.sleep(0)
+        if await self.extract_primitive() == False: # if there is no primitive to use
             await self.next((0, 0), self.dt)
         else:
-            prim_data, prim_progress = self.extract_primitive() # extract primitive data and primitive progress from prim
+            prim_data, prim_progress = await self.extract_primitive() # extract primitive data and primitive progress from prim
             start, finish, vee = prim_data # extract data from primitive
-            total_distance,_ = self.get_walking_displacement(start, finish)
+            total_distance,_ = await self.get_walking_displacement(start, finish)
             if prim_progress == 0: # ensure that starting position is correct at start of primitive
                 self.state[0] = start[0]
                 self.state[1] = start[1]
@@ -85,11 +85,11 @@ class Pedestrian(BoxComponent):
                 if self.prim_queue.len() > 1: # if current not at last primitive
                     last_prim_data, last_prim_progress = self.prim_queue.bottom() # extract last primitive
                     _, last_finish, vee = last_prim_data
-                    _,heading = self.get_walking_displacement(self.state, last_finish)
+                    _,heading = await self.get_walking_displacement(self.state, last_finish)
                     if self.state[2] != heading:
                         self.state[2] = heading
             else: # if in walking mode
-                remaining_distance,heading = self.get_walking_displacement(self.state,finish)
+                remaining_distance,heading = await self.get_walking_displacement(self.state,finish)
                 if self.state[2] != heading:
                     self.state[2] = heading
             if vee * self.dt > remaining_distance and remaining_distance != 0:
@@ -100,14 +100,14 @@ class Pedestrian(BoxComponent):
                 prim_progress += self.dt / (total_distance / vee)
             self.prim_queue.replace_top((prim_data, prim_progress)) # update primitive queue
             
-    def get_walking_displacement(self, start, finish):
+    async def get_walking_displacement(self, start, finish):
         dx = finish[0] - start[0]
         dy = finish[1] - start[1]
         distance = np.linalg.norm(np.array([dx, dy]))
         heading = np.arctan2(dy,dx)
         return distance, heading
 
-    def start_ped(self,start_walk, end_walk):
+    async def start_ped(self,start_walk, end_walk):
         print('Start Pedestrian')
         self.start_walk_lane = start_walk
         self.end_walk_lane = end_walk
@@ -121,7 +121,7 @@ class Pedestrian(BoxComponent):
             await trio.sleep(0)
 
     async def run(self, start_walk, end_walk):
-        self.start_ped(start_walk, end_walk)
+        await self.start_ped(start_walk, end_walk)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.ped_walk)
             await trio.sleep(0)

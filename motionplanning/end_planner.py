@@ -237,10 +237,10 @@ if __name__ == '__main__':
             planning_graph = pickle.load(f)
         end_planner = EndPlanner(planning_graph=planning_graph,end_states=end_states,contract=contract)
         planning_graph = end_planner.get_planning_graph()
-        with open('planning_graph_refined.pkl', 'wb') as f:
+        with open('planning_graph_lanes.pkl', 'wb') as f:
             pickle.dump(planning_graph, f)
     else:
-        with open('planning_graph_refined.pkl', 'rb') as f:
+        with open('planning_graph_lanes.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
         edge_info = planning_graph['edge_info']
         simple_graph = planning_graph['graph']
@@ -276,8 +276,10 @@ if __name__ == '__main__':
                         coords = []
                         start = ps[-2]
                         end = ps[-1]
-                        traj, _ = astar_trajectory(simple_graph, start, end)
+                        traj, weight = astar_trajectory(simple_graph, start, end)
                         #print(traj)
+                        print(weight)
+                        st()
                         # while not complete_path_is_safe(traj):
                         #     safe_subpath, safe_start = longest_safe_subpath(traj)
                         #      # TODO: not sure how to generate the path
@@ -287,6 +289,7 @@ if __name__ == '__main__':
                             #print('Start'+str(start))
                             #print(end)
                             segment = segment_to_mpc_inputs(start, end, edge_info)
+                            print(segment)
                             plt.plot(segment[0,0], segment[0,1], 'b.')
                             plt.plot(segment[-1,0], segment[-1,1], 'rx')
                             plt.plot(segment[:,0], segment[:,1], 'k--')

@@ -381,15 +381,17 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
     return xref, ind, dref
 
 
-def check_goal(state, goal, tind, nind,goalspeed):
+def check_goal(state, goal, tind, nind,goalspeed, last_segment):
 
     # check goal
     dx = state.x - goal[0]
     dy = state.y - goal[1]
     d = math.sqrt(dx ** 2 + dy ** 2)
 
-    isgoal = (d <= GOAL_DIS)
-
+    if not last_segment:
+        isgoal = (d <= GOAL_DIS)
+    else: 
+        isgoal = (d <= 1)
     if abs(tind - nind) >= 5:
         isgoal = False
     # modified

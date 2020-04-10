@@ -5,7 +5,7 @@ sys.path.append('..') # enable importing modules from an upper directory:
 from prepare.communication import *
 from variables.global_vars import *
 # import components
-#from components.boxcomponent import BoxComponent
+# from components.boxcomponent import BoxComponent
 from components.game import Game
 from components.simulation import Simulation
 from components.map  import Map
