@@ -47,10 +47,10 @@ extraj2 = np.array([[ 39, 129, 120,   0],
 
 
 
-try:
-    import cubic_spline_planner
-except:
-    raise
+# try:
+#     import cubic_spline_planner
+# except:
+#     raise
 #mod
 TOL = 0.5
 BACK_TARGET_SPEED = -10.0 / 3.6  # [m/s] target speed
