@@ -27,12 +27,13 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from component import parking_lot
 from variables.global_vars import *
-from variables.parking_data import parking_spots
+from variables.parking_data import parking_spots, grey_cars
 import components
 import component.pedestrian as Pedestrian
     
+add_parked_cars = True
 # set to True to save video
-save_video = True
+save_video = False
 # creates figure
 fig = plt.figure()
 ax = fig.add_axes([0,0,1,1]) # get rid of white border
@@ -107,6 +108,12 @@ def animate(frame_idx): # update animation by dt
                 break
     
     # update background
+    if add_parked_cars:
+        for key,value in grey_cars.items():
+            xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
+            yd = int(value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset)
+            hd = np.deg2rad(-value[2])
+            draw_grey_car(background,float(xd),float(yd),float(hd))
     the_parking_lot = [ax.imshow(background)] # update the stage
     background.close()
     background = parking_lot.get_background()

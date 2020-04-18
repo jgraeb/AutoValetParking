@@ -17,6 +17,9 @@ dir_path = os.path.dirname(os.path.realpath("__file__"))
 car_fig = os.path.dirname(dir_path) + '/imglib/blue_car.png'
 vehicle_fig = Image.open(car_fig)
 
+gray_car_fig = os.path.dirname(dir_path) + '/imglib/gray_car.png'
+gray_vehicle_fig = Image.open(gray_car_fig)
+
 car_scale_factor = 0.2
 center_to_axle_dist = 200
 
@@ -73,6 +76,22 @@ def draw_car(background,x,y,theta):
     # at (full scale) the relative coordinates of the center of the rear axle w.r.t. the center of the figure is center_to_axle_dist
     x_corner, y_corner = find_corner_coordinates(-car_scale_factor * center_to_axle_dist, 0, x, y, theta, vehicle_fig)
     background.paste(vehicle_fig, (x_corner, y_corner), vehicle_fig)
+    #background.paste(vehicle_fig, (x, y), vehicle_fig)
+
+def draw_grey_car(background,x,y,theta):
+    gray_vehicle_fig = Image.open(gray_car_fig)
+    w_orig, h_orig = gray_vehicle_fig.size
+    # convert angle to degrees and positive counter-clockwise
+    theta_d = -theta/np.pi * 180
+    # set expand=True so as to disable cropping of output image
+    gray_vehicle_fig = gray_vehicle_fig.rotate(theta_d, expand = False)
+    scaled_vehicle_fig_size  =  tuple([int(car_scale_factor * i) for i in gray_vehicle_fig.size])
+    # rescale car 
+    gray_vehicle_fig = gray_vehicle_fig.resize(scaled_vehicle_fig_size, Image.ANTIALIAS)
+    
+    # at (full scale) the relative coordinates of the center of the rear axle w.r.t. the center of the figure is center_to_axle_dist
+    x_corner, y_corner = find_corner_coordinates(-car_scale_factor * center_to_axle_dist, 0, x, y, theta, gray_vehicle_fig)
+    background.paste(gray_vehicle_fig, (x_corner, y_corner), gray_vehicle_fig)
     #background.paste(vehicle_fig, (x, y), vehicle_fig)
     
 def draw_pedestrian(pedestrian,background):

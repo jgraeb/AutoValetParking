@@ -39,7 +39,7 @@ class Game(BoxComponent):
                 await self.out_channels['ExitSim'].send(car)
                 print('Game System - Removing car from Game')
                 self.cars.remove(car)
-                car.cancel = True
+                #car.cancel = True
 
 
     async def keep_track_influx_peds(self):
