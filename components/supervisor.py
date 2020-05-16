@@ -4,7 +4,7 @@ import random
 from variables.global_vars import *
 from components.pedestrian import Pedestrian
 from components.planner import Planner
-from variables.parking_data import parking_spots
+from variables.parking_data import bad_parking_spot as parking_spots
 from ipdb import set_trace as st
 
 class Supervisor(BoxComponent):
@@ -14,7 +14,7 @@ class Supervisor(BoxComponent):
         self.cars = dict()
         self.nursery = nursery
         self.spot_no = len(list(parking_spots.keys()))
-        self.parking_spots = dict([ (i, ("Vacant", "None")) for i in list(parking_spots.keys()) ])
+        self.parking_spots = dict([(i, ("Vacant", "None")) for i in list(parking_spots.keys())])
         self.failures = dict()
         self.priority = dict()
         self.conflicts = []
