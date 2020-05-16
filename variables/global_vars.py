@@ -11,7 +11,7 @@ average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate
 average_park_time = 300 # seconds
 MAX_BUFFER_SIZE = np.inf
-MAX_NO_PARKING_SPOTS = 25
+MAX_NO_PARKING_SPOTS = 1#25
 OPEN_TIME = 500 # not yet working
 TARGET_SPEED = 10/3.6 # 10 km/h
 meters = 90
@@ -32,3 +32,6 @@ end_walk_lane = (3412,509)
 start_walk_lane_2 = (458,2090)
 end_walk_lane_2 = (3428,2090)
 TOW_TIME = 100
+DELAY_THRESH = 100
+# sim
+ids = []

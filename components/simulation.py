@@ -70,7 +70,7 @@ class Simulation(BoxComponent):
         f = open('car_pos_new.txt','a')
         f.write('FRAME'+str(ind)+'\n')
         for car in self.cars: 
-            draw_car(self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw)
+            draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,car)
             f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
         f.close()
         # to check parking spot locations
@@ -81,7 +81,7 @@ class Simulation(BoxComponent):
 #                print(value[0], value[1])
 #                print(xd, yd)
                 hd = np.deg2rad(-value[2])
-                draw_car(self.background,xd,yd,hd)
+                draw_car(self.ax,self.background,xd,yd,hd) # without car
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
         self.background = parking_lot.get_background()

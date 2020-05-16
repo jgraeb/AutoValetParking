@@ -30,7 +30,7 @@ class Map(BoxComponent):
     async def rmv_car_from_map(self):
         async with self.in_channels['Exit']:
             async for car in self.in_channels['Exit']:
-                print('Map System - Removing {} from Map'.format(car.name))
+                print('Map System - Removing {0} from Map'.format(car.name))
                 self.car_positions.pop(car.name)
                 #print(self.car_positions)
 

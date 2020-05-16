@@ -18,6 +18,7 @@ class Supervisor(BoxComponent):
         self.failures = dict()
         self.priority = dict()
         self.conflicts = []
+        self.counter = 0
 
     async def send_directive_to_planner(self, car,ref):
         directive = [car,ref]
@@ -33,7 +34,9 @@ class Supervisor(BoxComponent):
                     if (status[0] == 'Assigned') and not car.replan:
                         self.parking_spots[spot]=(('Occupied',car.name))
                         self.cars.update({car.name: 'Parked'})
-                    elif car.is_at_pickup: #(status[0] == 'Occupied') and not car.replan and
+                    elif car.is_at_pickup:
+                        print('Supervisor - Car {0} is picked up'.format(car.name))
+                        car.requested = False
                         self.parking_spots[spot]=(('Vacant','None'))
                         await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1
@@ -43,6 +46,9 @@ class Supervisor(BoxComponent):
                         car.cancel = True
                     elif not car.is_at_pickup and self.cars.get(car.name)=='Requested':
                         await self.send_directive_to_planner(car, 'Pickup')
+
+    async def reserve_reverse_area(self, car):
+        await self.send_directive_to_planner(car, 'ReserveReverse')
 
     async def update_planner_response(self,Planner):
         async with self.in_channels['Planner']:
@@ -82,18 +88,29 @@ class Supervisor(BoxComponent):
                     elif self.cars.get(car.name)=='Requested':
                         #await self.send_directive_to_planner(car,('Wait'))
                         print('Wait until resolved')
+                elif resp == 'RequestReservedArea':
+                    #car.reserved = True
+                    print("Car ID {0} has delay: {1} - Reserving Area".format(car.id,car.delay))
+                    await self.reserve_reverse_area(car)
                 elif resp[0] == 'Conflict':
-                    print(self.priority)
-                    prio_1 = self.priority.get(car.name)
+                    #print(self.priority)
+                    prio_car = self.priority.get(car.name)
                     car_list = resp[1]
                     for cars in car_list:
                         prio = self.priority.get(cars.name)
                         if car.unparking and not cars.unparking:
-                            print('Opposed car has priority')
-                            await self.send_directive_to_planner(car,('Back2spot'))
-                            self.conflicts.append(car)
+                            print("{0} delay: {1}".format(car.name,car.delay))
+                            if car.delay <= DELAY_THRESH:
+                                print('Opposed car has priority ID {0}'.format(cars.id))
+                                await self.send_directive_to_planner(car,('Back2spot'))
+                                self.conflicts.append(car)
+                            else:
+                                print('Opposed car has priority {0} - Delay high, Reserve Unparking Area Next'.format(cars.id))
+                                await self.send_directive_to_planner(car,('Back2spot'))
+                                await self.reserve_reverse_area(car)
+                                #car.reserved = True
                         elif cars.unparking and not car.unparking:
-                            print('{0} has priority'.format(car.name))
+                            print('{0} has priority, ID {1}'.format(car.name,car.id))
                         # elif prio>prio_1:
                         #     print('Opposed car has priority')
                         #     #await self.send_directive_to_planner(car,('Reverse'))
@@ -107,9 +124,9 @@ class Supervisor(BoxComponent):
                         else:
                             print('Conflict resolving by ID')
                             if id(car)>id(cars):
-                                print('{0} has priority'.format(car.name))
+                                print('{0} has priority, ID {1}'.format(car.name,car.id))
                             else:
-                                print('Opposed car has priority')
+                                print('Opposed car has priority {0}'.format(cars.id))
                                 if car.unparking:
                                     await self.send_directive_to_planner(car,('Back2spot'))
                                     self.conflicts.append(car)
@@ -151,6 +168,8 @@ class Supervisor(BoxComponent):
                 accept_condition = True
             if accept_condition:
                 print('{} has been accepted!'.format(car.name))
+                car.id = self.counter
+                self.counter=self.counter+1
                 await self.out_channels['Customer'].send(True)
                 self.spot_no=self.spot_no-1
                 await self.out_channels['GameEnter'].send(car)
@@ -173,6 +192,7 @@ class Supervisor(BoxComponent):
             self.priority.update({car.name: '1'})
             self.cars.update({car.name: 'Requested'})
             car.retrieving = True
+            car.requested = True
             for key, value in self.parking_spots.items(): 
                 if value == ('Assigned',car.name) or value == ('Occupied',car.name): 
                     val = key
@@ -192,7 +212,7 @@ class Supervisor(BoxComponent):
             print('Adding random pedestrian')
 
 
-    async def run(self, Planner):
+    async def run(self, Planner, Time):
         print(self.parking_spots)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.process_queue, Planner)

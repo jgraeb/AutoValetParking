@@ -31,9 +31,9 @@ from variables.parking_data import parking_spots, grey_cars
 import components
 import component.pedestrian as Pedestrian
     
-add_parked_cars = True
+add_parked_cars = False
 # set to True to save video
-save_video = False
+save_video = True
 # creates figure
 fig = plt.figure()
 ax = fig.add_axes([0,0,1,1]) # get rid of white border
@@ -76,7 +76,15 @@ def animate(frame_idx): # update animation by dt
         for car in car_at_this_frame:
              car = car.split(' ')     
              try:
-                 draw_car(background, float(car[0])*SCALE_FACTOR_SIM,float(car[1])*SCALE_FACTOR_SIM+yoffset,float(car[2]))
+                 draw_car(ax,background, float(car[0])*SCALE_FACTOR_SIM,float(car[1])*SCALE_FACTOR_SIM+yoffset,float(car[2]))
+                 if add_parked_cars:
+                    for key,value in grey_cars.items():
+                        xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
+                        yd = int(value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset)
+                        hd = np.deg2rad(-value[2])
+                        draw_grey_car(background,float(xd),float(yd),float(hd))
+                    #if frame_idx ==1:
+                        # save the image
              except EOFError:
                  break    
         f.close() 
@@ -108,12 +116,12 @@ def animate(frame_idx): # update animation by dt
                 break
     
     # update background
-    if add_parked_cars:
-        for key,value in grey_cars.items():
-            xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
-            yd = int(value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset)
-            hd = np.deg2rad(-value[2])
-            draw_grey_car(background,float(xd),float(yd),float(hd))
+    # if add_parked_cars:
+    #     for key,value in grey_cars.items():
+    #         xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
+    #         yd = int(value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset)
+    #         hd = np.deg2rad(-value[2])
+    #         draw_grey_car(background,float(xd),float(yd),float(hd))
     the_parking_lot = [ax.imshow(background)] # update the stage
     background.close()
     background = parking_lot.get_background()

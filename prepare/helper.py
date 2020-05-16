@@ -12,6 +12,7 @@ import random
 from PIL import Image
 from numpy import cos, sin, pi
 from component import parking_lot
+from variables import global_vars
 
 dir_path = os.path.dirname(os.path.realpath("__file__"))
 car_fig = os.path.dirname(dir_path) + '/imglib/blue_car.png'
@@ -62,7 +63,7 @@ def find_corner_coordinates(x_state_center_before, y_state_center_before, x_desi
     y_corner_unknown = int(y_desired - y_state_center_after + y_corner_center_after)
     return x_corner_unknown, y_corner_unknown
 
-def draw_car(background,x,y,theta):
+def draw_car(ax, background,x,y,theta,car = None):
     vehicle_fig = Image.open(car_fig)
     w_orig, h_orig = vehicle_fig.size
     # convert angle to degrees and positive counter-clockwise
@@ -77,6 +78,9 @@ def draw_car(background,x,y,theta):
     x_corner, y_corner = find_corner_coordinates(-car_scale_factor * center_to_axle_dist, 0, x, y, theta, vehicle_fig)
     background.paste(vehicle_fig, (x_corner, y_corner), vehicle_fig)
     #background.paste(vehicle_fig, (x, y), vehicle_fig)
+    if car:
+        ax.text(x_corner,y_corner,str(car.id), color='w', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='red', alpha=0.2), fontsize=5)
+
 
 def draw_grey_car(background,x,y,theta):
     gray_vehicle_fig = Image.open(gray_car_fig)

@@ -26,6 +26,7 @@ class Planner(BoxComponent):
         self.planning_graph_in_use = []
         self.lanes_box = Polygon([(150,50),(150,230),(230,230),(230,50),(150,50)])
         self.reachable = np.ones((max(list(parking_spots.keys()))+1,1)) # if spots can be reached from drop_off, currently all reachable
+        self.reserved_areas = dict()
 
     async def get_car_position(self,car):
         print('Planner - Sending position request to Map system')
@@ -38,7 +39,7 @@ class Planner(BoxComponent):
 
     async def send_directive_to_car(self, car, end,Game):
         if end == 'Reverse':
-            end = (car.x/SCALE_FACTOR_PLAN+car.direction*10, car.y/SCALE_FACTOR_PLAN+car.direction*10, car.yaw, 0)
+            end = (car.x/SCALE_FACTOR_PLAN+-car.direction*10, car.y/SCALE_FACTOR_PLAN+-car.direction*10, car.yaw, 0)
             print('Car moving out of the way to: '+str(end))
         pos = await self.get_car_position(car)
         start = np.zeros(4)
@@ -169,6 +170,8 @@ class Planner(BoxComponent):
                             await self.send_directive_to_car(car, PICK_UP, Game)
                     else:
                         print('No way to plan around the failure - {0} must wait'.format(car.name))
+                elif resp=='RequestReservedArea':
+                    await self.send_response_to_supervisor((resp,car))
                 elif resp[0]=='Conflict':
                     await self.send_response_to_supervisor((resp,car))
                 await trio.sleep(0)
@@ -183,15 +186,15 @@ class Planner(BoxComponent):
         await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
     
-    async def check_supervisor(self,send_response_channel,Game):
+    async def check_supervisor(self,send_response_channel,Game, Time):
         async for directive in self.in_channels['Supervisor']:
             car = directive[0]
             todo = directive[1]
             if todo[0] == 'Park':
-                print('Planner - receiving directive from Supervisor to park {0} in Lot {1}'.format(car.name,todo[1]))
+                print('Planner - receiving directive from Supervisor to park {0} in Spot {1}'.format(car.name,todo[1]))
                 self.cars.update({car.name: 'Assigned'})
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
-                self.nursery.start_soon(car.run,send_response_channel,Game)
+                self.nursery.start_soon(car.run,send_response_channel,Game, Time)
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end, Game)
@@ -211,22 +214,25 @@ class Planner(BoxComponent):
                 await self.send_directive_to_car(car, todo,Game)
             elif todo == 'Reverse':
                 print('Planner - {0} has to drive out of the way'.format(car.name))
-                await self.send_directive_to_car(car, todo,Game)
+                #await self.send_directive_to_car(car, todo,Game)
+                await self.out_channels[car.name].send('Reverse')
             elif todo == 'Back2spot':
                 print('Planner - {0} has to drive back into the spot to make space'.format(car.name))
                 car.status = 'Replan'
                 car.replan = True
-                for key, val in self.spots.items(): 
-                    if val == car.name: 
-                        spot = key
-                end = self.find_spot_coordinates(spot)
+                # for key, val in self.spots.items(): 
+                #     if val == car.name: 
+                #         spot = key
+                # end = self.find_spot_coordinates(spot)
                 #await self.send_directive_to_car(car, end,Game)
                 await self.out_channels[car.name].send('Back2spot')
+            elif todo == 'ReserveReverse':
+                Res_Area = Game.reserve_reverse(car)
+                self.reserved_areas.update({car.name: Res_Area})
 
     def is_failure_in_acceptable_area(self,gme):
         is_acceptable = gme.is_failure_acceptable(self.obstacles)
         return is_acceptable
-
 
     def check_reachability(self,spot):
         if self.reachable[spot]:
@@ -234,7 +240,7 @@ class Planner(BoxComponent):
         else:
             return False
 
-    async def run(self,Game):
+    async def run(self,Game, Time):
         sys.path.append('../motionplanning')
         with open('planning_graph_lanes.pkl', 'rb') as f:
             self.original_lanes_planning_graph = pickle.load(f)
@@ -243,6 +249,6 @@ class Planner(BoxComponent):
         self.planning_graph = self.original_lanes_planning_graph
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.check_supervisor,send_response_channel,Game)
+            nursery.start_soon(self.check_supervisor,send_response_channel,Game, Time)
             await trio.sleep(1)
             nursery.start_soon(self.update_car_response,receive_response_channel,Game)
