@@ -9,9 +9,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
 if __name__ == '__main__':
-    from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory, waypoints_to_headings
+    from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
+    get_tube_for_lines, point_set_is_safe, compute_edge_weight,
+    astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
 else:
-    from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory,waypoints_to_headings
+    try:
+        from motionplanning.tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
+        get_tube_for_lines, point_set_is_safe, compute_edge_weight,
+        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+    except:
+        from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
+        get_tube_for_lines, point_set_is_safe, compute_edge_weight,
+        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
 import cv2
 import sys
 sys.path.append('..')
@@ -50,26 +59,47 @@ class EndPlanner:
         self.graph = planning_graph['graph']
         self.edge_info = planning_graph['edge_info']
         self.end_states = end_states
+        self.node_to_edge_map = planning_graph['node_to_edge_map']
+        self.all_nodes = planning_graph['all_nodes']
         self.contract = contract
     def get_planning_graph(self):
+        end_state_weight_penalty = 1000
         the_planning_graph = dict()
         for idx, end_state in enumerate(self.end_states):
             print('planning graph progress: {0:.1f}%'.format(idx/(len(self.end_states)-1)*100))
             for assume_state in self.graph._nodes:
                 if self.contract.check_assumption(assume_state=assume_state, end_state=end_state):
                     node_sequence = self.contract.guart.generate_guarantee(assume_state, end_state)
-                    self.graph.add_edges([[assume_state, end_state, compute_sequence_weight(node_sequence)]])
+                    edge = convert_to_edge_dict(assume_state, end_state, node_sequence)
+                    self.graph.add_edges([[assume_state, end_state,
+                        end_state_weight_penalty + compute_edge_weight(edge)]])
                     self.edge_info[assume_state, end_state] = node_sequence
+                    for node in node_sequence:
+                        if node in self.node_to_edge_map:
+                            self.node_to_edge_map[node].add((assume_state, end_state))
+                        else:
+                            self.node_to_edge_map[node] = {(assume_state, end_state)}
+                        self.all_nodes.add(node)
                     if assume_state[3] == 0: # assume state is stopping
                         # add reverse
                         reversed_node_sequence = node_sequence[::-1]
-                        self.graph.add_edges([[end_state, assume_state, compute_sequence_weight(reversed_node_sequence)]])
+                        edge = convert_to_edge_dict(assume_state, end_state, reversed_node_sequence)
+                        self.graph.add_edges([[end_state,
+                            assume_state, end_state_weight_penalty + compute_edge_weight(edge)]])
                         self.edge_info[end_state, assume_state] = reversed_node_sequence
+                        for node in reversed_node_sequence:
+                            if node in self.node_to_edge_map:
+                                self.node_to_edge_map[node].add((end_state, assume_state))
+                            else:
+                                self.node_to_edge_map[node] = {(end_state, assume_state)}
+                            self.all_nodes.add(node)
         coverage = sum([int(end_state in self.graph._nodes) for end_state in self.end_states])/len(self.end_states)
         print('end state coverage is {0:.1f}%'.format(coverage*100))
         the_planning_graph['graph'] = self.graph
         the_planning_graph['edge_info'] = self.edge_info
         the_planning_graph['end_states'] = self.end_states
+        the_planning_graph['node_to_edge_map'] = self.node_to_edge_map
+        the_planning_graph['all_nodes'] = self.all_nodes
         return the_planning_graph
 
 class EndStateContract:
@@ -150,29 +180,19 @@ class TwoPointTurnGuarantee(PrimitiveGuarantee):
         end_loc = np.array([[end_state[0], end_state[1]]]).transpose()
         intersect_params = np.matmul(np.linalg.inv(dir_mat), (end_loc - assume_loc))
         intersect = assume_loc + intersect_params[0] * assume_dir
-        node_sequence = [[int(assume_loc[0]), int(assume_loc[1])],
-                         [int(intersect[0]), int(intersect[1])],
-                         [int(end_loc[0]), int(end_loc[1])]]
+        node_sequence = [(int(assume_loc[0]), int(assume_loc[1])),
+                         (int(intersect[0]), int(intersect[1])),
+                         (int(end_loc[0]), int(end_loc[1]))]
         return node_sequence
 
-def segment_to_mpc_inputs(start, end, edge_info_dict):
-    waypoints = edge_info_dict[tuple(start), tuple(end)]
-    initial_heading = start[2]
-    headings = waypoints_to_headings(waypoints, initial_heading)
-    mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
-    return mpc_inputs
 
-def update_plannning_graph(planning_graph, del_nodes):
+def update_planning_graph(planning_graph, del_nodes):
     new_planning_graph = cp.deepcopy(planning_graph)
     del_edges = []
     for node in del_nodes:
-        assert node in new_planning_graph['graph']._nodes
-        if node in new_planning_graph['graph']._predecessors:
-            for from_node in new_planning_graph['graph']._predecessors[node]:
-                del_edges.append((from_node, node))
-        if node in new_planning_graph['graph']._edges:
-            for to_node in new_planning_graph['graph']._edges:
-                del_edges.append((node, to_node))
+        if node in planning_graph['node_to_edge_map']:
+            for edge in planning_graph['node_to_edge_map'][node]:
+                del_edges.append((edge))
     for edge in del_edges:
         new_planning_graph['graph']._weights[edge] = np.inf
     return new_planning_graph
@@ -225,7 +245,7 @@ def longest_safe_subpath(traj):
 
 # TODO: make separate planner class
 if __name__ == '__main__':
-    remap = False
+    remap = True
     if remap:
         end_states = find_end_states_from_image('AVP_planning_300p_end_states')
         print(end_states)
@@ -279,7 +299,6 @@ if __name__ == '__main__':
                         traj, weight = astar_trajectory(simple_graph, start, end)
                         #print(traj)
                         print(weight)
-                        st()
                         # while not complete_path_is_safe(traj):
                         #     safe_subpath, safe_start = longest_safe_subpath(traj)
                         #      # TODO: not sure how to generate the path
