@@ -174,12 +174,12 @@ def update_planning_graph(planning_graph, del_nodes):
     new_planning_graph = cp.deepcopy(planning_graph)
     del_edges = []
     for node in del_nodes:
-        assert node in new_planning_graph['graph']._nodes
-        if node in new_planning_graph['graph']._predecessors:
-            for from_node in new_planning_graph['graph']._predecessors[node]:
+        assert node in planning_graph['graph']._nodes
+        if node in planning_graph['graph']._predecessors:
+            for from_node in planning_graph['graph']._predecessors[node]:
                 del_edges.append((from_node, node))
-        if node in new_planning_graph['graph']._edges:
-            for to_node in new_planning_graph['graph']._edges:
+        if node in planning_graph['graph']._edges:
+            for to_node in planning_graph['graph']._edges:
                 del_edges.append((node, to_node))
     for edge in del_edges:
         new_planning_graph['graph']._weights[edge] = np.inf

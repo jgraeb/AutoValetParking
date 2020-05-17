@@ -10,6 +10,7 @@ import traceback
 import logging
 import end_planner
 NODES_TO_DELETE = [(170, 90, 90, 0), (170, 90, -90, 0), (170, 90, -90, 10), (170, 100, 90, 0), (170, 90, 180, 0), (170, 90, 0, 0), (170, 100, -90, 0), (170, 100, -90, 10), (170, 90, 0, 10), (170, 90, 90, 10), (170, 100, 180, 0), (170, 100, 0, 0), (170, 100, 0, 10), (170, 100, 90, 10), (170, 90, 180, 10), (170, 100, 180, 10)]
+NODES_TO_DELETE = [(170, 90, 90, 0), (170, 90, -90, 0), (170, 90, -90, 10), (170, 100, 90, 0), (170, 90, 180, 0), (170, 90, 0, 0), (170, 100, -90, 0), (170, 100, -90, 10), (170, 90, 0, 10), (170, 90, 90, 10), (170, 100, 180, 0), (170, 100, 0, 0), (170, 100, 0, 10), (170, 100, 90, 10), (170, 90, 180, 10), (170, 100, 180, 10)]
 
 with open('planning_graph_lanes.pkl', 'rb') as f:
     planning_graph = pickle.load(f)
@@ -54,8 +55,10 @@ def onclick(event):
                 start = ps[-2]
                 end = ps[-1]
                 traj, weight = astar_trajectory(simple_graph, start, end)
+                if weight == np.inf:
+                    ValueError('path weight is infinite!')
                 #print(traj)
-                print(weight)
+                print('the path weight is ' + str(weight))
                 # while not complete_path_is_safe(traj):
                 #     safe_subpath, safe_start = longest_safe_subpath(traj)
                 #      # TODO: not sure how to generate the path
@@ -74,9 +77,7 @@ def onclick(event):
                 print('click to set desired xy')
                 clickok = True
                 plt.show()
-            except NameError as e:
-                print(e)
-            except Exception as e:
+            except Exception:
                 logging.error(traceback.format_exc())
                 clickok = True
                 print('CANNOT FIND TRAJECTORY: click again to set xy!')
