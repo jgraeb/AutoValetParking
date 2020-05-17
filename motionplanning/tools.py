@@ -193,3 +193,9 @@ def csv_bitmap_to_numpy_bitmap(file_name):
         np_bitmap = np.array(list(csv.reader(f, delimiter=','))).astype('bool')
     return np_bitmap
 
+def convert_to_edge_dict(start_node, end_node, node_sequence):
+    edge = dict()
+    edge['node_sequence'] = node_sequence
+    edge['start_node'] = start_node
+    edge['end_node'] = end_node
+    return edge

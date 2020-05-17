@@ -9,9 +9,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
 if __name__ == '__main__':
-    from tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory, waypoints_to_headings
+    from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
+    get_tube_for_lines, point_set_is_safe, compute_edge_weight,
+    astar_trajectory, waypoints_to_headings, convert_to_edge_dict)
 else:
-    from motionplanning.tools import constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe, compute_sequence_weight, astar_trajectory,waypoints_to_headings
+    from motionplanning.tools import (constrain_heading_to_pm_180,
+    img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe,
+    compute_sequence_weight, astar_trajectory,waypoints_to_headings)
 import cv2
 import sys
 sys.path.append('..')
@@ -52,18 +56,23 @@ class EndPlanner:
         self.end_states = end_states
         self.contract = contract
     def get_planning_graph(self):
+        end_state_weight_scaling_factor = 10
         the_planning_graph = dict()
         for idx, end_state in enumerate(self.end_states):
             print('planning graph progress: {0:.1f}%'.format(idx/(len(self.end_states)-1)*100))
             for assume_state in self.graph._nodes:
                 if self.contract.check_assumption(assume_state=assume_state, end_state=end_state):
                     node_sequence = self.contract.guart.generate_guarantee(assume_state, end_state)
-                    self.graph.add_edges([[assume_state, end_state, compute_sequence_weight(node_sequence)]])
+                    edge = convert_to_edge_dict(assume_state, end_state, node_sequence)
+                    self.graph.add_edges([[assume_state, end_state,
+                        end_state_weight_scaling_factor * compute_edge_weight(edge)]])
                     self.edge_info[assume_state, end_state] = node_sequence
                     if assume_state[3] == 0: # assume state is stopping
                         # add reverse
                         reversed_node_sequence = node_sequence[::-1]
-                        self.graph.add_edges([[end_state, assume_state, compute_sequence_weight(reversed_node_sequence)]])
+                        edge = convert_to_edge_dict(assume_state, end_state, reversed_node_sequence)
+                        self.graph.add_edges([[end_state,
+                            assume_state, end_state_weight_scaling_factor * compute_edge_weight(edge)]])
                         self.edge_info[end_state, assume_state] = reversed_node_sequence
         coverage = sum([int(end_state in self.graph._nodes) for end_state in self.end_states])/len(self.end_states)
         print('end state coverage is {0:.1f}%'.format(coverage*100))
@@ -279,7 +288,6 @@ if __name__ == '__main__':
                         traj, weight = astar_trajectory(simple_graph, start, end)
                         #print(traj)
                         print(weight)
-                        st()
                         # while not complete_path_is_safe(traj):
                         #     safe_subpath, safe_start = longest_safe_subpath(traj)
                         #      # TODO: not sure how to generate the path
