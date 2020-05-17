@@ -15,7 +15,7 @@ import json
 from collections import OrderedDict as od
 from ipdb import set_trace as st
 from prim_json_maker import import_json
-from tools import rotate_vector, reflect_over_x_axis, constrain_heading_to_pm_180, manhattan_distance, img_to_csv_bitmap, get_tube_for_lines, get_ball_neighbors, in_range, point_set_is_safe, compute_edge_weight, astar_trajectory
+from tools import rotate_vector, reflect_over_x_axis, constrain_heading_to_pm_180, img_to_csv_bitmap, get_tube_for_lines, get_ball_neighbors, in_range, point_set_is_safe, compute_edge_weight, astar_trajectory
 
 class Node:
     def __init__(self, x, y, heading, v):
