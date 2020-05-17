@@ -228,6 +228,7 @@ class Car(BoxComponent):
         # if self.depart_time + Time.START_TIME <= now:
         #     self.delay = (now-Time.START_TIME)-self.depart_time
         print('{0} - Tracking reference...'.format(self.name))
+        #print(self.ref)
         # print("deptime"+str(self.depart_time))
         # print("car.delay"+str(self.delay))
         # print("now"+str(now))

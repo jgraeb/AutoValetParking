@@ -80,11 +80,15 @@ class Game(BoxComponent):
     
     def update_reserved_areas(self):
         items_to_delete=[]
+        skip_line = False
         for key_req,val_req in self.reserved_areas_requested.items():
             accept = True
+            if skip_line:
+                break
             for key,val in self.reserved_areas.items():
                 if val_req.intersects(val):
                     accept = False
+                    skip_line = True
             if accept:
                 self.reserved_areas.update({key_req: val_req})
                 items_to_delete.append(key_req)
