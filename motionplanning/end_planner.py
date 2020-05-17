@@ -56,7 +56,7 @@ class EndPlanner:
         self.end_states = end_states
         self.contract = contract
     def get_planning_graph(self):
-        end_state_weight_scaling_factor = 10
+        end_state_weight_penalty = 1000
         the_planning_graph = dict()
         for idx, end_state in enumerate(self.end_states):
             print('planning graph progress: {0:.1f}%'.format(idx/(len(self.end_states)-1)*100))
@@ -65,14 +65,14 @@ class EndPlanner:
                     node_sequence = self.contract.guart.generate_guarantee(assume_state, end_state)
                     edge = convert_to_edge_dict(assume_state, end_state, node_sequence)
                     self.graph.add_edges([[assume_state, end_state,
-                        end_state_weight_scaling_factor * compute_edge_weight(edge)]])
+                        end_state_weight_penalty + compute_edge_weight(edge)]])
                     self.edge_info[assume_state, end_state] = node_sequence
                     if assume_state[3] == 0: # assume state is stopping
                         # add reverse
                         reversed_node_sequence = node_sequence[::-1]
                         edge = convert_to_edge_dict(assume_state, end_state, reversed_node_sequence)
                         self.graph.add_edges([[end_state,
-                            assume_state, end_state_weight_scaling_factor * compute_edge_weight(edge)]])
+                            assume_state, end_state_weight_penalty + compute_edge_weight(edge)]])
                         self.edge_info[end_state, assume_state] = reversed_node_sequence
         coverage = sum([int(end_state in self.graph._nodes) for end_state in self.end_states])/len(self.end_states)
         print('end state coverage is {0:.1f}%'.format(coverage*100))
