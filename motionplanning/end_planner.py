@@ -11,7 +11,7 @@ from ipdb import set_trace as st
 if __name__ == '__main__':
     from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
     get_tube_for_lines, point_set_is_safe, compute_edge_weight,
-    astar_trajectory, waypoints_to_headings, convert_to_edge_dict)
+    astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
 else:
     from motionplanning.tools import (constrain_heading_to_pm_180,
     img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe,
@@ -164,12 +164,6 @@ class TwoPointTurnGuarantee(PrimitiveGuarantee):
                          [int(end_loc[0]), int(end_loc[1])]]
         return node_sequence
 
-def segment_to_mpc_inputs(start, end, edge_info_dict):
-    waypoints = edge_info_dict[tuple(start), tuple(end)]
-    initial_heading = start[2]
-    headings = waypoints_to_headings(waypoints, initial_heading)
-    mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
-    return mpc_inputs
 
 def update_plannning_graph(planning_graph, del_nodes):
     new_planning_graph = cp.deepcopy(planning_graph)
@@ -234,7 +228,7 @@ def longest_safe_subpath(traj):
 
 # TODO: make separate planner class
 if __name__ == '__main__':
-    remap = False
+    remap = True
     if remap:
         end_states = find_end_states_from_image('AVP_planning_300p_end_states')
         print(end_states)

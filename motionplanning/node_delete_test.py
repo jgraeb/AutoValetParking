@@ -1,0 +1,77 @@
+# Tung M. Phan
+# California Institute of Technology
+# March 5th, 2020
+import _pickle as pickle
+import matplotlib.pyplot as plt
+import numpy as np
+from ipdb import set_trace as st
+from tools import astar_trajectory, segment_to_mpc_inputs
+NODES_TO_DELETE = [(170, 90, 90, 0), (170, 90, -90, 0), (170, 90, -90, 10), (170, 100, 90, 0), (170, 90, 180, 0), (170, 90, 0, 0), (170, 100, -90, 0), (170, 100, -90, 10), (170, 90, 0, 10), (170, 90, 90, 10), (170, 100, 180, 0), (170, 100, 0, 0), (170, 100, 0, 10), (170, 100, 90, 10), (170, 90, 180, 10), (170, 100, 180, 10)]
+
+
+with open('planning_graph_lanes.pkl', 'rb') as f:
+    planning_graph = pickle.load(f)
+edge_info = planning_graph['edge_info']
+simple_graph = planning_graph['graph']
+ps = []
+ps.append((120, 60, 0, 0))
+plt.plot(ps[0][0], ps[0][1], 'c.')
+img = plt.imread('imglib/AVP_planning_300p.png')
+fig = plt.figure(1)
+plt.imshow(img)
+plt.axis('equal')
+coords = []
+clicks = 0
+print('click on parking lot to set next desired xy')
+clickok = True
+def onclick(event):
+    global ix, iy, clicks, coords, ps, clickok
+    if clickok:
+        clickok = False
+        ix, iy = event.xdata, event.ydata
+        clicks += 1
+        coords.append((ix, iy))
+        if clicks % 2: # if odd
+            print('x = %d, y = %d'%( ix, iy))
+            print('click on another point to set desired heading')
+            clickok = True
+        else:
+            try:
+                dys = coords[1][1] - coords[0][1]
+                dxs = coords[1][0] - coords[0][0]
+                theta = np.arctan2(-dys, dxs) / np.pi * 180
+                print('theta = %d'%(theta))
+                ps.append((coords[0][0], coords[0][1], theta, 0))
+                coords = []
+                start = ps[-2]
+                end = ps[-1]
+                traj, weight = astar_trajectory(simple_graph, start, end)
+                #print(traj)
+                print(weight)
+                # while not complete_path_is_safe(traj):
+                #     safe_subpath, safe_start = longest_safe_subpath(traj)
+                #      # TODO: not sure how to generate the path
+                #     new_subpath = astar_trajectory(simple_graph, safe_start, end)
+                #     traj = safe_subpath + new_subpath
+                for start, end in zip(traj, traj[1:]):
+                    #print('Start'+str(start))
+                    #print(end)
+                    segment = segment_to_mpc_inputs(start, end, edge_info)
+                    print(segment)
+                    plt.plot(segment[0,0], segment[0,1], 'b.')
+                    plt.plot(segment[-1,0], segment[-1,1], 'rx')
+                    plt.plot(segment[:,0], segment[:,1], 'k--')
+                    plt.pause(0.1)
+                print('trajectory plotted!')
+                print('click to set desired xy')
+                clickok = True
+                plt.show()
+            except NameError as e:
+                print(e)
+            except:
+                clickok = True
+                print('CANNOT FIND TRAJECTORY: click again to set xy!')
+                if len(ps) > 1:
+                    ps = ps[:-1]
+cid = fig.canvas.mpl_connect('button_press_event', onclick)
+plt.show()

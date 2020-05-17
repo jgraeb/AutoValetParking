@@ -103,12 +103,16 @@ def point_set_is_safe(point_set, bitmap):
     return True
 
 def waypoints_to_headings(waypoints, initial_heading):
+    ''' given waypoints, compute headings made by vector starting from
+        current waypoint and ending on the next waypoint
+    '''
     headings = []
     previous_heading = initial_heading
     for point1, point2 in zip(waypoints, waypoints[1:]):
         dys = point2[1] - point1[1]
         dxs = point2[0] - point1[0]
         new_heading = np.arctan2(-dys, dxs) / np.pi * 180
+        # if going backwards
         if np.abs(constrain_heading_to_pm_180(new_heading-previous_heading)) >= 90:
             new_heading = constrain_heading_to_pm_180(new_heading + 180)
         headings.append(new_heading)
@@ -129,12 +133,12 @@ def compute_edge_weight(edge):
     if reversing:
         reverse_penalty = 1000 # play with this
     velocity_change = abs(end[3] - start[3])
-    headings = np.abs(waypoints_to_headings(sequence, initial_heading))
-    heading_change = np.sum([constrain_heading_to_pm_180(diff) for diff in np.diff(headings)])
-    man_distance = 0
+    headings = waypoints_to_headings(sequence, initial_heading)
+    heading_change = np.sum([abs(diff%360) for diff in np.diff(headings)])
+    length = 0
     for n1, n2 in zip(sequence, sequence[1:]):
-        man_distance += manhattan_distance(n1, n2)
-    weight = man_distance + heading_change * 0.1 + velocity_change + reverse_penalty
+        length += np.sqrt((n1[0]-n2[0])**2 + (n1[1]-n2[1])**2)
+    weight = length + heading_change * 0.1 + velocity_change + reverse_penalty
     return weight
 
 def compute_sequence_weight(sequence):
@@ -192,6 +196,13 @@ def csv_bitmap_to_numpy_bitmap(file_name):
     with open('{}.csv'.format(file_name), 'rt') as f:
         np_bitmap = np.array(list(csv.reader(f, delimiter=','))).astype('bool')
     return np_bitmap
+
+def segment_to_mpc_inputs(start, end, edge_info_dict):
+    waypoints = edge_info_dict[tuple(start), tuple(end)]
+    initial_heading = start[2]
+    headings = waypoints_to_headings(waypoints, initial_heading)
+    mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
+    return mpc_inputs
 
 def convert_to_edge_dict(start_node, end_node, node_sequence):
     edge = dict()
