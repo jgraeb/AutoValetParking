@@ -1,7 +1,7 @@
 import trio
 import sys
 sys.path.append('..') # enable importing modules from an upper directory:
-# import 
+# import
 from prepare.communication import *
 from variables.global_vars import *
 # import components

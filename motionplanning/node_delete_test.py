@@ -5,32 +5,11 @@ import _pickle as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from tools import astar_trajectory, segment_to_mpc_inputs, get_nodes_to_delete
+from tools import (astar_trajectory, segment_to_mpc_inputs,
+                   get_nodes_to_delete, waypoints_to_curve)
 import traceback
 import logging
 import end_planner
-import scipy.interpolate as interpolate
-import itertools
-
-def waypoints_to_curve(waypoints):
-    if len(waypoints) > 4:
-        t = [0]
-        arc_length = 0
-        for n1, n2 in zip(waypoints, waypoints[1:]):
-            arc_length += np.sqrt((n1[0]-n2[0])**2 + (n1[1]-n2[1])**2)
-            t.append(arc_length)
-        x = np.array([point[0] for point in waypoints])
-        y = np.array([point[1] for point in waypoints])
-        # s for smoothness, k for degree
-        tx, cx, kx = interpolate.splrep(t, x, s=20, k=4)
-        ty, cy, ky = interpolate.splrep(t, y, s=20, k=4)
-        spline_x = interpolate.BSpline(tx, cx, kx, extrapolate=False)
-        spline_y = interpolate.BSpline(ty, cy, ky, extrapolate=False)
-        return list(zip(spline_x(t), spline_y(t)))
-    else:
-        return waypoints
-
-
 
 with open('planning_graph_lanes.pkl', 'rb') as f:
     planning_graph = pickle.load(f)

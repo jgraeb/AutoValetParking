@@ -48,7 +48,7 @@ class Planner(BoxComponent):
         start[3] = 0
         self.get_current_planning_graph(Game)
         print('Planning - {0} driving from {1} to {2}'.format(car.name,start,end))
-        traj, weight = self.get_path(start,end) 
+        traj, weight = self.get_path(start,end)
         print('Path weight: '+str(weight))
         if traj:
             print('Planner - sending Directive to {0}'.format(car.name))
@@ -73,7 +73,7 @@ class Planner(BoxComponent):
         self.get_current_planning_graph(Game)
         for i in list(parking_spots.keys()):
             end = self.find_spot_coordinates(i)
-            traj = self.get_path(start,end) 
+            traj = self.get_path(start,end)
             if traj:
                 self.reachable[i]=1
             else:
@@ -114,24 +114,26 @@ class Planner(BoxComponent):
                 # find grid nodes around obstacle
                 nodes = self.planning_graph_in_use['graph']._nodes
                 del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs)]
-                print('deleting these nodes:')
-                print(del_nodes)
-                self.planning_graph = path_planner.update_plannning_graph(self.planning_graph_in_use, del_nodes)
+                DEL_XY_NODES = []
+                for del_node in del_nodes:
+                    if (del_node[0], del_node[1]) not in DEL_XY_NODES:
+                        DEL_XY_NODES.append(del_node[0], del_node[1])
+                self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, DEL_XY_NODES)
             else:
                 print('Failure blocks the narrow path')
                 self.planning_graph = self.original_lanes_planning_graph
         else:
             self.planning_graph = self.original_lanes_planning_graph
 
-    def get_path(self, start, end): 
+    def get_path(self, start, end):
         #self.get_current_planning_graph()
         try:
-            traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph)
-        except:
-            st()
+            traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph, smooth=True)
+        except Exception as e:
+            print(e)
         if traj and weight < 600:
             return traj, weight
-        else: 
+        else:
             traj = False
             weight = None
             return traj, weight
@@ -156,8 +158,8 @@ class Planner(BoxComponent):
                     if self.is_failure_in_acceptable_area(Game):
                         print('Obstacles are in acceptable area.')
                         if self.cars.get(car.name,0)=='Assigned':
-                            for key, val in self.spots.items(): 
-                                if val == car.name: 
+                            for key, val in self.spots.items():
+                                if val == car.name:
                                     spot = key
                             end = self.find_spot_coordinates(spot)
                             car.replan = True
@@ -182,7 +184,7 @@ class Planner(BoxComponent):
         print('Planner - sending "{0} - {1}" response to Supervisor'.format(response,car.name))
         await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
-    
+
     async def check_supervisor(self,send_response_channel,Game):
         async for directive in self.in_channels['Supervisor']:
             car = directive[0]
@@ -216,8 +218,8 @@ class Planner(BoxComponent):
                 print('Planner - {0} has to drive back into the spot to make space'.format(car.name))
                 car.status = 'Replan'
                 car.replan = True
-                for key, val in self.spots.items(): 
-                    if val == car.name: 
+                for key, val in self.spots.items():
+                    if val == car.name:
                         spot = key
                 end = self.find_spot_coordinates(spot)
                 #await self.send_directive_to_car(car, end,Game)

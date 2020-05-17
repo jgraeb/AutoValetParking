@@ -10,17 +10,25 @@ import numpy as np
 from ipdb import set_trace as st
 if __name__ == '__main__':
     from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
-    get_tube_for_lines, point_set_is_safe, compute_edge_weight,
-    astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+            get_tube_for_lines, point_set_is_safe,
+            compute_edge_weight, astar_trajectory,
+            waypoints_to_headings, convert_to_edge_dict,
+            segment_to_mpc_inputs, waypoints_to_curve)
 else:
     try:
-        from motionplanning.tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
-        get_tube_for_lines, point_set_is_safe, compute_edge_weight,
-        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+        from motionplanning.tools import (constrain_heading_to_pm_180,
+                img_to_csv_bitmap, get_tube_for_lines,
+                point_set_is_safe, compute_edge_weight,
+                astar_trajectory, waypoints_to_headings,
+                convert_to_edge_dict, segment_to_mpc_inputs,
+                waypoints_to_curve)
     except:
-        from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
-        get_tube_for_lines, point_set_is_safe, compute_edge_weight,
-        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+        from tools import (constrain_heading_to_pm_180,
+                img_to_csv_bitmap, get_tube_for_lines,
+                point_set_is_safe, compute_edge_weight,
+                astar_trajectory, waypoints_to_headings,
+                convert_to_edge_dict, segment_to_mpc_inputs,
+                waypoints_to_curve)
 import cv2
 import sys
 sys.path.append('..')
@@ -197,13 +205,22 @@ def update_planning_graph(planning_graph, del_nodes):
         new_planning_graph['graph']._weights[edge] = np.inf
     return new_planning_graph
 
-def get_mpc_path(start, end, planning_graph):
+def get_mpc_path(start, end, planning_graph, smooth=False):
     edge_info_dict = planning_graph['edge_info']
     simple_graph = planning_graph['graph']
     traj, path_weight = astar_trajectory(simple_graph, start, end)
     all_segments = []
     for start, end in zip(traj, traj[1:]):
         all_segments.append(segment_to_mpc_inputs(start, end, edge_info_dict))
+    if smooth:
+        waypoints = []
+        for segment in all_segments:
+            for waypoint in segment:
+                waypoint = tuple(waypoint)
+                if waypoint not in waypoints:
+                    waypoints.append(waypoint)
+        all_segments = [waypoints_to_curve(waypoints)]
+
     return all_segments, path_weight
 
 # check whether the path is blocked

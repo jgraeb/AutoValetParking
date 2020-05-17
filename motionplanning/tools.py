@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import networkx as nx
 from scipy.spatial.distance import cdist
+import scipy.interpolate as interpolate
 from ipdb import set_trace as st
 
 def img_to_csv_bitmap(img_path, save_name=None, verbose=False):
@@ -218,3 +219,22 @@ def get_nodes_to_delete(planning_graph, ball_center, ball_radius):
             'euclidean').tolist()[0]
     return [all_nodes_array[idx] for idx in range(len(all_nodes_array)) if all_dist[idx] <= ball_radius]
 
+def waypoints_to_curve(waypoints):
+    if len(waypoints) > 4:
+        t = [0]
+        arc_length = 0
+        for n1, n2 in zip(waypoints, waypoints[1:]):
+            arc_length += np.sqrt((n1[0]-n2[0])**2 + (n1[1]-n2[1])**2)
+            t.append(arc_length)
+        x = np.array([point[0] for point in waypoints])
+        y = np.array([point[1] for point in waypoints])
+        # s for smoothness, k for degree
+        tx, cx, kx = interpolate.splrep(t, x, s=20, k=4)
+        ty, cy, ky = interpolate.splrep(t, y, s=20, k=4)
+        spline_x = interpolate.BSpline(tx, cx, kx, extrapolate=False)
+        spline_y = interpolate.BSpline(ty, cy, ky, extrapolate=False)
+        # TODO: try derivatives on bsplines?
+        heading = [point[2] for point in waypoints]
+        return list(zip(spline_x(t), spline_y(t), heading))
+    else:
+        return waypoints
