@@ -59,6 +59,8 @@ class EndPlanner:
         self.graph = planning_graph['graph']
         self.edge_info = planning_graph['edge_info']
         self.end_states = end_states
+        self.node_to_edge_map = planning_graph['node_to_edge_map']
+        self.all_nodes = planning_graph['all_nodes']
         self.contract = contract
     def get_planning_graph(self):
         end_state_weight_penalty = 1000
@@ -72,6 +74,12 @@ class EndPlanner:
                     self.graph.add_edges([[assume_state, end_state,
                         end_state_weight_penalty + compute_edge_weight(edge)]])
                     self.edge_info[assume_state, end_state] = node_sequence
+                    for node in node_sequence:
+                        if node in self.node_to_edge_map:
+                            self.node_to_edge_map[node].add((assume_state, end_state))
+                        else:
+                            self.node_to_edge_map[node] = {(assume_state, end_state)}
+                        self.all_nodes.add(node)
                     if assume_state[3] == 0: # assume state is stopping
                         # add reverse
                         reversed_node_sequence = node_sequence[::-1]
@@ -79,11 +87,19 @@ class EndPlanner:
                         self.graph.add_edges([[end_state,
                             assume_state, end_state_weight_penalty + compute_edge_weight(edge)]])
                         self.edge_info[end_state, assume_state] = reversed_node_sequence
+                        for node in reversed_node_sequence:
+                            if node in self.node_to_edge_map:
+                                self.node_to_edge_map[node].add((end_state, assume_state))
+                            else:
+                                self.node_to_edge_map[node] = {(end_state, assume_state)}
+                            self.all_nodes.add(node)
         coverage = sum([int(end_state in self.graph._nodes) for end_state in self.end_states])/len(self.end_states)
         print('end state coverage is {0:.1f}%'.format(coverage*100))
         the_planning_graph['graph'] = self.graph
         the_planning_graph['edge_info'] = self.edge_info
         the_planning_graph['end_states'] = self.end_states
+        the_planning_graph['node_to_edge_map'] = self.node_to_edge_map
+        the_planning_graph['all_nodes'] = self.all_nodes
         return the_planning_graph
 
 class EndStateContract:
@@ -164,9 +180,9 @@ class TwoPointTurnGuarantee(PrimitiveGuarantee):
         end_loc = np.array([[end_state[0], end_state[1]]]).transpose()
         intersect_params = np.matmul(np.linalg.inv(dir_mat), (end_loc - assume_loc))
         intersect = assume_loc + intersect_params[0] * assume_dir
-        node_sequence = [[int(assume_loc[0]), int(assume_loc[1])],
-                         [int(intersect[0]), int(intersect[1])],
-                         [int(end_loc[0]), int(end_loc[1])]]
+        node_sequence = [(int(assume_loc[0]), int(assume_loc[1])),
+                         (int(intersect[0]), int(intersect[1])),
+                         (int(end_loc[0]), int(end_loc[1]))]
         return node_sequence
 
 
@@ -174,13 +190,9 @@ def update_planning_graph(planning_graph, del_nodes):
     new_planning_graph = cp.deepcopy(planning_graph)
     del_edges = []
     for node in del_nodes:
-        assert node in planning_graph['graph']._nodes
-        if node in planning_graph['graph']._predecessors:
-            for from_node in planning_graph['graph']._predecessors[node]:
-                del_edges.append((from_node, node))
-        if node in planning_graph['graph']._edges:
-            for to_node in planning_graph['graph']._edges:
-                del_edges.append((node, to_node))
+        if node in planning_graph['node_to_edge_map']:
+            for edge in planning_graph['node_to_edge_map'][node]:
+                del_edges.append((edge))
     for edge in del_edges:
         new_planning_graph['graph']._weights[edge] = np.inf
     return new_planning_graph

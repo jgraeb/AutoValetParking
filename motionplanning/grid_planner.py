@@ -60,7 +60,7 @@ class GridPrimitiveSet:
         edges = []
         for prim in self.grid_trajectory_set:
             edge = dict()
-            node_sequence = [[point[0]+xy[0], point[1]+xy[1]] for point in prim['node_sequence']]
+            node_sequence = [(point[0]+xy[0], point[1]+xy[1]) for point in prim['node_sequence']]
             start_node = (node_sequence[0][0], node_sequence[0][1], prim['start_heading'], prim['start_v'])
             end_node = (node_sequence[-1][0], node_sequence[-1][1], prim['end_heading'], prim['end_v'])
             edge['node_sequence'] = node_sequence
@@ -142,6 +142,8 @@ class GridPlanner:
             planning_graph['edge_info'] = None
             graph = WeightedDirectedGraph()
             edge_info = dict()
+            node_to_edge_map = dict()
+            all_nodes = set()
             sampled_points = self.grid.sampled_points
             all_xy_nodes = []
             for xy in sampled_points:
@@ -155,12 +157,19 @@ class GridPlanner:
                 for edge in self.prim_set.get_edges_for_xy(xy):
                     tube = get_tube_for_lines(edge['node_sequence'], r=self.uncertainty)
                     if point_set_is_safe(tube, bitmap):
-#                        graph.add_edges([[edge['start_node'], edge['end_node'], compute_sequence_weight(edge['node_sequence'])]])
                         graph.add_edges([[edge['start_node'], edge['end_node'], compute_edge_weight(edge)]])
                         edge_info[edge['start_node'], edge['end_node']] = edge['node_sequence']
+                        for node in edge['node_sequence']:
+                            if node in node_to_edge_map:
+                                node_to_edge_map[node].add((edge['start_node'], edge['end_node']))
+                            else:
+                                node_to_edge_map[node] = {(edge['start_node'], edge['end_node'])}
+                            all_nodes.add(node)
 
             planning_graph['graph'] = graph
             planning_graph['edge_info'] = edge_info
+            planning_graph['node_to_edge_map'] = node_to_edge_map
+            planning_graph['all_nodes'] = all_nodes
             self.planning_graph = planning_graph
             return planning_graph
         else:

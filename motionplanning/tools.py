@@ -9,6 +9,7 @@ if ros_path in sys.path:
 import cv2
 import numpy as np
 import networkx as nx
+from scipy.spatial.distance import cdist
 from ipdb import set_trace as st
 
 def img_to_csv_bitmap(img_path, save_name=None, verbose=False):
@@ -210,3 +211,10 @@ def convert_to_edge_dict(start_node, end_node, node_sequence):
     edge['start_node'] = start_node
     edge['end_node'] = end_node
     return edge
+
+def get_nodes_to_delete(planning_graph, ball_center, ball_radius):
+    all_nodes_array = [node for node in planning_graph['all_nodes']]
+    all_dist = cdist([ball_center], all_nodes_array,
+            'euclidean').tolist()[0]
+    return [all_nodes_array[idx] for idx in range(len(all_nodes_array)) if all_dist[idx] <= ball_radius]
+

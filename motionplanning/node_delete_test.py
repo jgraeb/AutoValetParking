@@ -5,22 +5,22 @@ import _pickle as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
-from tools import astar_trajectory, segment_to_mpc_inputs
+from tools import astar_trajectory, segment_to_mpc_inputs, get_nodes_to_delete
 import traceback
 import logging
 import end_planner
-NODES_TO_DELETE = [(170, 90, 90, 0), (170, 90, -90, 0), (170, 90, -90, 10), (170, 100, 90, 0), (170, 90, 180, 0), (170, 90, 0, 0), (170, 100, -90, 0), (170, 100, -90, 10), (170, 90, 0, 10), (170, 90, 90, 10), (170, 100, 180, 0), (170, 100, 0, 0), (170, 100, 0, 10), (170, 100, 90, 10), (170, 90, 180, 10), (170, 100, 180, 10)]
-NODES_TO_DELETE = [(170, 90, 90, 0), (170, 90, -90, 0), (170, 90, -90, 10), (170, 100, 90, 0), (170, 90, 180, 0), (170, 90, 0, 0), (170, 100, -90, 0), (170, 100, -90, 10), (170, 90, 0, 10), (170, 90, 90, 10), (170, 100, 180, 0), (170, 100, 0, 0), (170, 100, 0, 10), (170, 100, 90, 10), (170, 90, 180, 10), (170, 100, 180, 10)]
 
 with open('planning_graph_lanes.pkl', 'rb') as f:
     planning_graph = pickle.load(f)
+#NODES_TO_DELETE = [(170, 90), (170, 100), (210, 100), (200, 150), (90, 150)]
+NODES_TO_DELETE = get_nodes_to_delete(planning_graph, [190, 192], 15)
 planning_graph = end_planner.update_planning_graph(planning_graph, NODES_TO_DELETE)
 edge_info = planning_graph['edge_info']
 simple_graph = planning_graph['graph']
 ps = []
 # plot obstacles:
 for NODE in NODES_TO_DELETE:
-    plt.plot(NODE[0], NODE[1], 'kx')
+    plt.plot(NODE[0], NODE[1], 'ro')
 starting_at = [120, 60, 0, 0]
 starting_at = [170.,  70., -90, 0]
 ps.append(starting_at)
@@ -56,9 +56,9 @@ def onclick(event):
                 end = ps[-1]
                 traj, weight = astar_trajectory(simple_graph, start, end)
                 if weight == np.inf:
-                    ValueError('path weight is infinite!')
+                    raise ValueError('PATH WEIGHT IS INFINITE!')
                 #print(traj)
-                print('the path weight is ' + str(weight))
+                print('THE PATH WEIGHT IS ' + str(weight))
                 # while not complete_path_is_safe(traj):
                 #     safe_subpath, safe_start = longest_safe_subpath(traj)
                 #      # TODO: not sure how to generate the path
