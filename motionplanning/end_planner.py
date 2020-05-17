@@ -13,9 +13,14 @@ if __name__ == '__main__':
     get_tube_for_lines, point_set_is_safe, compute_edge_weight,
     astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
 else:
-    from motionplanning.tools import (constrain_heading_to_pm_180,
-    img_to_csv_bitmap, get_tube_for_lines, point_set_is_safe,
-    compute_sequence_weight, astar_trajectory,waypoints_to_headings)
+    try:
+        from motionplanning.tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
+        get_tube_for_lines, point_set_is_safe, compute_edge_weight,
+        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+    except:
+        from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
+        get_tube_for_lines, point_set_is_safe, compute_edge_weight,
+        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
 import cv2
 import sys
 sys.path.append('..')
@@ -165,7 +170,7 @@ class TwoPointTurnGuarantee(PrimitiveGuarantee):
         return node_sequence
 
 
-def update_plannning_graph(planning_graph, del_nodes):
+def update_planning_graph(planning_graph, del_nodes):
     new_planning_graph = cp.deepcopy(planning_graph)
     del_edges = []
     for node in del_nodes:

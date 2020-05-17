@@ -6,15 +6,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
 from tools import astar_trajectory, segment_to_mpc_inputs
+import traceback
+import logging
+import end_planner
 NODES_TO_DELETE = [(170, 90, 90, 0), (170, 90, -90, 0), (170, 90, -90, 10), (170, 100, 90, 0), (170, 90, 180, 0), (170, 90, 0, 0), (170, 100, -90, 0), (170, 100, -90, 10), (170, 90, 0, 10), (170, 90, 90, 10), (170, 100, 180, 0), (170, 100, 0, 0), (170, 100, 0, 10), (170, 100, 90, 10), (170, 90, 180, 10), (170, 100, 180, 10)]
-
 
 with open('planning_graph_lanes.pkl', 'rb') as f:
     planning_graph = pickle.load(f)
+planning_graph = end_planner.update_planning_graph(planning_graph, NODES_TO_DELETE)
 edge_info = planning_graph['edge_info']
 simple_graph = planning_graph['graph']
 ps = []
-ps.append((120, 60, 0, 0))
+# plot obstacles:
+for NODE in NODES_TO_DELETE:
+    plt.plot(NODE[0], NODE[1], 'kx')
+starting_at = [120, 60, 0, 0]
+starting_at = [170.,  70., -90, 0]
+ps.append(starting_at)
 plt.plot(ps[0][0], ps[0][1], 'c.')
 img = plt.imread('imglib/AVP_planning_300p.png')
 fig = plt.figure(1)
@@ -68,7 +76,8 @@ def onclick(event):
                 plt.show()
             except NameError as e:
                 print(e)
-            except:
+            except Exception as e:
+                logging.error(traceback.format_exc())
                 clickok = True
                 print('CANNOT FIND TRAJECTORY: click again to set xy!')
                 if len(ps) > 1:
