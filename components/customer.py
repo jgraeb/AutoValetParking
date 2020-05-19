@@ -4,6 +4,7 @@ import random
 from variables.global_vars import *
 from prepare.communication import *
 from components.car import Car
+from ipdb import set_trace as st
 
 class Customer(BoxComponent):
     def __init__(self, average_arrival_rate, average_park_time):
@@ -43,10 +44,10 @@ class Customer(BoxComponent):
                 await trio.sleep(5)
             now = get_current_time(start_time)
             for i,cars in enumerate(self.cars): # checks for requested cars
-                if cars.depart_time <= now and cars.status == 'Completed':
+                if cars.depart_time <= now and cars.parked:
                     print('{0} is requested at {1:.3f}'.format(cars.name,now))
-                    car.depart_time = now
-                    car.requested = True
+                    cars.depart_time = now
+                    cars.requested = True
                     await self.out_channels['Request'].send(cars)
                     self.cars.pop(i)
             # self.cars.append(car)
