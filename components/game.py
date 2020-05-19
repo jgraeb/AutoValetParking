@@ -97,14 +97,18 @@ class Game(BoxComponent):
             self.reserved_areas_requested.pop(item)
         print('Areas Reserved:')
         print(self.reserved_areas)
+        for key in self.reserved_areas.keys():
+            print(key.id)
         print('Areas Requested:')
         print(self.reserved_areas_requested)
+        for key in self.reserved_areas_requested.keys():
+            print(key.id)
 
     def release_reverse_area(self, car):
         print('{0} releasing reserved area'.format(car.id))
         self.reserved_areas.pop(car)
         self.update_reserved_areas()
-        car.reserved = False
+        #car.reserved = False
 
     def is_car_free_of_reserved_area(self,car):
         if not self.reserved_areas:
@@ -123,6 +127,7 @@ class Game(BoxComponent):
         return True
 
     def get_vision_cone(self,car):
+        buffer = car.v/10*0.4
         if car.replan and car.last_segment:# and not car.retrieving:
             openangle = 30
             length = 3
@@ -131,13 +136,13 @@ class Game(BoxComponent):
             length = 4 # m
         elif car.unparking:
             openangle = 60
-            length = 4 # m # changes here to try
+            length = 4+buffer # m # changes here to try
         elif car.close or car.replan:
             openangle = 30
             length = 5.0 # m
         else:
             openangle = 30
-            length = 6 # m
+            length+buffer = 6 # m
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking and not car.last_segment:
@@ -220,21 +225,24 @@ class Game(BoxComponent):
                                 if cars.status=='Failure' or cars.status =='Blocked':
                                     blocked = True 
                                     print('Failure or blocked car ahead')
-
+        clearpath = True
         for key,val in self.car_boxes.items():
             if key != car.name:
                 if mycone.intersects(val):
-                    clearpath = False
+                    #clearpath = False
                     for cars in self.cars:
                         if cars.name == key:
                             if cars.status=='Failure':
                                 #failed_cars.append(cars)
                                 failed = True
                                 print('{0} blocked by a failed car, ID {1}'.format(car.name, car.id))
+                                clearpath = False
                             elif cars.parked:
                                 print('Blocked by a parked car - Go on ID {0}'.format(car.id))
+                                #clearpath = True
                             else:
                                 conflict_cars.append(cars)
+                                clearpath = False
         # check if a pedestrian is in the cone and I am not in the pedestrian's way
         mypedcone = self.get_vision_cone_pedestrian(car)
         for ped in self.peds:

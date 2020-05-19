@@ -79,8 +79,22 @@ def draw_car(ax, background,x,y,theta,car = None):
     background.paste(vehicle_fig, (x_corner, y_corner), vehicle_fig)
     #background.paste(vehicle_fig, (x, y), vehicle_fig)
     if car:
-        ax.text(x_corner,y_corner,str(car.id), color='w', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='red', alpha=0.2), fontsize=5)
-
+        ax.text(x_corner,y_corner,str(car.id), color='w', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='red', alpha=0.4), fontsize=5)
+        if car.status == 'Stop':
+            ax.text(x,y,'S', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.reserved:
+            ax.text(x,y,'R', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.requested:
+            ax.text(x,y,'R', color='y', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.parked:
+            ax.text(x,y,'P', color='b', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.status == 'Conflict':
+            ax.text(x,y,'C', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.status == 'Driving':
+            ax.text(x,y,'D', color='g', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.status == 'Idle':
+            ax.text(x,y,'I', color='black', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        
 
 def draw_grey_car(background,x,y,theta):
     gray_vehicle_fig = Image.open(gray_car_fig)
@@ -115,4 +129,3 @@ def draw_pedestrian(pedestrian,background):
     person_fig = person_fig.rotate(180-theta/np.pi * 180 + 90, expand = False)
     x_corner, y_corner = find_corner_coordinates(0., 0, x, y, theta,  person_fig)
     background.paste(person_fig, (int(x_corner), int(y_corner)), person_fig)
-    

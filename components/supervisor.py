@@ -37,6 +37,7 @@ class Supervisor(BoxComponent):
                     elif car.is_at_pickup:
                         print('Supervisor - Car {0} is picked up'.format(car.name))
                         car.requested = False
+                        car.picked_up = True
                         self.parking_spots[spot]=(('Vacant','None'))
                         await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1
@@ -192,7 +193,7 @@ class Supervisor(BoxComponent):
             self.priority.update({car.name: '1'})
             self.cars.update({car.name: 'Requested'})
             car.retrieving = True
-            car.requested = True
+            #car.requested = True
             for key, value in self.parking_spots.items(): 
                 if value == ('Assigned',car.name) or value == ('Occupied',car.name): 
                     val = key

@@ -198,6 +198,8 @@ class Planner(BoxComponent):
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end, Game)
+                # if car.requested:
+                #     st()
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
                 await self.send_directive_to_car(car, PICK_UP,Game)
