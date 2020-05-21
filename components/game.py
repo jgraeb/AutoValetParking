@@ -142,7 +142,7 @@ class Game(BoxComponent):
             length = 5.0 # m
         else:
             openangle = 30
-            length+buffer = 6 # m
+            length = 6 + buffer # m
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking and not car.last_segment:

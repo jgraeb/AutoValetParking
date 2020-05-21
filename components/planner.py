@@ -83,14 +83,17 @@ class Planner(BoxComponent):
     def is_in_buffer(self,node_x,node_y,obs,):
         # get car box around x,y
         #print(obs)
+        buffer_back = 20
+        buffer_side = 15
+        buffer_front = 15
         for i in range(0,len(obs)):
             x = obs[i][0]
             y = obs[i][1]
             yaw = obs[i][2]
-            box = Polygon([(x-10, y+10),(x-10,y-10),(x+15,y-10),(x+15,y+10),(x-15, y+10)])
+            box = Polygon([(x-buffer_back, y+buffer_side),(x-buffer_back,y-buffer_side),(x+buffer_front,y-buffer_side),(x+buffer_front,y+buffer_side),(x-buffer_back, y+buffer_side)])
             rot_box = affinity.rotate(box, np.rad2deg(yaw), origin = (x,y))
         # assume radius of 10 pixels (gridsize) to delete around obstacle center
-            if Point(node_x,node_y).intersects(rot_box):
+            if Point(node_x,node_y).buffer(5).intersects(rot_box):
                 return True
         return False
 
@@ -98,6 +101,7 @@ class Planner(BoxComponent):
         # loop through obstacles and generate new graph
         if self.obstacles:
             print('Updating Planning Graph')
+            #print(self.obstacles)
             if self.is_failure_in_acceptable_area(Game):
                 print('Failure is in acceptable area')
                 obs = []
@@ -106,6 +110,7 @@ class Planner(BoxComponent):
                     obs.append(value)
                     obs_boxes.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(15.0))
                 obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs]
+                print(obs)
                 # assume obs not in the lane area
                 self.planning_graph_in_use = self.original_lanes_planning_graph
                 # check if obstacle is in lanes_box
@@ -115,9 +120,14 @@ class Planner(BoxComponent):
                 # find grid nodes around obstacle
                 nodes = self.planning_graph_in_use['graph']._nodes
                 del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs)]
-                print('deleting these nodes:')
-                print(del_nodes)
-                self.planning_graph = path_planner.update_plannning_graph(self.planning_graph_in_use, del_nodes)
+                DEL_XY_NODES = []
+                for del_node in del_nodes:
+                    if (del_node[0], del_node[1]) not in DEL_XY_NODES:
+                        DEL_XY_NODES.append((del_node[0], del_node[1]))
+                print('del_xy_nodes:')
+                print(DEL_XY_NODES)
+                self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, DEL_XY_NODES)
+                #self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, del_nodes)
             else:
                 print('Failure blocks the narrow path')
                 self.planning_graph = self.original_lanes_planning_graph
@@ -126,11 +136,12 @@ class Planner(BoxComponent):
 
     def get_path(self, start, end): 
         #self.get_current_planning_graph()
+        traj = None
         try:
             traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph)
         except:
             st()
-        if traj and weight < 600:
+        if traj:
             return traj, weight
         else: 
             traj = False

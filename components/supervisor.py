@@ -145,7 +145,7 @@ class Supervisor(BoxComponent):
         self.priority.pop(car.name)
         self.failures.pop(car.name)
         for spot, value in self.parking_spots.items(): 
-            if value == ('Assigned',car.name) or value == ('Occupied', car.name): 
+            if value == ('Assigned',car.name) or value == ('Occupied', car.name) or value == ('Requested', car.name): 
                 val = spot
         self.parking_spots[val]=(('Vacant','None'))
         self.spot_no=self.spot_no+1

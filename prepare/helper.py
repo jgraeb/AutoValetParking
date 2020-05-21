@@ -13,6 +13,8 @@ from PIL import Image
 from numpy import cos, sin, pi
 from component import parking_lot
 from variables import global_vars
+from ipdb  import set_trace as st
+
 
 dir_path = os.path.dirname(os.path.realpath("__file__"))
 car_fig = os.path.dirname(dir_path) + '/imglib/blue_car.png'
@@ -94,7 +96,19 @@ def draw_car(ax, background,x,y,theta,car = None):
             ax.text(x,y,'D', color='g', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
         elif car.status == 'Idle':
             ax.text(x,y,'I', color='black', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.status == 'Failure':
+            ax.text(x,y,'F', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.status == 'Blocked':
+            ax.text(x,y,'B', color='y', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.status == 'Replan':
+            ax.text(x,y,'R', color='g', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
         
+
+def show_traj(ax,background, ref):
+    #st()
+    for segment in ref:
+        #st()
+        ax.plot(segment[:,0]*global_vars.SCALE_FACTOR_SIM*global_vars.SCALE_FACTOR_PLAN, segment[:,1]*global_vars.SCALE_FACTOR_SIM*global_vars.SCALE_FACTOR_PLAN, 'k--')
 
 def draw_grey_car(background,x,y,theta):
     gray_vehicle_fig = Image.open(gray_car_fig)

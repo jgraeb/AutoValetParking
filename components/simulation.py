@@ -4,7 +4,7 @@ import sys
 sys.path.append('..') # enable importing modules from an upper directory
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from prepare.helper import draw_car, draw_pedestrian
+from prepare.helper import draw_car, draw_pedestrian, show_traj
 from component import parking_lot
 from variables.global_vars import *
 from variables.parking_data import parking_spots
@@ -14,10 +14,13 @@ import time
 import datetime
 import pickle
 import os
+import warnings
 
 show_all_spots = False
+show_trajs = True
 
 ind = 0
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 class Simulation(BoxComponent):
     def __init__(self):
@@ -71,6 +74,9 @@ class Simulation(BoxComponent):
         f.write('FRAME'+str(ind)+'\n')
         for car in self.cars: 
             draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,car)
+            # draw car trajectories
+            if car.ref!= None and show_trajs:
+                show_traj(self.ax,self.background, car.ref)
             f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
         f.close()
         # to check parking spot locations
@@ -91,10 +97,15 @@ class Simulation(BoxComponent):
     async def update_simulation(self):
         frame_idx = 0
         self.fig = plt.figure()
+        new = True
         while True:
             frame_idx +=1 
-            #ped = pickle.load( open('pedestrain_file', "rb" ) )
-            self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
+            #ped = pickle.load( open('pedestrain_file', "rb" ) )\
+            if new:
+                self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
+            else:
+                self.ax = plt.gca()
+            new = False
             plt.axis('off')
             self.background = parking_lot.get_background()
             ani = animation.FuncAnimation(self.fig, self.animate, frames=1, interval=1**3, blit=True, repeat=False)

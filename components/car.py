@@ -97,6 +97,7 @@ class Car(BoxComponent):
                     print('{0} - Receiving Directive from Planner'.format(self.name))
                     #self.status = 'Replan'
                     self.ref = np.array(directive)
+                    print(self.ref)
                     #if self.replan:
                     #print('Tracking this path:')
                     #print(directive)
@@ -133,8 +134,8 @@ class Car(BoxComponent):
             target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
             #sp = tracking.calc_speed_profile(cx, cy, cyaw, 0,0,self.direction)
             sp = [self.v, self.v/2, 0]
-            print('sp')
-            print(sp)
+            #print('sp')
+            #print(sp)
             xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
             x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
             oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
@@ -208,7 +209,7 @@ class Car(BoxComponent):
                     # return
                 if self.status == 'Replan':
                     print('{0} Stopping the Tracking, ID {1}'.format(self.name, self.id))
-                    self.v = 0
+                    self.v = 0 # include braking here
                     return
                 await trio.sleep(3)
             self.status = 'Driving'
@@ -291,14 +292,16 @@ class Car(BoxComponent):
         # including a failure in 20% of cars
         failidx = len(self.ref)
         chance = random.randint(1,100) # changed to 0!!!
+        if self.id == 1:
+            chance = 1
         if not self.replan:
-            if len(self.ref)-1>4 and chance <=0:
+            if len(self.ref)-1>4 and chance <=30:
                 failidx = np.random.randint(low=4, high=6, size=1)
                 if self.parking:
                     print('{0} will fail at acceptable spot: {1}'.format(self.name,failidx))
                 else:
                     print('{0} will fail in narrow path: {1}'.format(self.name,failidx))
-            elif len(self.ref)-1>10 and chance <=0:
+            elif len(self.ref)-1>10 and chance <=30:
                 failidx = np.random.randint(low=len(self.ref)-5, high=len(self.ref)-1, size=1)
                 if self.parking:
                     print('{0} will fail in narrow path: {1}'.format(self.name,failidx))
@@ -331,6 +334,7 @@ class Car(BoxComponent):
             await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,send_response_channel,Time)
             await trio.sleep(0)
             if self.status == 'Replan' or self.status=='Removed':
+                self.ref = None
                 return
         if not self.status == 'Failure':
             self.last_segment = True
@@ -342,10 +346,11 @@ class Car(BoxComponent):
             self.direction = tracking.check_direction(path)
             initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
             sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,0.0,self.direction)
-            print('sp')
-            print(sp)
+            #print('sp')
+            #print(sp)
             await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0,Game,send_response_channel,Time)
             if self.status == 'Replan' or self.status=='Removed':
+                self.ref = None
                 return
             self.status = 'Completed'
             self.is_at_pickup = self.check_at_pickup(Game)
@@ -356,6 +361,7 @@ class Car(BoxComponent):
                 self.parked = True
                 print('Car is in a parking spot')
             self.parking = False
+            self.ref = None
             await self.send_response(send_response_channel)
 
     async def send_response(self,send_response_channel):
