@@ -292,7 +292,7 @@ class Car(BoxComponent):
         # including a failure in 20% of cars
         failidx = len(self.ref)
         chance = random.randint(1,100) # changed to 0!!!
-        if self.id == 1:
+        if self.id == 0:
             chance = 1
         if not self.replan:
             if len(self.ref)-1>4 and chance <=30:

@@ -83,7 +83,7 @@ class Planner(BoxComponent):
     def is_in_buffer(self,node_x,node_y,obs,):
         # get car box around x,y
         #print(obs)
-        buffer_back = 20
+        buffer_back = 15
         buffer_side = 15
         buffer_front = 15
         for i in range(0,len(obs)):
@@ -115,7 +115,8 @@ class Planner(BoxComponent):
                 self.planning_graph_in_use = self.original_lanes_planning_graph
                 # check if obstacle is in lanes_box
                 for obs_box in obs_boxes:
-                    if not obs_box.intersects(self.lanes_box):
+                    if obs_box.intersects(self.lanes_box):
+                        print('AAAABBBBCCCCC')
                         self.planning_graph_in_use = self.original_free_planning_graph
                 # find grid nodes around obstacle
                 nodes = self.planning_graph_in_use['graph']._nodes
