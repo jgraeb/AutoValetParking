@@ -10,10 +10,10 @@ from components.game import Game
 from components.simulation import Simulation
 from components.map  import Map
 from components.planner import Planner
-from components.pedestrian import Pedestrian
+from environment.pedestrian import Pedestrian
 from components.car import Car
 from components.supervisor import Supervisor
-from components.customer import Customer
+from environment.customer import Customer
 
 async def main():
     #global START_TIME

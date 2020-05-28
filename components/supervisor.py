@@ -2,7 +2,7 @@ from components.boxcomponent import BoxComponent
 import trio
 import random
 from variables.global_vars import *
-from components.pedestrian import Pedestrian
+from environment.pedestrian import Pedestrian
 from components.planner import Planner
 from variables.parking_data import parking_spots #bad_parking_spot as parking_spots
 from ipdb import set_trace as st
