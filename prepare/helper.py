@@ -11,7 +11,7 @@ import numpy as np
 import random
 from PIL import Image
 from numpy import cos, sin, pi
-from component import parking_lot
+from animation.component import parking_lot
 from variables import global_vars
 from ipdb  import set_trace as st
 

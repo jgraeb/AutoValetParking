@@ -5,7 +5,7 @@ sys.path.append('..') # enable importing modules from an upper directory
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian, show_traj
-from component import parking_lot
+from animation.component import parking_lot
 from variables.global_vars import *
 from variables.parking_data import parking_spots
 #from motionplanning.parking_data import parking_spots
@@ -63,14 +63,14 @@ class Simulation(BoxComponent):
         # scale to the large topo
         xoffset = 0
         yoffset = 0
-        f = open('pedestrian_file_new.pkl','ab')
+        f = open('../animation/stored_data/pedestrian_file_new.pkl','ab')
         pickle.dump('FRAME'+str(ind)+'\n',f)
         for pedestrian in self.peds:
             draw_pedestrian(pedestrian,self.background)
             pickle.dump(pedestrian,f)
         f.close()
         
-        f = open('car_pos_new.txt','a')
+        f = open('../animation/stored_data/car_pos_new.txt','a')
         f.write('FRAME'+str(ind)+'\n')
         for car in self.cars: 
             draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,car)

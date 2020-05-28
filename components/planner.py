@@ -36,7 +36,7 @@ class Planner(BoxComponent):
     def find_spot_coordinates(self, spot):
         return parking_spots[spot]
 
-    async def send_directive_to_car(self, car, end, Game): # directive/response system
+    async def send_directive_to_car(self, car, end, Game, original): # directive/response system
         if end == 'Reverse':
             end = (car.x/SCALE_FACTOR_PLAN+-car.direction*10, car.y/SCALE_FACTOR_PLAN+-car.direction*10, car.yaw, 0)
             print('Car moving out of the way to: '+str(end))
@@ -46,7 +46,10 @@ class Planner(BoxComponent):
         start[1] = pos[1]/SCALE_FACTOR_PLAN
         start[2] = -np.rad2deg(pos[2])
         start[3] = 0
-        self.get_current_planning_graph(Game)
+        if original:
+            self.planning_graph = self.original_lanes_planning_graph
+        else:
+            self.get_current_planning_graph(Game)
         print('Planning - {0} driving from {1} to {2}'.format(car.name,start,end))
         traj, weight = self.get_path(start,end) 
         print('Path weight: '+str(weight))
@@ -57,7 +60,7 @@ class Planner(BoxComponent):
             print('Planner - No Path found - sending Response to Supervisor')
             resp = ('NoPath', car)
             await self.send_response_to_supervisor(resp)
-            await self.out_channels[car.name].send('OriginalPath')
+            #await self.out_channels[car.name].send('OriginalPath')
         await trio.sleep(1)
 
     async def add_obstacle(self, car,Game): # add failed car coordinates to obstacle list
@@ -113,15 +116,15 @@ class Planner(BoxComponent):
             end = self.find_spot_coordinates(spot)
             car.replan = True
             print('Car {} receives a new directive'.format(car.id))
-            await self.send_directive_to_car(car, end, Game)
+            await self.send_directive_to_car(car, end, Game, False)
         elif self.cars.get(car.name,0)=='Request':
-            await self.send_directive_to_car(car, PICK_UP, Game)
+            await self.send_directive_to_car(car, PICK_UP, Game, False)
 
     def is_in_buffer(self,node_x,node_y,obs,): # find nodes in a buffer area around the obstacle to delete from grid
         # get car box around x,y
-        buffer_back = 15
-        buffer_side = 15
-        buffer_front = 15
+        buffer_back = 5
+        buffer_side = 5
+        buffer_front = 10
         for i in range(0,len(obs)):
             # create a buffer box around the obstacle coordinates
             x = obs[i][0]
@@ -210,10 +213,10 @@ class Planner(BoxComponent):
                             car.replan = True
                             car.status = 'Replan'
                             print('Blocked car {} receives a new directive'.format(car.name))
-                            await self.send_directive_to_car(car, end, Game)
+                            await self.send_directive_to_car(car, end, Game, False)
                         elif self.cars.get(car.name,0)=='Request':
                             car.status = 'Replan'
-                            await self.send_directive_to_car(car, PICK_UP, Game)
+                            await self.send_directive_to_car(car, PICK_UP, Game, False)
                     else:
                         print('No way to plan around the failure - {0} must wait'.format(car.name))
                 elif resp=='RequestReservedArea':
@@ -243,12 +246,12 @@ class Planner(BoxComponent):
                 self.nursery.start_soon(car.run,send_response_channel,Game, Time)
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
-                await self.send_directive_to_car(car, end, Game)
+                await self.send_directive_to_car(car, end, Game, False)
                 # if car.requested:
                 #     st()
             elif todo == 'Pickup':
                 print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
-                await self.send_directive_to_car(car, PICK_UP,Game)
+                await self.send_directive_to_car(car, PICK_UP,Game, False)
                 self.cars.update({car.name : 'Request'})
                 self.spots.update({self.spots.get(car.name): 0})
             elif todo == 'Towed':
@@ -259,11 +262,21 @@ class Planner(BoxComponent):
                 self.spots.update({self.spots.get(car.name): 0})
             elif todo == 'Wait':
                 print('Planner - {0} has to wait until path clears'.format(car.name))
-                await self.send_directive_to_car(car, todo,Game)
+                await self.send_directive_to_car(car, todo,Game, False)
             elif todo == 'Reverse':
                 print('Planner - {0} has to drive out of the way'.format(car.name))
                 #await self.send_directive_to_car(car, todo,Game)
                 await self.out_channels[car.name].send('Reverse')
+            elif todo == 'OriginalPath':
+                if car.ref is not None:
+                    await self.out_channels[car.name].send('OriginalPath')
+                else:
+                    if self.cars.get(car.name)=='Request':
+                        end = PICK_UP
+                    else:
+                        spot = self.spots.get(car.name)
+                        end = self.find_spot_coordinates(spot)
+                    await self.send_directive_to_car(car, end,Game, True) # original graph
             elif todo == 'Back2spot':
                 print('Planner - {0} has to drive back into the spot to make space'.format(car.name))
                 car.status = 'Replan'
