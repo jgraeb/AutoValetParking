@@ -28,9 +28,6 @@ class Supervisor(BoxComponent):
     async def update_parking_spots(self,car):
         for spot, status in self.parking_spots.items():
                 if (status[1] == car.name) and not car.status == 'Removed':
-                    # print('AAAAAA - Updating the parking spots')
-                    # print(car.replan)
-                    # print(car.is_at_pickup)
                     if (status[0] == 'Assigned') and not car.replan:
                         self.parking_spots[spot]=(('Occupied',car.name))
                         self.cars.update({car.name: 'Parked'})
@@ -158,6 +155,7 @@ class Supervisor(BoxComponent):
             if (self.parking_spots[spot]==('Vacant','None')) and pln.check_reachability(spot):
                 # self.parking_spots[spot]=(('Assigned',car.name))
                 return spot
+        return None
 
     async def process_queue(self,Planner):
         async for car in self.in_channels['Customer']:
@@ -165,7 +163,8 @@ class Supervisor(BoxComponent):
             print(str(self.spot_no)+' parking Spots vacant')
             print(self.parking_spots)
             await self.start_random_ped()
-            if self.spot_no>0:
+            spot = self.pick_spot(car,Planner)
+            if spot is not None:
                 accept_condition = True
             if accept_condition:
                 print('{} has been accepted!'.format(car.name))
@@ -174,7 +173,7 @@ class Supervisor(BoxComponent):
                 await self.out_channels['Customer'].send(True)
                 self.spot_no=self.spot_no-1
                 await self.out_channels['GameEnter'].send(car)
-                spot = self.pick_spot(car,Planner)
+                #spot = self.pick_spot(car,Planner)
                 self.parking_spots[spot]=(('Assigned',car.name))
                 self.cars.update({car.name: 'Assigned'})
                 self.priority.update({car.name: '0'})

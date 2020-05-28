@@ -57,7 +57,7 @@ class Car(BoxComponent):
         self.area_requested = False
         self.picked_up = False
 
-    async def update_planner_command(self,send_response_channel,Game, Time):
+    async def update_planner_command(self,send_response_channel,Game, Time): # directive/response system - receiving directives
         async with self.in_channels['Planner']:
             async for directive in self.in_channels['Planner']:
                 if directive == 'Wait':
@@ -91,11 +91,14 @@ class Car(BoxComponent):
                     self.ref = directive
                     print('Tracking this path:')
                     print(self.ref)
+                elif directive == 'OriginalPath':
+                    print('Tracking the original path and wait for failure to be removed ID {0}'.format(self.id))
+                    print(self.ref)
+                    await self.track_reference(Game,send_response_channel, Time)
                 elif not directive:
                     trio.sleep(0)
                 elif not self.picked_up:
                     print('{0} - Receiving Directive from Planner'.format(self.name))
-                    #self.status = 'Replan'
                     self.ref = np.array(directive)
                     print(self.ref)
                     #if self.replan:
@@ -120,7 +123,7 @@ class Car(BoxComponent):
                 break
         return oa, od
 
-    async def stop_car(self):
+    async def stop_car(self): # bringing car to a full stop asap
         if not self.status == 'Stop':
         # bring car to a full stop
             odelta, oa = None, None
@@ -132,27 +135,20 @@ class Car(BoxComponent):
             dl = 1.0
             goal = [cx[-1], cy[-1]]
             target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
-            #sp = tracking.calc_speed_profile(cx, cy, cyaw, 0,0,self.direction)
             sp = [self.v, self.v/2, 0]
-            #print('sp')
-            #print(sp)
             xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
             x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
             oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
             if odelta is not None:
                 di, ai = odelta[0], oa[0]
             self.state = tracking.update_state(self.state, ai, di)
-            #time = time + tracking.DT
             self.x = self.state.x
             self.y = self.state.y
             self.yaw = self.state.yaw
             self.v = self.state.v
-            #if tracking.check_goal(self.state, goal, target_ind, len(cx),0,self.last_segment): # modified goal speed
-                #break
 
     async def track_async(self, cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed,Game,send_response_channel,Time): # modified from MPC
         goal = [cx[-1], cy[-1]]
-        #print('I am at {0} and {1}'.format(self.x,self.y))
         self.state = initial_state
         # initial yaw compensation
         if self.state.yaw - cyaw[0] >= math.pi:
@@ -174,6 +170,11 @@ class Car(BoxComponent):
                 print('{0} Removed'.format(self.name))
                 self.v = 0
                 return
+            elif self.status == 'Replan':
+                    print('{0} Stopping the Tracking, ID {1}'.format(self.name, self.id))
+                    await self.stop_car()
+                    #self.v = 0 # include braking here
+                    return
             while not self.path_clear(Game) or blocked:
                 await self.stop_car()
                 self.status = 'Stop'
@@ -264,7 +265,10 @@ class Car(BoxComponent):
         # print("car.delay"+str(self.delay))
         # print("now"+str(now))
         self.update_delay(Time)
-        self.current_segment = self.ref[:][0]
+        try:
+            self.current_segment = self.ref[:][0]
+        except:
+            st()
         print("{0} delay: {1}".format(self.name,self.delay))
         if self.delay > DELAY_THRESH and not self.area_requested:
             await self.request_reserved_area(send_response_channel)
@@ -308,6 +312,11 @@ class Car(BoxComponent):
                 else:
                     print('{0} will fail at acceptable spot: {1}'.format(self.name,failidx))
         # start tracking segments
+        elif self.status == 'Replan':
+            print('{0} Stopping the Tracking, ID {1}'.format(self.name, self.id))
+            await self.stop_car()
+            #self.v = 0 # include braking here
+            return
         for i in range(0,len(self.ref)-1):
             #print('{0} self.unparking'.format(self.name))
             #print(self.unparking)
@@ -321,6 +330,9 @@ class Car(BoxComponent):
             if self.check_car_close_2_spot(Game):
                 self.close = True
             self.status = 'Driving'
+            if self.ref == None:
+                await self.stop_car()
+                return
             path = self.ref[:][i]
             self.current_segment = path
             cx = path[:,0]*SCALE_FACTOR_PLAN
@@ -334,7 +346,7 @@ class Car(BoxComponent):
             await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,send_response_channel,Time)
             await trio.sleep(0)
             if self.status == 'Replan' or self.status=='Removed':
-                self.ref = None
+                #self.ref = None
                 return
         if not self.status == 'Failure':
             self.last_segment = True
@@ -350,7 +362,7 @@ class Car(BoxComponent):
             #print(sp)
             await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,0.0,Game,send_response_channel,Time)
             if self.status == 'Replan' or self.status=='Removed':
-                self.ref = None
+                #self.ref = None
                 return
             self.status = 'Completed'
             self.is_at_pickup = self.check_at_pickup(Game)

@@ -56,24 +56,23 @@ class Game(BoxComponent):
         area = car.current_segment
         #define points on the current segment
         n = len(area)
-        Points = np.zeros((n,2))
-        for i in range(0,n):
-            Points[i][0] = area[i][0]*SCALE_FACTOR_PLAN
-            Points[i][1] = area[i][1]*SCALE_FACTOR_PLAN
-        if n == 3:
-            line=LineString([(Points[0]),(Points[1]),(Points[2])])
-        elif n == 2:
-            line=LineString([(Points[0]),(Points[1])])
-        elif n == 4:
-            line=LineString([(Points[0]),(Points[1]),(Points[2]),(Points[3])])
-        area = line.buffer(3.5)
+        #Points = np.zeros((n,2))
+        line = [(entry[0],entry[1]) for entry in area]
+        linestring = LineString(line)
+
+        # for i in range(0,n):
+        #     Points[i][0] = area[i][0]*SCALE_FACTOR_PLAN
+        #     Points[i][1] = area[i][1]*SCALE_FACTOR_PLAN
+        # if n == 3:
+        #     line=LineString([(Points[0]),(Points[1]),(Points[2])])
+        # elif n == 2:
+        #     line=LineString([(Points[0]),(Points[1])])
+        # elif n == 4:
+        #     line=LineString([(Points[0]),(Points[1]),(Points[2]),(Points[3])])
+        area = linestring.buffer(3.5)
         print('Reserving for Car ID {0}'.format(car.id))
         print(car.current_segment)
         print(line)
-        #st()
-        #cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
-        #rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
-        #rotated_cone_reverse = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
         self.reserved_areas_requested.update({car: area})
         self.update_reserved_areas()
         #car.reserved = True
@@ -108,7 +107,6 @@ class Game(BoxComponent):
         print('{0} releasing reserved area'.format(car.id))
         self.reserved_areas.pop(car)
         self.update_reserved_areas()
-        #car.reserved = False
 
     def is_car_free_of_reserved_area(self,car):
         if not self.reserved_areas:
@@ -159,7 +157,6 @@ class Game(BoxComponent):
         return rotated_cone
 
     def get_vision_cone_pedestrian(self,car):
-        #openangle = 45
         length = 6 # m
         cone = Polygon([(car.x,car.y),(car.x,car.y+1),(car.x+length,car.y+1),(car.x+length,car.y-1),(car.x,car.y-1),(car.x,car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))

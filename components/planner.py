@@ -8,9 +8,8 @@ from variables.parking_data import parking_spots,parking_spots_original
 import math
 from ipdb import set_trace as st
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, Point, LineString
 from shapely import affinity
-#from motionplanning.parking_data import parking_spots
 
 class Planner(BoxComponent):
     def __init__(self, nursery):
@@ -37,7 +36,7 @@ class Planner(BoxComponent):
     def find_spot_coordinates(self, spot):
         return parking_spots[spot]
 
-    async def send_directive_to_car(self, car, end,Game):
+    async def send_directive_to_car(self, car, end, Game): # directive/response system
         if end == 'Reverse':
             end = (car.x/SCALE_FACTOR_PLAN+-car.direction*10, car.y/SCALE_FACTOR_PLAN+-car.direction*10, car.yaw, 0)
             print('Car moving out of the way to: '+str(end))
@@ -58,50 +57,87 @@ class Planner(BoxComponent):
             print('Planner - No Path found - sending Response to Supervisor')
             resp = ('NoPath', car)
             await self.send_response_to_supervisor(resp)
-            #await self.out_channels['Supervisor'].send((resp,car))
+            await self.out_channels[car.name].send('OriginalPath')
         await trio.sleep(1)
 
-    def add_obstacle(self, car,Game):
+    async def add_obstacle(self, car,Game): # add failed car coordinates to obstacle list
         self.obstacles.update({car.name: (car.x,car.y,car.yaw)})
         self.update_reachability_matrix(Game)
+        await self.check_obs_on_path(car, Game)
 
-    def rmv_obstacle(self, car,Game):
+    def rmv_obstacle(self, car,Game): # remove towed car from obstacle list
         self.obstacles.pop(car.name)
         self.update_reachability_matrix(Game)
 
-    def update_reachability_matrix(self,Game):
+    def update_reachability_matrix(self,Game): # check which parking spots are still reachable and update self.reachable
         start = (140,55,0,0) # start position on the grid
         self.get_current_planning_graph(Game)
         for i in list(parking_spots.keys()):
             end = self.find_spot_coordinates(i)
-            traj = self.get_path(start,end) 
+            traj, weight = self.get_path(start,end) 
             if traj:
                 self.reachable[i]=1
             else:
                 self.reachable[i]=0
 
-    def is_in_buffer(self,node_x,node_y,obs,):
+    async def check_obs_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
+        if self.is_single_failure_in_acceptable_area(obscar, gme):
+            obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
+            for carname in list(self.cars):
+                if carname != obscar.name:
+                    for car in gme.cars:
+                        if carname == car.name:
+                            if car.ref is not None:
+                                ref = np.concatenate(car.ref, axis=0) 
+                                ref = ref.tolist()
+                                del_idx = []
+                                for i in range(0,len(ref)-1): # remove duplicates
+                                    if np.all(ref[i]==ref[i+1]):
+                                        del_idx.append(i)
+                                del_idx = np.flip(del_idx)
+                                for k in del_idx:
+                                    ref.pop(k)
+                                line = [(entry[0],entry[1]) for entry in ref]
+                                path = LineString(line)
+                                if obstacle.intersects(path):
+                                    print('FAILURE ON PATH - NEED NEW PATH ID {0}'.format(car.id))
+                                    car.status == 'Replan'
+                                    await self.replan_path(car, gme)
+                            
+    async def replan_path(self,car, Game):
+        car.status = 'Replan'
+        if self.cars.get(car.name,0)=='Assigned':
+            for key, val in self.spots.items(): 
+                if val == car.name: 
+                    spot = key
+            end = self.find_spot_coordinates(spot)
+            car.replan = True
+            print('Car {} receives a new directive'.format(car.id))
+            await self.send_directive_to_car(car, end, Game)
+        elif self.cars.get(car.name,0)=='Request':
+            await self.send_directive_to_car(car, PICK_UP, Game)
+
+    def is_in_buffer(self,node_x,node_y,obs,): # find nodes in a buffer area around the obstacle to delete from grid
         # get car box around x,y
-        #print(obs)
         buffer_back = 15
         buffer_side = 15
         buffer_front = 15
         for i in range(0,len(obs)):
+            # create a buffer box around the obstacle coordinates
             x = obs[i][0]
             y = obs[i][1]
             yaw = obs[i][2]
             box = Polygon([(x-buffer_back, y+buffer_side),(x-buffer_back,y-buffer_side),(x+buffer_front,y-buffer_side),(x+buffer_front,y+buffer_side),(x-buffer_back, y+buffer_side)])
             rot_box = affinity.rotate(box, np.rad2deg(yaw), origin = (x,y))
-        # assume radius of 10 pixels (gridsize) to delete around obstacle center
+            # add additional buffer of 1/2 gridsize to every node and check if it intersects the buffer region
             if Point(node_x,node_y).buffer(5).intersects(rot_box):
                 return True
         return False
 
-    def get_current_planning_graph(self,Game):
+    def get_current_planning_graph(self,Game): # includes all current obstacles
         # loop through obstacles and generate new graph
         if self.obstacles:
             print('Updating Planning Graph')
-            #print(self.obstacles)
             if self.is_failure_in_acceptable_area(Game):
                 print('Failure is in acceptable area')
                 obs = []
@@ -111,12 +147,11 @@ class Planner(BoxComponent):
                     obs_boxes.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(15.0))
                 obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs]
                 print(obs)
-                # assume obs not in the lane area
+                # assume obs not in the acceptable area to use graph with lanes
                 self.planning_graph_in_use = self.original_lanes_planning_graph
-                # check if obstacle is in lanes_box
+                # check if obstacle is in lanes_box (acceptable area)
                 for obs_box in obs_boxes:
                     if obs_box.intersects(self.lanes_box):
-                        print('AAAABBBBCCCCC')
                         self.planning_graph_in_use = self.original_free_planning_graph
                 # find grid nodes around obstacle
                 nodes = self.planning_graph_in_use['graph']._nodes
@@ -135,21 +170,20 @@ class Planner(BoxComponent):
         else:
             self.planning_graph = self.original_lanes_planning_graph
 
-    def get_path(self, start, end): 
-        #self.get_current_planning_graph()
+    def get_path(self, start, end): # compute path using grid_planner + end_planner
         traj = None
         try:
             traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph)
         except:
             st()
-        if traj:
+        if traj and not weight == np.inf:
             return traj, weight
         else: 
             traj = False
             weight = None
             return traj, weight
 
-    async def update_car_response(self, receive_response_channel,Game):
+    async def update_car_response(self, receive_response_channel,Game): # directive/response system
         async with receive_response_channel:
             async for response in receive_response_channel:
                 car = response[0]
@@ -161,8 +195,8 @@ class Planner(BoxComponent):
                     elif self.cars.get(car.name,0)=='Request':
                         self.cars.pop(car.name)
                     await self.send_response_to_supervisor((resp,car))
-                if response[1]=='Failure':
-                    self.add_obstacle(car,Game)
+                if response[1]=='Failure': # car reports Failure
+                    await self.add_obstacle(car,Game) # add obstacle to list
                     self.cars.update({car.name: 'Failure'})
                     await self.send_response_to_supervisor((resp,car))
                 elif response[1]=='Blocked':
@@ -190,7 +224,7 @@ class Planner(BoxComponent):
                 print(self.cars)
                 # await self.send_response_to_supervisor((resp,car))
 
-    async def send_response_to_supervisor(self,resp):
+    async def send_response_to_supervisor(self,resp): # directive/response system
         response = resp[0]
         car = resp[1]
         #print(resp)
@@ -198,7 +232,7 @@ class Planner(BoxComponent):
         await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
     
-    async def check_supervisor(self,send_response_channel,Game, Time):
+    async def check_supervisor(self,send_response_channel,Game, Time): # directive/response system (receiving directives from supervisor)
         async for directive in self.in_channels['Supervisor']:
             car = directive[0]
             todo = directive[1]
@@ -248,13 +282,18 @@ class Planner(BoxComponent):
         is_acceptable = gme.is_failure_acceptable(self.obstacles)
         return is_acceptable
 
+    def is_single_failure_in_acceptable_area(self,car,gme):
+        obs = {car.name : [car.x,car.y,car.yaw]}
+        is_acceptable = gme.is_failure_acceptable(obs)
+        return is_acceptable
+
     def check_reachability(self,spot):
         if self.reachable[spot]:
             return True
         else:
             return False
 
-    async def run(self,Game, Time):
+    async def run(self,Game, Time): # run in trio nursery
         sys.path.append('../motionplanning')
         with open('planning_graph_lanes.pkl', 'rb') as f:
             self.original_lanes_planning_graph = pickle.load(f)
