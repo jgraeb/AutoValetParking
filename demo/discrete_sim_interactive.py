@@ -17,16 +17,16 @@ from PIL import Image
 
 import time, platform, warnings, matplotlib, random
 import datetime
-if platform.system() == 'Darwin': # if the operating system is MacOS
-#    matplotlib.use('macosx')
-    matplotlib.use('Qt5Agg')
-else: # if the operating system is Linux or Windows
-    try:
-        import PySide2 # if pyside2 is installed
-        matplotlib.use('Qt5Agg')
-    except ImportError:
-        warnings.warn('Using the TkAgg backend, this may affect performance. Consider installing pyside2 for Qt5Agg backend')
-        matplotlib.use('TkAgg') # this may be slower
+# if platform.system() == 'Darwin': # if the operating system is MacOS
+# #    matplotlib.use('macosx')
+#     matplotlib.use('Qt5Agg')
+# else: # if the operating system is Linux or Windows
+#     try:
+#         import PySide2 # if pyside2 is installed
+#         matplotlib.use('Qt5Agg')
+#     except ImportError:
+#         warnings.warn('Using the TkAgg backend, this may affect performance. Consider installing pyside2 for Qt5Agg backend')
+#         matplotlib.use('TkAgg') # this may be slower
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
     
@@ -60,7 +60,7 @@ def animate(frame_idx): # update animation by dt
     global background, input_values, state
     ax.clear()
     x,y,theta = cell_coordinates[state]
-    draw_car(background,x,y,theta) # draw cars to background
+    draw_car(ax,background,x,y,theta) # draw cars to background
     
     if pedestrian.state[0] < end_walk_lane[0]: # if not at the destination
         pedestrian.prim_next(dt)
