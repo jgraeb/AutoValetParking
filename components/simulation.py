@@ -1,12 +1,13 @@
 from components.boxcomponent import BoxComponent
 import trio
 import sys
+import numpy as np
 sys.path.append('..') # enable importing modules from an upper directory
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from prepare.helper import draw_car, draw_pedestrian, show_traj
 from animation.component import parking_lot
-from variables.global_vars import *
+from variables.global_vars import SCALE_FACTOR_SIM, SCALE_FACTOR_PLAN
 from variables.parking_data import parking_spots
 #from motionplanning.parking_data import parking_spots
 from ipdb import set_trace as st
@@ -76,7 +77,8 @@ class Simulation(BoxComponent):
             draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,car)
             # draw car trajectories
             if car.ref!= None and show_trajs:
-                show_traj(self.ax,self.background, car.ref)
+                ref = car.ref[car.idx:]
+                show_traj(self.ax,self.background, ref)
             f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
         f.close()
         # to check parking spot locations

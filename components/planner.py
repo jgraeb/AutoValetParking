@@ -1,12 +1,14 @@
 from components.boxcomponent import BoxComponent
 import trio
+import numpy as np
 import _pickle as pickle
 import motionplanning.end_planner as path_planner
-from prepare.communication import *
-from variables.global_vars import *
+from prepare.communication import create_bidirectional_channel, create_unidirectional_channel, get_current_time
+from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP
 from variables.parking_data import parking_spots,parking_spots_original
 import math
 from ipdb import set_trace as st
+import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
 from shapely import affinity
@@ -77,7 +79,7 @@ class Planner(BoxComponent):
         self.get_current_planning_graph(Game)
         for i in list(parking_spots.keys()):
             end = self.find_spot_coordinates(i)
-            traj, weight = self.get_path(start,end) 
+            traj, _ = self.get_path(start,end) 
             if traj:
                 self.reachable[i]=1
             else:
@@ -91,7 +93,9 @@ class Planner(BoxComponent):
                     for car in gme.cars:
                         if carname == car.name:
                             if car.ref is not None:
-                                ref = np.concatenate(car.ref, axis=0) 
+                                ref = car.ref
+                                ref = ref[car.idx:]
+                                ref = np.concatenate(ref, axis=0) 
                                 ref = ref.tolist()
                                 del_idx = []
                                 for i in range(0,len(ref)-1): # remove duplicates
@@ -281,11 +285,6 @@ class Planner(BoxComponent):
                 print('Planner - {0} has to drive back into the spot to make space'.format(car.name))
                 car.status = 'Replan'
                 car.replan = True
-                # for key, val in self.spots.items(): 
-                #     if val == car.name: 
-                #         spot = key
-                # end = self.find_spot_coordinates(spot)
-                #await self.send_directive_to_car(car, end,Game)
                 await self.out_channels[car.name].send('Back2spot')
             elif todo == 'ReserveReverse':
                 Res_Area = Game.reserve_reverse(car)

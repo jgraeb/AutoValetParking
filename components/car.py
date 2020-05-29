@@ -1,7 +1,8 @@
 from components.boxcomponent import BoxComponent
 import trio
-from variables.global_vars import *
-from prepare.communication import *
+import numpy as np
+from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED
+#from prepare.communication import  
 import motiontracking.mpc_tracking as tracking
 import math
 from components.game import Game
@@ -56,6 +57,7 @@ class Car(BoxComponent):
         self.reserved = False
         self.area_requested = False
         self.picked_up = False
+        self.idx = 0
 
     async def update_planner_command(self,send_response_channel,Game, Time): # directive/response system - receiving directives
         async with self.in_channels['Planner']:
@@ -75,7 +77,6 @@ class Car(BoxComponent):
                     self.ref = directive
                     print('Tracking this path:')
                     print(self.ref)
-                    # st()
                     self.replan = True
                     self.last_segment = True
                     self.direction = 1
@@ -93,14 +94,14 @@ class Car(BoxComponent):
                     print(self.ref)
                 elif directive == 'OriginalPath':
                     print('Tracking the original path and wait for failure to be removed ID {0}'.format(self.id))
-                    print(self.ref)
+                    #print(self.ref)
                     await self.track_reference(Game,send_response_channel, Time)
                 elif not directive:
                     trio.sleep(0)
                 elif not self.picked_up:
                     print('{0} - Receiving Directive from Planner'.format(self.name))
                     self.ref = np.array(directive)
-                    print(self.ref)
+                    #print(self.ref)
                     #if self.replan:
                     #print('Tracking this path:')
                     #print(directive)
@@ -114,7 +115,7 @@ class Car(BoxComponent):
         if oa is None or od is None:
             oa = [0.0] * tracking.T
             od = [0.0] * tracking.T
-        for i in range(tracking.MAX_ITER):
+        for _ in range(tracking.MAX_ITER):
             xbar = tracking.predict_motion(x0, oa, od, xref)
             poa, pod = oa[:], od[:]
             oa, od, _, _, _, _ = tracking.linear_mpc_control(xref, xbar, x0, dref)
@@ -133,7 +134,7 @@ class Car(BoxComponent):
             cyaw = [self.yaw, self.yaw, self.yaw]
             ck = 0
             dl = 1.0
-            goal = [cx[-1], cy[-1]]
+            #goal = [cx[-1], cy[-1]]
             target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
             sp = [self.v, self.v/2, 0]
             xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
@@ -256,7 +257,7 @@ class Car(BoxComponent):
         await send_response_channel.send((self,response))
  
     async def track_reference(self,Game,send_response_channel, Time):
-        now = trio.current_time()
+        #now = trio.current_time()
         # if self.depart_time + Time.START_TIME <= now:
         #     self.delay = (now-Time.START_TIME)-self.depart_time
         print('{0} - Tracking reference...'.format(self.name))
@@ -297,6 +298,8 @@ class Car(BoxComponent):
         failidx = len(self.ref)
         chance = random.randint(1,100) # changed to 0!!!
         if self.id == 0:
+            chance = 100
+        elif self.id ==1:
             chance = 1
         if not self.replan:
             if len(self.ref)-1>4 and chance <=30:
@@ -320,6 +323,7 @@ class Car(BoxComponent):
         for i in range(0,len(self.ref)-1):
             #print('{0} self.unparking'.format(self.name))
             #print(self.unparking)
+            self.idx = i
             if (i==failidx):
                 print('{0} Failing'.format(self.name))
                 await self.failure(send_response_channel)
@@ -330,7 +334,7 @@ class Car(BoxComponent):
             if self.check_car_close_2_spot(Game):
                 self.close = True
             self.status = 'Driving'
-            if self.ref == None:
+            if self.ref[0].all() == None: 
                 await self.stop_car()
                 return
             path = self.ref[:][i]
@@ -350,6 +354,7 @@ class Car(BoxComponent):
                 return
         if not self.status == 'Failure':
             self.last_segment = True
+            self.idx = len(self.ref)-1
             state = np.array([self.x, self.y,self.yaw])
             path = self.ref[:][-1]
             cx = path[:,0]*SCALE_FACTOR_PLAN
@@ -425,8 +430,9 @@ class Car(BoxComponent):
 
     async def failure(self,send_response_channel):
         self.status = 'Failure'
+        self.ref = None
         await self.send_response(send_response_channel)
-        await trio.sleep(1000) # freeze car
+        #await trio.sleep(1000) # freeze car
 
     # async def cancel_car(self,nursery):
     #     while True:
