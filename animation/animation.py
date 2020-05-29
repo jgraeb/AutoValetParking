@@ -8,10 +8,11 @@ Created in Mar 2020
 """
 import sys
 import pickle
+import numpy as np
 import component.pedestrian as Pedestrian
 sys.path.append('..') # enable importing modules from an upper directory:
 from PIL import Image
-from prepare.helper import *
+from prepare.helper import draw_car, show_traj, draw_pedestrian, draw_grey_car
 import time, platform, warnings, matplotlib, random
 import datetime
 # if platform.system() == 'Darwin': # if the operating system is MacOS
@@ -27,7 +28,7 @@ import datetime
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from component import parking_lot
-from variables.global_vars import *
+from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM
 from variables.parking_data import parking_spots, grey_cars
 import components
 import environment

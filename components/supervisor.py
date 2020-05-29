@@ -1,7 +1,7 @@
 from components.boxcomponent import BoxComponent
 import trio
 import random
-from variables.global_vars import *
+from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2
 from environment.pedestrian import Pedestrian
 from components.planner import Planner
 from variables.parking_data import parking_spots #bad_parking_spot as parking_spots
@@ -92,10 +92,10 @@ class Supervisor(BoxComponent):
                     await self.reserve_reverse_area(car)
                 elif resp[0] == 'Conflict':
                     #print(self.priority)
-                    prio_car = self.priority.get(car.name)
+                    #prio_car = self.priority.get(car.name)
                     car_list = resp[1]
                     for cars in car_list:
-                        prio = self.priority.get(cars.name)
+                        #prio = self.priority.get(cars.name)
                         if car.unparking and not cars.unparking:
                             print("{0} delay: {1}".format(car.name,car.delay))
                             if car.delay <= DELAY_THRESH:
@@ -135,12 +135,13 @@ class Supervisor(BoxComponent):
     async def tow(self,car):
         await trio.sleep(TOW_TIME)
         # removing car from lot
-        await self.out_channels['GameExit'].send(car)
+        #await self.out_channels['GameExit'].send(car)
         directive = [car, 'Towed'] 
         await self.out_channels['Planner'].send(directive)
         self.cars.pop(car.name)
         self.priority.pop(car.name)
         self.failures.pop(car.name)
+        await self.out_channels['GameExit'].send(car)
         for spot, value in self.parking_spots.items(): 
             if value == ('Assigned',car.name) or value == ('Occupied', car.name) or value == ('Requested', car.name): 
                 val = spot

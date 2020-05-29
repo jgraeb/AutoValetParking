@@ -2,7 +2,7 @@ from components.boxcomponent import BoxComponent
 import trio
 import numpy as np
 import math
-from variables.global_vars import *
+from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
@@ -38,8 +38,9 @@ class Game(BoxComponent):
     async def keep_track_outflux(self):
         async with self.in_channels['GameExit']:
             async for car in self.in_channels['GameExit']:
-                await self.out_channels['Exit'].send(car)
                 await self.out_channels['ExitSim'].send(car)
+                await self.out_channels['Exit'].send(car)
+                #await self.out_channels['ExitSim'].send(car)
                 print('Game System - Removing {0} from Game'.format(car.name))
                 self.cars.remove(car)
                 #car.cancel = True
@@ -55,7 +56,7 @@ class Game(BoxComponent):
     def reserve_reverse(self,car):
         area = car.current_segment
         #define points on the current segment
-        n = len(area)
+        #n = len(area)
         #Points = np.zeros((n,2))
         line = [(entry[0],entry[1]) for entry in area]
         linestring = LineString(line)
