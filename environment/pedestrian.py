@@ -1,3 +1,8 @@
+# Automated Valet Parking - Environment Pedestrian Component
+# Jiaqi Yan, Tung, Phan, Josefine Graebener
+# California Institute of Technology
+# March, 2020
+
 from components.boxcomponent import BoxComponent
 import trio
 from variables.global_vars import *

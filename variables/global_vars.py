@@ -1,11 +1,9 @@
+# Global Variables for Automated Valet Parking
+
 import numpy as np
 import sys
 sys.path.append('..')
 current_time = 0
-
-pedestrians_to_keep= set()
-cars_to_show = []
-pedestrians_to_show = []
 ###
 average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate

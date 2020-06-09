@@ -82,7 +82,9 @@ def draw_car(ax, background,x,y,theta,car = None):
     #background.paste(vehicle_fig, (x, y), vehicle_fig)
     if car:
         ax.text(x_corner,y_corner,str(car.id), color='w', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='red', alpha=0.4), fontsize=5)
-        if car.status == 'Stop':
+        if car.status == 'Failure':
+            ax.text(x,y,'F', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+        elif car.status == 'Stop':
             ax.text(x,y,'S', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
         elif car.reserved:
             ax.text(x,y,'R', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
@@ -96,8 +98,6 @@ def draw_car(ax, background,x,y,theta,car = None):
             ax.text(x,y,'D', color='g', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
         elif car.status == 'Idle':
             ax.text(x,y,'I', color='black', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.status == 'Failure':
-            ax.text(x,y,'F', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
         elif car.status == 'Blocked':
             ax.text(x,y,'B', color='y', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
         elif car.status == 'Replan':

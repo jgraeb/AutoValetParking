@@ -1,13 +1,19 @@
+# Automated Valet Parking - Garage Game Component
+# Josefine Graebener
+# California Institute of Technology
+# March, 2020
+
 from components.boxcomponent import BoxComponent
 import trio
 import numpy as np
 import math
+from components.gametools import make_line, remove_duplicates, rad2rad
 from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
 from shapely import affinity
-from shapely.ops import nearest_points
+from shapely.ops import nearest_points, split
 from variables.parking_data import parking_spots
 from ipdb import set_trace as st
 
@@ -17,15 +23,17 @@ class Game(BoxComponent):
         self.name = self.__class__.__name__
         self.cars = []
         self.peds = []
-        #self.lot_status = []
         self.car_boxes = dict()
         self.dropoff_box = Polygon([(40, 18), (40, 15), (47, 18), (47, 15), (40, 18)])
         self.pickup_box = Point(260*SCALE_FACTOR_PLAN, 60*SCALE_FACTOR_PLAN).buffer(1.0)
         self.park_boxes = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(1.0) for i in list(parking_spots.keys())]
         self.park_boxes_area = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(3.0) for i in list(parking_spots.keys())]
         self.accept_box = Polygon([(160*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (160*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (230*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (230*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (160*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN)])
+        self.lane1box = Polygon([(160*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (160*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (295*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (295*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (160*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN)])
+        self.lane2box = Polygon([(195*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (195*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (230*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN), (230*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN), (195*SCALE_FACTOR_PLAN, 75*SCALE_FACTOR_PLAN)])
         self.reserved_areas = dict()
         self.reserved_areas_requested = dict()
+        self.trajs = dict()
 
     async def keep_track_influx(self):
         async with self.in_channels['GameEnter']:
@@ -56,39 +64,82 @@ class Game(BoxComponent):
     def reserve_reverse(self,car):
         area = car.current_segment
         #define points on the current segment
-        #n = len(area)
-        #Points = np.zeros((n,2))
-        line = [(entry[0],entry[1]) for entry in area]
+        line = [(entry[0]*SCALE_FACTOR_PLAN,entry[1]*SCALE_FACTOR_PLAN) for entry in area]
         linestring = LineString(line)
-
-        # for i in range(0,n):
-        #     Points[i][0] = area[i][0]*SCALE_FACTOR_PLAN
-        #     Points[i][1] = area[i][1]*SCALE_FACTOR_PLAN
-        # if n == 3:
-        #     line=LineString([(Points[0]),(Points[1]),(Points[2])])
-        # elif n == 2:
-        #     line=LineString([(Points[0]),(Points[1])])
-        # elif n == 4:
-        #     line=LineString([(Points[0]),(Points[1]),(Points[2]),(Points[3])])
         area = linestring.buffer(3.5)
         print('Reserving for Car ID {0}'.format(car.id))
         print(car.current_segment)
         print(line)
         self.reserved_areas_requested.update({car: area})
         self.update_reserved_areas()
-        #car.reserved = True
+
+    def check_and_reserve_other_lane(self,car,newtraj):
+        # here reserve other lane if necessary
+        print('Checking if Car {0} is crossing into other lane'.format(car.id))
+        newlinestring = make_line(newtraj)
+        if newlinestring.intersects(self.lane2box) and newlinestring.intersects(self.lane1box):
+            print('Have to reserve other lane for  Car {0}'.format(car.id))
+
+    def reserve_replanning(self,car,newtraj,obs): # find area to reserve
+        oldpath = car.ref[car.idx:]
+        oldlinestring = make_line(oldpath)
+        # find location of failure on path
+        failpoint = nearest_points(oldlinestring,obs)
+        originalpath = split(oldlinestring,failpoint[0])
+        originaltraj = originalpath[1]
+        # new trajectory from planner around obstacle
+        newlinestring = make_line(newtraj)
+        # find intersection of old path and new path after passing the failure
+        intersection = originaltraj.intersection(newlinestring)
+        try:
+            point = Point(intersection[0].coords[0])
+        except:
+            st()
+        print('Intersection is at: {0}, {1}'.format(point.x,point.y))
+        traj = split(newlinestring,point)
+        # reserve new path until getting back to original path
+        traj = traj[0]
+        area = traj.buffer(3.5)
+        print('Reserving Replanning Area for Car ID {0}'.format(car.id))
+        #st()
+        self.reserved_areas_requested.update({car: area})
+        self.trajs.update({car: (traj,point)})
+        self.update_reserved_areas()
+
+    def update_reserved_area_for_car(self,car): # make sure to reserve area on path and release behind car
+        path = car.ref[car.idx:]
+        path = make_line(path) 
+        _, point = self.trajs.get(car,0)
+        if point.intersects(path):
+            segments = split(path,point)
+        if not point.intersects(path) or len(segments)==1: # stop updating the reserved area if car is leaving it
+            return
+        # choose first segment and update reserved areas
+        segments = segments[0]
+        rem_area = segments.buffer(3.5)
+        if self.reserved_areas.get(car,0)!=0:
+            self.reserved_areas.update({car: rem_area})
+        elif self.reserved_areas_requested.get(car,0)!=0:
+            self.reserved_areas_requested.update({car: rem_area})
     
     def update_reserved_areas(self):
         items_to_delete=[]
-        skip_line = False
+        check_before = False
         for key_req,val_req in self.reserved_areas_requested.items():
             accept = True
-            if skip_line:
-                break
-            for key,val in self.reserved_areas.items():
-                if val_req.intersects(val):
-                    accept = False
-                    skip_line = True
+            if check_before:
+                for key_before,val_before in self.reserved_areas_requested.items():
+                    if key_req == key_before:
+                        break
+                    elif val_req.intersects(val_before):
+                        accept = False
+                        break
+            if accept:
+                for key,val in self.reserved_areas.items():
+                    if val_req.intersects(val):
+                        accept = False
+                        check_before = True
+                        break
             if accept:
                 self.reserved_areas.update({key_req: val_req})
                 items_to_delete.append(key_req)
@@ -104,9 +155,10 @@ class Game(BoxComponent):
         for key in self.reserved_areas_requested.keys():
             print(key.id)
 
-    def release_reverse_area(self, car):
+    def release_reserved_area(self, car):
         print('{0} releasing reserved area'.format(car.id))
         self.reserved_areas.pop(car)
+        self.trajs.pop(car)
         self.update_reserved_areas()
 
     def is_car_free_of_reserved_area(self,car):
@@ -120,6 +172,7 @@ class Game(BoxComponent):
         mybox = self.car_boxes.get(car.name,0)
         try:
             if mycone.intersects(area) or mybox.intersects(area):
+                print('Car {} still in reserved area'.format(car.id))
                 return False
         except:
             st()
@@ -127,18 +180,18 @@ class Game(BoxComponent):
 
     def get_vision_cone(self,car):
         buffer = car.v/10*0.4
-        if car.replan and car.last_segment:# and not car.retrieving:
-            openangle = 30
-            length = 3
-        elif car.last_segment and not car.retrieving:
+        # if car.replan and car.last_segment:# and not car.retrieving:
+        #     openangle = 30
+        #     length = 3
+        if car.last_segment and not car.retrieving:
             openangle = 45
             length = 4 # m
         elif car.unparking:
             openangle = 60
             length = 4+buffer # m # changes here to try
-        elif car.close or car.replan:
+        elif car.close:# or car.replan:
             openangle = 30
-            length = 5.0 # m
+            length = 5.0+buffer # m
         else:
             openangle = 30
             length = 6 + buffer # m
@@ -149,8 +202,9 @@ class Game(BoxComponent):
         return rotated_cone
 
     def get_vision_cone_blocked(self,car):
+        buffer = car.v/10*0.4
         openangle = 45
-        length = 8 # m
+        length = 8 + buffer # m # was 6
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking:
@@ -165,22 +219,19 @@ class Game(BoxComponent):
             rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
         return rotated_cone
 
-    def rad2rad(self,angle):
-        if abs(angle)>np.pi:
-            if angle > np.pi:
-                angle = np.mod(angle, 2*np.pi)
-                diff = angle - np.pi
-                angle = diff - np.pi
-            elif angle < -np.pi:
-                angle = np.mod(angle, 2*np.pi)
-                diff = angle + np.pi
-                angle = np.pi - diff
-        return angle
+    def get_forward_vision_cone(self,car):
+        length = 6 # m
+        cone = Polygon([(car.x,car.y),(car.x,car.y+1),(car.x+length,car.y+1),(car.x+length,car.y-1),(car.x,car.y-1),(car.x,car.y)])
+        rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
+        if car.direction == -1 or car.unparking:
+            rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
+        return rotated_cone
 
     def check_car_path(self,car):
         conflict_cars = []
-        failed = False
+        failed_car = False
         blocked = False
+        blocked_by = False
         clearpath = True
         conflict = False
         stop_reserved = False
@@ -222,8 +273,10 @@ class Game(BoxComponent):
                             if cars.name == key:
                                 if cars.status=='Failure' or cars.status =='Blocked':
                                     blocked = True 
-                                    print('Failure or blocked car ahead')
+                                    blocked_by = cars
+                                    print('Failure or blocked car {0} ahead'.format(cars.id))
         clearpath = True
+        mysmallcone = self.get_forward_vision_cone(car)
         for key,val in self.car_boxes.items():
             if key != car.name:
                 if mycone.intersects(val):
@@ -232,9 +285,10 @@ class Game(BoxComponent):
                         if cars.name == key:
                             if cars.status=='Failure':
                                 #failed_cars.append(cars)
-                                failed = True
-                                print('{0} blocked by a failed car, ID {1}'.format(car.name, car.id))
-                                clearpath = False
+                                failed_car = True
+                                if mysmallcone.intersects(val):
+                                    print('{0} blocked by a failed car, ID {1}'.format(car.name, car.id))
+                                    clearpath = False
                             elif cars.parked:
                                 print('Blocked by a parked car - Go on ID {0}'.format(car.id))
                                 #clearpath = True
@@ -278,7 +332,7 @@ class Game(BoxComponent):
                         clearpath = False
                         print('BBBBBBBBBB ---- {0} stopped because of reserved area for Car {1} ahead'.format(car.id,key.id))
                     print('Stopping for reserved area ID {0}'.format(car.id))
-        return clearpath, conflict_cars, failed, conflict, blocked, stop_reserved
+        return clearpath, conflict_cars, failed_car, conflict, blocked, stop_reserved, blocked_by
 
     def clear_before_unparking(self,car):
         self.update_car_boxes()
@@ -306,11 +360,9 @@ class Game(BoxComponent):
             self.car_boxes.update({cars.name: rot_box})
 
     def dropoff_free(self):
-        # update car boxes
         self.update_car_boxes()
         for key,val in self.car_boxes.items():
             if self.dropoff_box.intersects(val):
-                #print('DROPOFF OCCUPIED')
                 return False
         return True
 
@@ -319,15 +371,10 @@ class Game(BoxComponent):
         mybox = self.car_boxes.get(car.name)
         if self.pickup_box.intersects(mybox):
             print('{0} is at pick up, ID {1}'.format(car.name,car.id))
-            # print('X '+str(car.x))
-            # print('Y '+str(car.y))
-            # print('Pickup Box '+str(260*SCALE_FACTOR_PLAN)+str(60*SCALE_FACTOR_PLAN))
-            #st()
             return True
         return False
 
     def is_car_in_spot(self,car):
-        #print('Checking if car {0} is in spot:'.format(car.name))
         self.update_car_boxes()
         mycar_box = self.car_boxes.get(car.name)
         for park_box in self.park_boxes:
@@ -336,7 +383,6 @@ class Game(BoxComponent):
         return False
 
     def is_car_close_2_spot(self,car):
-        #print('Checking if car {0} is in spot:'.format(car.name))
         self.update_car_boxes()
         mycar_box = self.car_boxes.get(car.name)
         for park_box in self.park_boxes_area:
@@ -349,7 +395,6 @@ class Game(BoxComponent):
             if not Point(val[0],val[1]).buffer(3).intersects(self.accept_box):
                 return False
         return True
-
 
     async def run(self):
         async with trio.open_nursery() as nursery:

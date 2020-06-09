@@ -1,3 +1,8 @@
+# Automated Valet Parking - Garage Supervisor Component
+# Josefine Graebener
+# California Institute of Technology
+# March, 2020
+
 from components.boxcomponent import BoxComponent
 import trio
 import random
@@ -31,10 +36,12 @@ class Supervisor(BoxComponent):
                     if (status[0] == 'Assigned') and not car.replan:
                         self.parking_spots[spot]=(('Occupied',car.name))
                         self.cars.update({car.name: 'Parked'})
+                        car.parked = True
                     elif car.is_at_pickup:
                         print('Supervisor - Car {0} is picked up'.format(car.name))
                         car.requested = False
                         car.picked_up = True
+                        car.ref = []
                         self.parking_spots[spot]=(('Vacant','None'))
                         await self.out_channels['GameExit'].send(car)
                         self.spot_no=self.spot_no+1

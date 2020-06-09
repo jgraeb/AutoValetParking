@@ -1,3 +1,8 @@
+# Automated Valet Parking Game Component
+# Josefine Graebener
+# California Institute of Technology
+# March, 2020
+
 import curses
 from ipdb import set_trace as st
 import numpy as np

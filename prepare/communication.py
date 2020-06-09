@@ -1,3 +1,8 @@
+# Automated Valet Parking - Communication Channels
+# Josefine Graebener
+# California Institute of Technology
+# March, 2020
+
 import trio
 import numpy as np
 

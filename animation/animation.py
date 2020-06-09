@@ -119,12 +119,6 @@ def animate(frame_idx): # update animation by dt
                 break
     
     # update background
-    # if add_parked_cars:
-    #     for key,value in grey_cars.items():
-    #         xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
-    #         yd = int(value[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+yoffset)
-    #         hd = np.deg2rad(-value[2])
-    #         draw_grey_car(background,float(xd),float(yd),float(hd))
     the_parking_lot = [ax.imshow(background)] # update the stage
     background.close()
     background = parking_lot.get_background()

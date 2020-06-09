@@ -1,3 +1,8 @@
+# Automated Valet Parking Game Component
+# Josefine Graebener
+# California Institute of Technology
+# March, 2020
+
 import trio
 import sys
 sys.path.append('..') # enable importing modules from an upper directory:
