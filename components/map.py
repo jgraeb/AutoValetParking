@@ -1,3 +1,8 @@
+# Automated Valet Parking - Garage Map Component
+# Josefine Graebener
+# California Institute of Technology
+# March, 2020
+
 from components.boxcomponent import BoxComponent
 import trio
 
@@ -19,20 +24,17 @@ class Map(BoxComponent):
             async for car in self.in_channels['Enter']:
                 print('Map System - Adding new car to Map')
                 self.car_positions.update({car.name: (car)})
-                #print(self.car_positions)
 
     async def send_camera_data_to_planner(self):
         async with self.in_channels['Planner']:
             async for car in self.in_channels['Planner']:
                 await self.send_position(car)
-                #print(self.car_positions)
             
     async def rmv_car_from_map(self):
         async with self.in_channels['Exit']:
             async for car in self.in_channels['Exit']:
                 print('Map System - Removing {0} from Map'.format(car.name))
                 self.car_positions.pop(car.name)
-                #print(self.car_positions)
 
     async def run(self):
         async with trio.open_nursery() as nursery:
