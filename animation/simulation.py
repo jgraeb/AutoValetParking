@@ -10,7 +10,7 @@ import numpy as np
 sys.path.append('..') # enable importing modules from an upper directory
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from prepare.helper import draw_car, draw_pedestrian, show_traj
+from animation.helper import draw_car, draw_pedestrian, show_traj
 from animation.component import parking_lot
 from variables.global_vars import SCALE_FACTOR_SIM, SCALE_FACTOR_PLAN
 from variables.parking_data import parking_spots
@@ -70,21 +70,45 @@ class Simulation(BoxComponent):
         xoffset = 0
         yoffset = 0
         f = open('../animation/stored_data/pedestrian_file_new.pkl','ab')
+        g = open('../animation/stored_data/car_file_new.pkl','ab')
         pickle.dump('FRAME'+str(ind)+'\n',f)
         for pedestrian in self.peds:
             draw_pedestrian(pedestrian,self.background)
             pickle.dump(pedestrian,f)
         f.close()
+        # TO DO figure out how to pickle cars
+        # pickle.dump('FRAME'+str(ind)+'\n',g)
+        # for car in self.cars: 
+        #     draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,car)
+        #     # draw car trajectories when running sim
+        #     if car.ref!= None and show_trajs:
+        #         ref = car.ref[car.idx:]
+        #         show_traj(self.ax,self.background, ref)
+        #     pickle.dump(car,g)
+        # g.close()
         
         f = open('../animation/stored_data/car_pos_new.txt','a')
         f.write('FRAME'+str(ind)+'\n')
         for car in self.cars: 
-            draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,car)
+            status = car.status
+            if car.parked:
+                status = 'Parked'
+            if car.requested:
+                if car.status=='Stop' or car.status =='Failure':
+                    status = car.status
+                else:
+                    status = 'Requested'
+            if car.reserved:
+                if car.status=='Stop' or car.status =='Failure':
+                    status = car.status
+                else:
+                    status = 'Reserved'
+            draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,status,car)
             # draw car trajectories
             if car.ref!= None and show_trajs:
                 ref = car.ref[car.idx:]
                 show_traj(self.ax,self.background, ref)
-            f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw), '\n'])
+            f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw),' ',str(status), '\n'])
         f.close()
         # to check parking spot locations
         if show_all_spots:
@@ -94,7 +118,7 @@ class Simulation(BoxComponent):
 #                print(value[0], value[1])
 #                print(xd, yd)
                 hd = np.deg2rad(-value[2])
-                draw_car(self.ax,self.background,xd,yd,hd) # without car
+                draw_car(self.ax,self.background,xd,yd,hd,None,None) # without car
         the_parking_lot = [self.ax.imshow(self.background)] # update the stage
         self.background.close()
         self.background = parking_lot.get_background()
@@ -123,11 +147,11 @@ class Simulation(BoxComponent):
 
     async def run(self):
         try:
-            os.remove("pedestrian_file_new.pkl")
+            os.remove("../animation/stored_data/pedestrian_file_new.pkl")
         except:
             print('No file to delete.')
         try:
-            os.remove("car_pos_new.txt")
+            os.remove("../animation/stored_data/car_pos_new.txt")
         except:
             print('No file to delete.')
         async with trio.open_nursery() as nursery:

@@ -12,7 +12,7 @@ import numpy as np
 import component.pedestrian as Pedestrian
 sys.path.append('..') # enable importing modules from an upper directory:
 from PIL import Image
-from prepare.helper import draw_car, show_traj, draw_pedestrian, draw_grey_car
+from animation.helper import draw_car, show_traj, draw_pedestrian, draw_grey_car
 import time, platform, warnings, matplotlib, random
 import datetime
 # if platform.system() == 'Darwin': # if the operating system is MacOS
@@ -36,7 +36,7 @@ import environment
     
 add_parked_cars = False
 # set to True to save video
-save_video = False
+save_video = True
 # creates figure
 fig = plt.figure()
 ax = fig.add_axes([0,0,1,1]) # get rid of white border
@@ -79,7 +79,7 @@ def animate(frame_idx): # update animation by dt
         for car in car_at_this_frame:
              car = car.split(' ')     
              try:
-                 draw_car(ax,background, float(car[0])*SCALE_FACTOR_SIM,float(car[1])*SCALE_FACTOR_SIM+yoffset,float(car[2]))
+                 draw_car(ax,background, float(car[0])*SCALE_FACTOR_SIM,float(car[1])*SCALE_FACTOR_SIM+yoffset,float(car[2]),car[3])
                  if add_parked_cars:
                     for key,value in grey_cars.items():
                         xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
@@ -130,7 +130,7 @@ if save_video:
     #Writer = animation.writers['ffmpeg']
     writer = animation.FFMpegWriter(fps = 10, metadata=dict(artist='Auto Park Simulator'), bitrate=None)
     now = str(datetime.datetime.now())
-    ani.save('../movies/' + now + '.mp4', dpi=200, writer=writer)
+    ani.save('../movies/' + now + '.mp4', dpi=300, writer=writer)
 plt.show()
 #t2 = time.time()
 #print('Total elapsed time: ' + str(t2-t0))

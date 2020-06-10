@@ -10,6 +10,7 @@ import os
 import numpy as np
 import random
 from PIL import Image
+from PIL import ImageFont,ImageDraw  
 from numpy import cos, sin, pi
 from animation.component import parking_lot
 from variables import global_vars
@@ -65,7 +66,7 @@ def find_corner_coordinates(x_state_center_before, y_state_center_before, x_desi
     y_corner_unknown = int(y_desired - y_state_center_after + y_corner_center_after)
     return x_corner_unknown, y_corner_unknown
 
-def draw_car(ax, background,x,y,theta,car = None):
+def draw_car(ax, background,x,y,theta,status,car=None):
     vehicle_fig = Image.open(car_fig)
     w_orig, h_orig = vehicle_fig.size
     # convert angle to degrees and positive counter-clockwise
@@ -81,27 +82,49 @@ def draw_car(ax, background,x,y,theta,car = None):
     background.paste(vehicle_fig, (x_corner, y_corner), vehicle_fig)
     #background.paste(vehicle_fig, (x, y), vehicle_fig)
     if car:
+        status = car.status
+        if car.parked:
+            status = 'Parked'
+        if car.requested:
+            if car.status=='Stop' or car.status =='Failure':
+                status = car.status
+            else:
+                status = 'Requested'
+        if car.reserved:
+            if car.status=='Stop' or car.status =='Failure':
+                status = car.status
+            else:
+                status = 'Reserved'
         ax.text(x_corner,y_corner,str(car.id), color='w', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='red', alpha=0.4), fontsize=5)
-        if car.status == 'Failure':
-            ax.text(x,y,'F', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.status == 'Stop':
-            ax.text(x,y,'S', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.reserved:
-            ax.text(x,y,'R', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.requested:
-            ax.text(x,y,'R', color='y', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.parked:
-            ax.text(x,y,'P', color='b', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.status == 'Conflict':
-            ax.text(x,y,'C', color='r', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.status == 'Driving':
-            ax.text(x,y,'D', color='g', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.status == 'Idle':
-            ax.text(x,y,'I', color='black', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.status == 'Blocked':
-            ax.text(x,y,'B', color='y', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
-        elif car.status == 'Replan':
-            ax.text(x,y,'R', color='g', horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='white', alpha=0.4), fontsize=7,fontweight='bold')
+    if status:
+        fontpath = 'NotoSans-ExtraBold.ttf'
+        try:
+            font = ImageFont.truetype(fontpath, 50)
+        except:
+            fontpath = '../animation/NotoSans-ExtraBold.ttf'
+            font = ImageFont.truetype(fontpath, 50)
+        draw = ImageDraw.Draw(background) 
+        draw.rectangle([(x-20, y-30), (x+25, y+25)], fill='snow', outline='black')
+        if status.rstrip() == 'Failure':
+            draw.text((x-15, y-35), 'F',fill='red',font=font,fontsize=7)
+        elif status.rstrip() == 'Stop':
+            draw.text((x-15, y-35), 'S',fill='darkred',font=font,fontsize=7)
+        elif status.rstrip() == 'Reserved':
+            draw.text((x-15, y-35), 'R',fill='red',font=font,fontsize=7)
+        elif status.rstrip() == 'Requested':
+            draw.text((x-15, y-35), 'R',fill='gold',font=font,fontsize=7)
+        elif status.rstrip() == 'Parked':
+            draw.text((x-15, y-35), 'P',fill='mediumblue',font=font,fontsize=7)
+        elif status.rstrip() == 'Conflict':
+            draw.text((x-15, y-35), 'C',fill='deeppink',font=font,fontsize=7)
+        elif status.rstrip() == 'Driving':
+            draw.text((x-15, y-35), 'D',fill='darkgreen',font=font,fontsize=7)
+        elif status.rstrip() == 'Idle':
+            draw.text((x-15, y-35), 'I',fill='black',font=font,fontsize=7)
+        elif status.rstrip() == 'Blocked':
+            draw.text((x-15, y-35), 'B',fill='darkorange',font=font,fontsize=7)
+        elif status.rstrip() == 'Replan':
+            draw.text((x-15, y-35), 'R',fill='slateblue',font=font,fontsize=7)
         
 
 def show_traj(ax,background, ref):

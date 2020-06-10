@@ -12,7 +12,7 @@ from variables.global_vars import average_arrival_rate, average_park_time, OPEN_
 # import components
 from components.boxcomponent import Time
 from components.game import Game
-from components.simulation import Simulation
+from animation.simulation import Simulation
 from components.map  import Map
 from components.planner import Planner
 from environment.pedestrian import Pedestrian
