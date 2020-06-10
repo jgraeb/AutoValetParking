@@ -7,7 +7,7 @@ from components.boxcomponent import BoxComponent
 import trio
 import numpy as np
 import math
-from components.gametools import make_line, remove_duplicates, rad2rad
+from components.camera.gametools import make_line, remove_duplicates, rad2rad
 from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
