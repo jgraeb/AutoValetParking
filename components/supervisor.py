@@ -3,7 +3,7 @@
 # California Institute of Technology
 # March, 2020
 
-from components.boxcomponent import BoxComponent
+from prepare.boxcomponent import BoxComponent
 import trio
 import random
 from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2

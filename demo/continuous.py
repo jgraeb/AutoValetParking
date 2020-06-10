@@ -10,7 +10,7 @@ sys.path.append('..') # enable importing modules from an upper directory:
 from prepare.communication import set_up_channels
 from variables.global_vars import average_arrival_rate, average_park_time, OPEN_TIME
 # import components
-from components.boxcomponent import Time
+from prepare.boxcomponent import Time
 from components.game import Game
 from animation.simulation import Simulation
 from components.map  import Map

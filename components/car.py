@@ -3,7 +3,7 @@
 # California Institute of Technology
 # March, 2020
 
-from components.boxcomponent import BoxComponent
+from prepare.boxcomponent import BoxComponent
 import trio
 import numpy as np
 from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED

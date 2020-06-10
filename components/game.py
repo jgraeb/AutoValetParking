@@ -3,7 +3,7 @@
 # California Institute of Technology
 # March, 2020
 
-from components.boxcomponent import BoxComponent
+from prepare.boxcomponent import BoxComponent
 import trio
 import numpy as np
 import math
