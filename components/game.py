@@ -84,11 +84,15 @@ class Game(BoxComponent):
                     st()
                 traj = traj[0]
                 area = traj.buffer(3.5)
+                self.reserved_areas_requested.update({car: area})
+                self.trajs.update({car: (traj,point)})
+                self.update_reserved_areas()
         else:
             #st()
             newlinestring = make_line(ref) 
             area = newlinestring.buffer(3.5)
             point = None
+            traj = newlinestring
             #if car in self.reserved_areas:
             #    self.reserved_areas.pop(car)
             self.reserved_areas_requested.update({car: area})
@@ -136,43 +140,39 @@ class Game(BoxComponent):
         # new trajectory from planner around obstacle
         newlinestring = make_line(newtraj)
         print(car.ref)
-        #st()
-        if len(car.ref)!=0:
+        if len(car.ref)>1: # if we have an old trajectory stored for the car
             oldpath = car.ref[car.idx:]
             oldlinestring = make_line(oldpath)
             # find location of failure on path
-            failpoint = nearest_points(oldlinestring,obs)
+            try:
+                failpoint = nearest_points(oldlinestring,obs)
+            except:
+                st()
             originalpath = split(oldlinestring,failpoint[0])
             originaltraj = originalpath[1]
-        # new trajectory from planner around obstacle
-        #newlinestring = make_line(newtraj)
-        # find intersection of old path and new path after passing the failure
+            # find intersection of old path and new path after passing the failure
             intersection = originaltraj.intersection(newlinestring)
             try:
                 point = Point(intersection[0].coords[0])
             except:
                 st()
-        else:
+        else: # if the car does not have an old trajectory or was reversing last
             intersection = newlinestring.intersection(self.accept_box)
-            #st()
             try:
                 point = Point(intersection.coords[-1]) 
             except:
                 point = Point(intersection[-1].coords[-1]) 
-        #st()
         print('Intersection is at: {0}, {1}'.format(point.x,point.y))
         traj = split(newlinestring,point)
         # reserve new path until getting back to original path
         traj = traj[0]
         area = traj.buffer(3.5)
         print('Reserving Replanning Area for Car ID {0}'.format(car.id))
-        #st()
         self.reserved_areas_requested.update({car: area})
         self.trajs.update({car: (traj,point)})
         self.update_reserved_areas()
 
     def update_reserved_area_for_car(self,car): # make sure to reserve area on path and release behind car
-        #try:
         if not car.unparking:
             path = car.ref[car.idx:]
             path = make_line(path) 
@@ -192,10 +192,8 @@ class Game(BoxComponent):
                         self.reserved_areas.update({car: rem_area})
                     elif self.reserved_areas_requested.get(car,0)!=0:
                         self.reserved_areas_requested.update({car: rem_area})
-        #except:
-        #    st()
     
-    def update_reserved_areas(self):
+    def update_reserved_areas(self): # check this again
         items_to_delete=[]
         for key_req,val_req in self.reserved_areas_requested.items():
             accept = True
@@ -205,7 +203,7 @@ class Game(BoxComponent):
                     del_key = key
                 elif val_req.intersects(val):
                     accept = False
-                    break
+                    #break
             if del_key:
                 self.reserved_areas.pop(del_key)
             for key_before,val_before in self.reserved_areas_requested.items():

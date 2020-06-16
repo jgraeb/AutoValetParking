@@ -398,8 +398,10 @@ class Planner(BoxComponent):
         directive = [np.array(direc)]
         Res_Area = Game.reserve(directive,car)
         self.reserved_areas.update({car.name: Res_Area})
-        print('Planner - sending Directive to {0}'.format(car.name))
+        print('Planner - sending Directive to {0} to reverse'.format(car.name))
         car.reverse = True
+        car.replan = True
+        car.status = 'Replan'
         await self.out_channels[car.name].send(directive)
 
     def is_failure_in_acceptable_area(self,gme):

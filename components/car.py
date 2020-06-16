@@ -277,6 +277,7 @@ class Car(BoxComponent):
                         # request reserved area
                         await self.request_area(send_response_channel)
                 if self.reverse:
+                    print('Car {0} sending max reverse'.format(self.name))
                     await self.send_max_reverse(send_response_channel)
                 # insert here for replanning!!
                 # self.update_delay(Time)
@@ -300,6 +301,7 @@ class Car(BoxComponent):
                     await self.send_conflict(conflict_cars, send_response_channel)
                     self.waiting = True
                     if self.reverse:
+                        print('Car {0} sending max reverse'.format(self.name))
                         await self.send_max_reverse(send_response_channel)
                     # return
                 # elif failed_car or blocked and self.replan and not self.waiting:
@@ -315,6 +317,7 @@ class Car(BoxComponent):
                     if not self.replan:
                         await self.send_blocked(blocked_by, send_response_channel)
                     elif self.reverse:
+                        print('Car {0} sending max reverse'.format(self.name))
                         await self.send_max_reverse(send_response_channel)
                     elif self.replan:
                         await self.send_blocked_again(blocked_by, send_response_channel)
@@ -358,8 +361,14 @@ class Car(BoxComponent):
             self.hold = False
             print('Releasing the reserved area for Car {0}'.format(self.id))  
             Game.release_reserved_area(self)  
-            self.area_requested = False
-            self.replan = False
+            # self.area_requested = False
+            # self.replan = False
+        elif self in Game.reserved_areas_requested:
+            Game.reserved_areas_requested.pop(self)
+            print('Releasing the requested area for Car {0}'.format(self.id))  
+        self.area_requested = False
+        self.replan = False
+
 
     async def request_reserved_area(self,send_response_channel):
         self.area_requested = True
@@ -573,9 +582,11 @@ class Car(BoxComponent):
     async def failure(self,Game,send_response_channel):
         self.status = 'Failure'
         self.ref = []
-        if self.reserved:
-            self.release_reserved_area(Game,send_response_channel)
-            self.reserved = False
+        #if self.reserved:
+        self.release_reserved_area(Game,send_response_channel)
+        self.reserved = False
+        # elif self in Game.reserved_areas_requested:
+        #     Game.reserved_areas_requested.pop(self)
         await self.send_response(send_response_channel)
 
     async def run(self,send_response_channel,Game, Time):
