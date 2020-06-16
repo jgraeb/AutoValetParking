@@ -12,7 +12,7 @@ import numpy as np
 import component.pedestrian as Pedestrian
 sys.path.append('..') # enable importing modules from an upper directory:
 from PIL import Image
-from animation.helper import draw_car, show_traj, draw_pedestrian, draw_grey_car
+from animation.helper import draw_car, show_traj, draw_pedestrian, draw_grey_car, label_spots
 import time, platform, warnings, matplotlib, random
 import datetime
 # if platform.system() == 'Darwin': # if the operating system is MacOS
@@ -79,7 +79,7 @@ def animate(frame_idx): # update animation by dt
         for car in car_at_this_frame:
              car = car.split(' ')     
              try:
-                 draw_car(ax,background, float(car[0])*SCALE_FACTOR_SIM,float(car[1])*SCALE_FACTOR_SIM+yoffset,float(car[2]),car[3])
+                 draw_car(ax,background, float(car[0])*SCALE_FACTOR_SIM,float(car[1])*SCALE_FACTOR_SIM+yoffset,float(car[2]),car[3],car[4])
                  if add_parked_cars:
                     for key,value in grey_cars.items():
                         xd = int(value[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM+xoffset)
@@ -91,7 +91,7 @@ def animate(frame_idx): # update animation by dt
              except EOFError:
                  break    
         f.close() 
-        
+            
     with open('stored_data/pedestrian_file.pkl','rb') as f:
         i = 0
         begin = 0
@@ -117,6 +117,33 @@ def animate(frame_idx): # update animation by dt
                     break
             except EOFError:
                 break
+
+    with open('stored_data/spots.pkl','rb') as f:
+        i = 0
+        begin = 0
+        end = 0
+        while True:
+            i += 1
+            spots=pickle.load(f)
+            if spots == 'FRAME'+ str(frame_idx)+'\n':
+                begin = i
+            if spots == 'FRAME'+ str(frame_idx+1)+'\n':
+                end = i
+                break
+
+    with open('stored_data/spots.pkl','rb') as f:
+        i = 0
+        while True:
+            i = i+1
+            try:
+                spots=pickle.load(f)
+                if i > begin and i < end:
+                    label_spots(ax,background,spots)
+                if i >= end:
+                    break
+            except EOFError:
+                break
+
     
     # update background
     the_parking_lot = [ax.imshow(background)] # update the stage

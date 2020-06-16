@@ -15,6 +15,8 @@ from numpy import cos, sin, pi
 from animation.component import parking_lot
 from variables import global_vars
 from ipdb  import set_trace as st
+from variables.global_vars import SCALE_FACTOR_SIM, SCALE_FACTOR_PLAN
+from variables.parking_data import parking_spots
 
 
 dir_path = os.path.dirname(os.path.realpath("__file__"))
@@ -66,9 +68,49 @@ def find_corner_coordinates(x_state_center_before, y_state_center_before, x_desi
     y_corner_unknown = int(y_desired - y_state_center_after + y_corner_center_after)
     return x_corner_unknown, y_corner_unknown
 
-def draw_car(ax, background,x,y,theta,status,car=None):
+def label_spots(ax, background, spots): # put car ids on the assigned parking spots  
+    fontpath = 'NotoSans-ExtraBold.ttf'
+    try:
+        font = ImageFont.truetype(fontpath, 50)
+    except:
+        fontpath = '../animation/NotoSans-ExtraBold.ttf'
+    draw = ImageDraw.Draw(background)
+    for spot,car_id in spots.items():
+        if spot in range(0,10):
+            offset = 160
+            offsetB = 10
+        elif spot in range(10,19):
+            offset = 180
+            offsetB = 15
+        elif spot in range(19,28):
+            offset = 170
+            offsetB = -5
+        elif spot in range(28,44):
+            offset = 175
+            offsetB = -5 
+        # find x,y location of spot 
+        loc = parking_spots[spot]
+        x = loc[0]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM
+        y = loc[1]*SCALE_FACTOR_PLAN*SCALE_FACTOR_SIM
+        center_x = x + offset*cos(np.deg2rad(-loc[2])) +offsetB
+        center_y = y + offset*sin(np.deg2rad(-loc[2]))
+        # write car_id
+        try:
+            n = len(str(car_id.rstrip))
+        except:
+            n = len(str(car_id))
+        draw.ellipse([(center_x-22, center_y-22), (center_x+22, center_y+22)], fill='snow', outline='black')
+        if n==1 or int(car_id)<10:
+            font = ImageFont.truetype(fontpath, 40)
+            draw.text((center_x-10, center_y-27), str(car_id),fill='black',font=font,fontsize=3)
+        elif n==2 or int(car_id)>=10:
+            font = ImageFont.truetype(fontpath, 35)
+            draw.text((center_x-20, center_y-25), str(car_id),fill='black',font=font,fontsize=3)
+
+
+def draw_car(ax, background,x,y,theta,status,car_id, car=None):
     vehicle_fig = Image.open(car_fig)
-    w_orig, h_orig = vehicle_fig.size
+    #w_orig, h_orig = vehicle_fig.size
     # convert angle to degrees and positive counter-clockwise
     theta_d = -theta/np.pi * 180
     # set expand=True so as to disable cropping of output image
@@ -76,26 +118,26 @@ def draw_car(ax, background,x,y,theta,status,car=None):
     scaled_vehicle_fig_size  =  tuple([int(car_scale_factor * i) for i in vehicle_fig.size])
     # rescale car 
     vehicle_fig = vehicle_fig.resize(scaled_vehicle_fig_size, Image.ANTIALIAS)
-    
     # at (full scale) the relative coordinates of the center of the rear axle w.r.t. the center of the figure is center_to_axle_dist
     x_corner, y_corner = find_corner_coordinates(-car_scale_factor * center_to_axle_dist, 0, x, y, theta, vehicle_fig)
     background.paste(vehicle_fig, (x_corner, y_corner), vehicle_fig)
     #background.paste(vehicle_fig, (x, y), vehicle_fig)
     if car:
         status = car.status
-        if car.parked:
+        if car.parked or car.in_spot:
             status = 'Parked'
         if car.requested:
-            if car.status=='Stop' or car.status =='Failure':
+            if car.status=='Stop' or car.status =='Failure' or car.status == 'Blocked':
                 status = car.status
             else:
                 status = 'Requested'
         if car.reserved:
-            if car.status=='Stop' or car.status =='Failure':
+            if car.status=='Stop' or car.status =='Failure' or car.status == 'Blocked':
                 status = car.status
             else:
                 status = 'Reserved'
         ax.text(x_corner,y_corner,str(car.id), color='w', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='red', alpha=0.4), fontsize=5)
+    
     if status:
         fontpath = 'NotoSans-ExtraBold.ttf'
         try:
@@ -104,7 +146,7 @@ def draw_car(ax, background,x,y,theta,status,car=None):
             fontpath = '../animation/NotoSans-ExtraBold.ttf'
             font = ImageFont.truetype(fontpath, 50)
         draw = ImageDraw.Draw(background) 
-        draw.rectangle([(x-20, y-30), (x+25, y+25)], fill='snow', outline='black')
+        draw.ellipse([(x-25, y-25), (x+25, y+25)], fill='snow', outline='black')
         if status.rstrip() == 'Failure':
             draw.text((x-15, y-35), 'F',fill='red',font=font,fontsize=7)
         elif status.rstrip() == 'Stop':
@@ -112,20 +154,35 @@ def draw_car(ax, background,x,y,theta,status,car=None):
         elif status.rstrip() == 'Reserved':
             draw.text((x-15, y-35), 'R',fill='red',font=font,fontsize=7)
         elif status.rstrip() == 'Requested':
-            draw.text((x-15, y-35), 'R',fill='gold',font=font,fontsize=7)
+            draw.text((x-15, y-35), 'R',fill='darkorange',font=font,fontsize=7)
         elif status.rstrip() == 'Parked':
             draw.text((x-15, y-35), 'P',fill='mediumblue',font=font,fontsize=7)
         elif status.rstrip() == 'Conflict':
-            draw.text((x-15, y-35), 'C',fill='deeppink',font=font,fontsize=7)
+            draw.text((x-15, y-35), 'C',fill='darkred',font=font,fontsize=7)
         elif status.rstrip() == 'Driving':
             draw.text((x-15, y-35), 'D',fill='darkgreen',font=font,fontsize=7)
         elif status.rstrip() == 'Idle':
-            draw.text((x-15, y-35), 'I',fill='black',font=font,fontsize=7)
+            draw.text((x-10, y-35), 'I',fill='black',font=font,fontsize=7)
         elif status.rstrip() == 'Blocked':
-            draw.text((x-15, y-35), 'B',fill='darkorange',font=font,fontsize=7)
+            draw.text((x-15, y-35), 'B',fill='darkred',font=font,fontsize=7)
         elif status.rstrip() == 'Replan':
             draw.text((x-15, y-35), 'R',fill='slateblue',font=font,fontsize=7)
-        
+    # put car_ids on cars
+    try:
+        n = len(str(car_id.rstrip))
+    except:
+        n = len(str(car_id))
+    #if n>=3:
+        #car_id = car_id-100
+    center_x = x + 90*cos(theta)
+    center_y = y + 90*sin(theta)
+    draw.ellipse([(center_x-22, center_y-22), (center_x+22, center_y+22)], fill='snow', outline='black')
+    if n==1 or int(car_id)<10:
+        font = ImageFont.truetype(fontpath, 40)
+        draw.text((center_x-10, center_y-27), str(car_id),fill='black',font=font,fontsize=3)
+    elif n==2 or int(car_id)>=10:
+        font = ImageFont.truetype(fontpath, 35)
+        draw.text((center_x-20, center_y-25), str(car_id),fill='black',font=font,fontsize=3)
 
 def show_traj(ax,background, ref):
     #st()
