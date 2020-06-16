@@ -6,11 +6,14 @@
 from prepare.boxcomponent import BoxComponent
 import trio
 import random
-from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2
+from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2, SCALE_FACTOR_PLAN
 from environment.pedestrian import Pedestrian
 from components.planner import Planner
 from variables.parking_data import parking_spots #bad_parking_spot as parking_spots
 from ipdb import set_trace as st
+import sys
+sys.path.append('/anaconda3/lib/python3.7/site-packages')
+from shapely.geometry import Point, Polygon
 
 class Supervisor(BoxComponent):
     def __init__(self, nursery):
@@ -23,12 +26,14 @@ class Supervisor(BoxComponent):
         self.failures = dict()
         self.priority = dict()
         self.conflicts = []
-        self.counter = 0
-
+        self.counter = 1
+        self.upper_spots = Polygon([(30*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 175*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 175*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN)])
+        self.lower_spots = Polygon([(30*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 240*SCALE_FACTOR_PLAN), (220*SCALE_FACTOR_PLAN, 240*SCALE_FACTOR_PLAN), (220*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN)])
+        
     async def send_directive_to_planner(self, car,ref):
         directive = [car,ref]
-        await self.out_channels['Planner'].send(directive)
         print('Supervisor sending {0} - {1} to Planner'.format(car.name,directive))
+        await self.out_channels['Planner'].send(directive)
 
     async def update_parking_spots(self,car):
         for spot, status in self.parking_spots.items():
@@ -52,43 +57,34 @@ class Supervisor(BoxComponent):
                     elif not car.is_at_pickup and self.cars.get(car.name)=='Requested':
                         await self.send_directive_to_planner(car, 'Pickup')
 
-    async def reserve_reverse_area(self, car):
+    async def reserve_reverse_area(self, car): # reserve area for unparking
         await self.send_directive_to_planner(car, 'ReserveReverse')
 
-    async def update_planner_response(self,Planner):
+    async def update_planner_response(self,Planner, Simulation): # process responses from planner
         async with self.in_channels['Planner']:
             async for response in self.in_channels['Planner']:
                 car = response[0]
                 resp = response[1]
                 print('Supervisor - receiving "{0} - {1}" Response from Planner'.format(car.name,resp))
                 if resp == 'Completed':
-                    #st()
                     await self.update_parking_spots(car)
-                    # if self.cars.get(car.name)=='Requested':
-                    #     #print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
-                    #     #await self.send_directive_to_planner(car, 'Pickup')
-                    #     await self.update_parking_spots(car)
-                    # if self.cars.get(car.name)=='Assigned':
-                    #     # for key, value in self.parking_spots.items(): 
-                    #     #     if value == ('Assigned',car.name): 
-                    #     #         spot = key
-                    #     # await self.send_directive_to_planner(car,('Park',spot))
-                    #     await self.update_parking_spots(car)
                 elif resp == 'Failure':
                     self.failures.update({car.name: (car.x,car.y,car.yaw)})
                     await self.out_channels['Failure'].send(car)
                     self.cars.update({car.name: 'Failure'})
                     print('Supervisor initiating towing of {0}'.format(car.name))
-                    await self.tow(car)
+                    await self.tow(car, Simulation)
                 elif resp == 'NoPath':
                     if self.cars.get(car.name)== 'Assigned':
-                        spot = self.pick_spot(car,Planner)
+                        spot = self.pick_spot(car,Planner, Simulation)
                         for key, value in self.parking_spots.items(): 
                             if value == ('Assigned',car.name): 
                                 val = key
                         self.parking_spots[val]=(('Vacant','None'))
+                        Simulation.spots.pop(val)
                         self.parking_spots[spot]=(('Assigned',car.name))
                         self.cars.update({car.name: 'Assigned'})
+                        Simulation.spots.update({spot: car.id})
                         await self.send_directive_to_planner(car,('Park',spot))
                     elif self.cars.get(car.name)=='Requested':
                         #await self.send_directive_to_planner(car,('Wait'))
@@ -97,9 +93,13 @@ class Supervisor(BoxComponent):
                     #car.reserved = True
                     print("Car ID {0} has delay: {1} - Reserving Area".format(car.id,car.delay))
                     await self.reserve_reverse_area(car)
+                elif resp[0] == 'SpotUnreachable':
+                    obs = resp[1]
+                    spot = self.pick_new_spot(car,obs,Planner)
+                    if spot: # if there exits a possible new spot send updated command
+                        Simulation.spots.update({spot: car.id})
+                        await self.send_directive_to_planner(car,('Park',spot))
                 elif resp[0] == 'Conflict':
-                    #print(self.priority)
-                    #prio_car = self.priority.get(car.name)
                     car_list = resp[1]
                     for cars in car_list:
                         #prio = self.priority.get(cars.name)
@@ -113,7 +113,6 @@ class Supervisor(BoxComponent):
                                 print('Opposed car has priority {0} - Delay high, Reserve Unparking Area Next'.format(cars.id))
                                 await self.send_directive_to_planner(car,('Back2spot'))
                                 await self.reserve_reverse_area(car)
-                                #car.reserved = True
                         elif cars.unparking and not car.unparking:
                             print('{0} has priority, ID {1}'.format(car.name,car.id))
                         # elif prio>prio_1:
@@ -139,10 +138,9 @@ class Supervisor(BoxComponent):
                                     await self.send_directive_to_planner(car,('Reverse'))
                 await trio.sleep(0)
     
-    async def tow(self,car):
+    async def tow(self,car, Simulation): # tow the failed car, remove it after t_tow
         await trio.sleep(TOW_TIME)
         # removing car from lot
-        #await self.out_channels['GameExit'].send(car)
         directive = [car, 'Towed'] 
         await self.out_channels['Planner'].send(directive)
         self.cars.pop(car.name)
@@ -153,35 +151,88 @@ class Supervisor(BoxComponent):
             if value == ('Assigned',car.name) or value == ('Occupied', car.name) or value == ('Requested', car.name): 
                 val = spot
         self.parking_spots[val]=(('Vacant','None'))
+        if val in Simulation.spots:
+            Simulation.spots.pop(val)
         self.spot_no=self.spot_no+1
         print(str(self.spot_no)+' parking Spots vacant')
 
-    def pick_spot(self,car,pln):
-        #print(list(self.parking_spots.keys()))
+    def pick_spot(self,car,pln,sim): # pick a parking spot randomly
         random_list = random.sample(list(self.parking_spots.keys()),len(list(self.parking_spots.keys())))
         for spot in random_list: 
             if (self.parking_spots[spot]==('Vacant','None')) and pln.check_reachability(spot):
-                # self.parking_spots[spot]=(('Assigned',car.name))
                 return spot
         return None
 
-    async def process_queue(self,Planner):
+    def pick_new_spot(self,car,obs, pln): # strategy to pick a different parking spot, if spot becomes unreachable
+        st()
+        # is another spot reachable before the failure
+        buffer = 3.0 # m
+        ordered_dict = dict()
+        obs_x = obs.x
+        car_loc = Point([(car.x,car.y)])
+        car_x = car.x
+        if obs.intersects(self.upper_spots): # if failure is in upper row
+            for key,val in self.parking_spots.items():
+                loc_x = val[0]
+                loc_y = val[1]
+                loc = Point([(loc_x/SCALE_FACTOR_PLAN,loc_y/SCALE_FACTOR_PLAN)])
+                if loc.intersects(self.upper_spots):
+                    print('Check if between')
+                    if loc_x > (obs_x + buffer) and loc_x < (car_x - buffer): # if between car and failure
+                        ordered_dict.update({key: val})
+        elif obs.intersects(self.lower_spots):
+            if car_loc.intersects(self.lower_spots):
+                for key,val in self.parking_spots.items():
+                    loc_x = val[0]
+                    loc_y = val[1]
+                    loc = Point([(loc_x/SCALE_FACTOR_PLAN,loc_y/SCALE_FACTOR_PLAN)])
+                    if loc.intersects(self.lower_spots):
+                        if loc_x > (obs_x + buffer) and loc_x < (car_x - buffer): # if between car and failure
+                            ordered_dict.update({key: val})
+            else:
+                for key,val in self.parking_spots.items():
+                    loc_x = val[0]
+                    loc_y = val[1]
+                    loc = Point([(loc_x/SCALE_FACTOR_PLAN,loc_y/SCALE_FACTOR_PLAN)])
+                    if loc.intersects(self.lower_spots):
+                        if loc_x < (obs_x + buffer):
+                            ordered_dict.update({key: val})
+                    else:
+                        if loc_x < (car_x - buffer):
+                            ordered_dict.update({key: val})
+            # ordered dict contains all possible parking spots
+            # delete the occupied ones and unreachable ones
+            for key,val in ordered_dict:
+                if not (self.parking_spots[key]==('Vacant','None')):
+                    ordered_dict.pop(key)
+                elif not pln.check_reachable(key):
+                    ordered_dict.pop(key)
+            # pick one of the remaining ones
+            if len(ordered_dict)!=0:
+                chosen_spot = random.sample(list(ordered_dict.keys()),1)
+                print('Picking spot {0} for Car {1}'.format(chosen_spot,car.id))
+                return chosen_spot
+            else:
+                print('No other spot possible')
+                return None
+
+    async def process_queue(self,Planner, Simulation): # process arriving customers
         async for car in self.in_channels['Customer']:
             accept_condition = False
             print(str(self.spot_no)+' parking Spots vacant')
             print(self.parking_spots)
             await self.start_random_ped()
-            spot = self.pick_spot(car,Planner)
+            spot = self.pick_spot(car,Planner, Simulation)
             if spot is not None:
                 accept_condition = True
             if accept_condition:
                 print('{} has been accepted!'.format(car.name))
                 car.id = self.counter
                 self.counter=self.counter+1
+                Simulation.spots.update({spot: car.id})
                 await self.out_channels['Customer'].send(True)
                 self.spot_no=self.spot_no-1
                 await self.out_channels['GameEnter'].send(car)
-                #spot = self.pick_spot(car,Planner)
                 self.parking_spots[spot]=(('Assigned',car.name))
                 self.cars.update({car.name: 'Assigned'})
                 self.priority.update({car.name: '0'})
@@ -193,22 +244,20 @@ class Supervisor(BoxComponent):
                 await self.out_channels['Customer'].send(False)
                 print('Garage fully occupied - A car has been rejected!')
 
-    async def request_queue(self):
+    async def request_queue(self, Simulation): # process customer retrieval requests
         async for car in self.in_channels['Request']:
-            #while not self.cars.get(car.name, 0)=='Parked':#car.status == 'Driving' or car.status == 'Stop':
-            #    await trio.sleep(10)
             self.priority.update({car.name: '1'})
             self.cars.update({car.name: 'Requested'})
             car.retrieving = True
-            #car.requested = True
             for key, value in self.parking_spots.items(): 
                 if value == ('Assigned',car.name) or value == ('Occupied',car.name): 
                     val = key
             self.parking_spots[val]=(('Requested',car.name))
+            Simulation.spots.pop(val)
             print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
             await self.send_directive_to_planner(car, 'Pickup')
 
-    async def start_random_ped(self):
+    async def start_random_ped(self): # randomly start a pedestrian on the lower crosswalk
         accept_condition = False
         chance = random.randint(0,100)
         if chance <=25:
@@ -220,9 +269,9 @@ class Supervisor(BoxComponent):
             print('Adding random pedestrian')
 
 
-    async def run(self, Planner, Time):
+    async def run(self, Planner, Time, Simulation):
         print(self.parking_spots)
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.process_queue, Planner)
-            nursery.start_soon(self.request_queue)
-            nursery.start_soon(self.update_planner_response,Planner)
+            nursery.start_soon(self.process_queue, Planner, Simulation)
+            nursery.start_soon(self.request_queue, Simulation)
+            nursery.start_soon(self.update_planner_response,Planner, Simulation)

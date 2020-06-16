@@ -44,9 +44,9 @@ class Planner(BoxComponent):
         return parking_spots[spot]
 
     async def send_directive_to_car(self, car, end, Game, original, obstacle): # directive/response system
-        if end == 'Reverse':
-            end = (car.x/SCALE_FACTOR_PLAN-car.direction*10, car.y/SCALE_FACTOR_PLAN-car.direction*10, car.yaw, 0)
-            print('Car moving out of the way to: '+str(end))
+        # if end == 'Reverse':
+        #     end = (car.x/SCALE_FACTOR_PLAN-car.direction*10, car.y/SCALE_FACTOR_PLAN-car.direction*10, car.yaw, 0)
+        #     print('Car moving out of the way to: '+str(end))
         pos = await self.get_car_position(car)
         start = np.zeros(4)
         start[0] = pos[0]/SCALE_FACTOR_PLAN
@@ -70,7 +70,10 @@ class Planner(BoxComponent):
                 #         dist.append(obst.distance(pos))
                 print('Reserve Replanning Area for Car {0}!!!'.format(car.id))
                 Game.reserve_replanning(car, traj, obstacle)
-                Game.check_and_reserve_other_lane(car,traj)
+                #Game.check_and_reserve_other_lane(car,traj)
+            if not car.replan and Game.check_and_reserve_other_lane(car,traj):
+                car.hold = True
+                Game.reserve_replanning(car, traj, obstacle)
             print('Planner - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
         else:
@@ -101,7 +104,7 @@ class Planner(BoxComponent):
                 self.reachable[i]=0
 
     async def check_obs_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
-        if self.is_single_failure_in_acceptable_area(obscar, gme):
+        #if self.is_single_failure_in_acceptable_area(obscar, gme):
             obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
             for carname in list(self.cars):
                 if carname != obscar.name:
@@ -122,10 +125,16 @@ class Planner(BoxComponent):
                                 line = [(entry[0],entry[1]) for entry in ref]
                                 path = LineString(line)
                                 if obstacle.intersects(path):
-                                    print('FAILURE ON PATH - NEED NEW PATH CAR ID {0}'.format(car.id))
-                                    car.status == 'Replan'
                                     obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)])
-                                    await self.replan_path(car, gme, obstacle)
+                                    if self.is_single_failure_in_acceptable_area(obscar, gme):
+                                        print('FAILURE ON PATH - NEED NEW PATH CAR ID {0}'.format(car.id))
+                                        car.status == 'Replan'
+                                        await self.replan_path(car, gme, obstacle)
+                                    else: 
+                                        if not car.requested:
+                                            # stop car here and replan
+                                            resp = (('SpotUnreachable',obstacle), car)
+                                            await self.send_response_to_supervisor(resp)
                             
     async def replan_path(self, car, Game, obstacle):
         car.status = 'Replan'
@@ -143,7 +152,7 @@ class Planner(BoxComponent):
     def is_in_buffer(self,node_x,node_y,obs,): # find nodes in a buffer area around the obstacle to delete from grid
         # get car box around x,y
         buffer_back = 5
-        buffer_side = 5
+        buffer_side = 4
         buffer_front = 10
         for i in range(0,len(obs)):
             # create a buffer box around the obstacle coordinates
@@ -223,6 +232,16 @@ class Planner(BoxComponent):
                 resp = response[1]
                 print('Planner - receiving "{0}" response from {1}'.format(resp,car.name))
                 if response[1]=='Completed':
+                    if car.reverse:
+                        if self.cars.get(car.name)=='Request':
+                            end = PICK_UP
+                        else:
+                            for key, val in self.spots.items(): 
+                                if val == car.name: 
+                                    spot = key
+                            end = self.find_spot_coordinates(spot)
+                        car.reverse = False
+                        await self.send_directive_to_car(car, end,Game, False, None)
                     if self.cars.get(car.name,0)=='Assigned':
                         self.cars.update({car.name: 'Parked'})
                     elif self.cars.get(car.name,0)=='Request':
@@ -232,34 +251,36 @@ class Planner(BoxComponent):
                     await self.add_obstacle(car,Game) # add obstacle to list
                     self.cars.update({car.name: 'Failure'})
                     await self.send_response_to_supervisor((resp,car))
-                elif resp[0]=='BlockedAgain': # make car reverse first and then compute new path
+                elif resp[0]=='Reverse': # make car reverse first and then compute new path
                     car.status == 'Replan'
                     obscar = resp[1]
+                    await self.send_reverse(car, Game)
                     # add reversing segment
-                    print('Car {0} - Reversing first'.format(car.id))
-                    direc = [[car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, car.yaw]]
-                    direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*5*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*5*np.sin(car.yaw), car.yaw])
-                    direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), car.yaw])
-                    directive = [np.array(direc)]
-                    #st()
-                    # compute path from end of reversing to destination
-                    # start = [car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), car.yaw, 0]
-                    # end = self.find_destination(car)
-                    # self.get_current_planning_graph(Game)
-                    # path = self.get_path(start,end)
-                    # directive.append(path)
-                    # send directive to car and update reserved area
-                    print('Planner - sending Directive to {0}'.format(car.name))
-                    car.reverse = True
-                    await self.out_channels[car.name].send(directive)
+                    # print('Car {0} - Reversing first'.format(car.id))
+                    # direc = [[car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, -np.rad2deg(car.yaw)]]
+                    # direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*5*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*5*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+                    # direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+                    # directive = [np.array(direc)]
+                    # #st()
+                    # Res_Area = Game.reserve(directive,car)
+                    # self.reserved_areas.update({car.name: Res_Area})
+                    # # compute path from end of reversing to destination
+                    # # start = [car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), car.yaw, 0]
+                    # # end = self.find_destination(car)
+                    # # self.get_current_planning_graph(Game)
+                    # # path = self.get_path(start,end)
+                    # # directive.append(path)
+                    # # send directive to car and update reserved area
+                    # print('Planner - sending Directive to {0}'.format(car.name))
+                    # car.reverse = True
+                    # await self.out_channels[car.name].send(directive)
                     # print('Reserve Replanning Area for Car {0}!!!'.format(car.id))
                     # obs = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)])
                     # try:
                     #     Game.reserve_replanning(car, directive, obs)
                     # except:
                     #     st()
-                    # Game.check_and_reserve_other_lane(car,directive)
-                    
+                    # Game.check_and_reserve_other_lane(car,directive) 
                 elif resp[0]=='Blocked': # compute a path around the blockage if possiblw, if not possible, wait
                     if self.is_failure_in_acceptable_area(Game):
                         print('Obstacles are in acceptable area.')
@@ -274,12 +295,29 @@ class Planner(BoxComponent):
                             blocked_car = resp[1]
                             print('Blocked Car {0} receives a new directive'.format(car.id))
                             obs = Point([(blocked_car.x/SCALE_FACTOR_PLAN, blocked_car.y/SCALE_FACTOR_PLAN)])
-                            await self.send_directive_to_car(car, end, Game, False, obs)
+                            # try to get path
+                            pos = await self.get_car_position(car) # in meters
+                            # convert position to grid pixels and flip angle
+                            start = np.zeros(4)
+                            start[0] = pos[0]/SCALE_FACTOR_PLAN
+                            start[1] = pos[1]/SCALE_FACTOR_PLAN
+                            start[2] = -np.rad2deg(pos[2])
+                            start[3] = 0
+                            self.get_current_planning_graph(Game)
+                            traj, weight = self.get_path(start,end) 
+                            # if no path, reverse first
+                            if traj:
+                                await self.send_directive_to_car(car, end, Game, False, obs)
+                            else:
+                                await self.send_reverse(car,Game)
                         elif self.cars.get(car.name,0)=='Request':
                             car.status = 'Replan'
                             await self.send_directive_to_car(car, PICK_UP, Game, False, None)
                     else:
                         print('No way to plan around the failure - {0} must wait'.format(car.name))
+                elif resp=='RequestArea':
+                    Game.reserve(None,car)
+                    #await self.send_response_to_supervisor((resp,car))
                 elif resp=='RequestReservedArea':
                     await self.send_response_to_supervisor((resp,car))
                 elif resp[0]=='Conflict':
@@ -300,6 +338,7 @@ class Planner(BoxComponent):
         async for directive in self.in_channels['Supervisor']:
             car = directive[0]
             todo = directive[1]
+            print(self.spots)
             if todo[0] == 'Park':
                 print('Planner - receiving directive from Supervisor to park {0} in Spot {1}'.format(car.name,todo[1]))
                 self.cars.update({car.name: 'Assigned'})
@@ -324,6 +363,7 @@ class Planner(BoxComponent):
                 await self.send_directive_to_car(car, todo,Game, False, None)
             elif todo == 'Reverse':
                 print('Planner - {0} has to drive out of the way'.format(car.name))
+                st()
                 await self.out_channels[car.name].send('Reverse')
             elif todo == 'OriginalPath':
                 if len(car.ref) != 0: # fix here
@@ -332,7 +372,13 @@ class Planner(BoxComponent):
                     if self.cars.get(car.name)=='Request':
                         end = PICK_UP
                     else:
-                        spot = self.spots.get(car.name)
+                        try:
+                            spot = self.spots.get(car.name)
+                        except:
+                            st()
+                            for key, val in self.spots.items(): 
+                                if val == car.name: 
+                                    spot = key
                         end = self.find_spot_coordinates(spot)
                     await self.send_directive_to_car(car, end,Game, True, None) # original graph
             elif todo == 'Back2spot':
@@ -343,6 +389,18 @@ class Planner(BoxComponent):
             elif todo == 'ReserveReverse':
                 Res_Area = Game.reserve_reverse(car)
                 self.reserved_areas.update({car.name: Res_Area})
+
+    async def send_reverse(self,car, Game):
+        print('Car {0} - Reversing first'.format(car.id))
+        direc = [[car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, -np.rad2deg(car.yaw)]]
+        direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*5*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*5*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+        direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+        directive = [np.array(direc)]
+        Res_Area = Game.reserve(directive,car)
+        self.reserved_areas.update({car.name: Res_Area})
+        print('Planner - sending Directive to {0}'.format(car.name))
+        car.reverse = True
+        await self.out_channels[car.name].send(directive)
 
     def is_failure_in_acceptable_area(self,gme):
         is_acceptable = gme.is_failure_acceptable(self.obstacles)

@@ -47,7 +47,7 @@ async def main():
             nursery.start_soon(comp.run)
             await trio.sleep(0)
         nursery.start_soon(planner.run, game, time_sys)
-        nursery.start_soon(supervisor.run, planner, time_sys)
+        nursery.start_soon(supervisor.run, planner, time_sys, simulation)
         nursery.start_soon(customer.run,END_TIME,START_TIME, game)
 
 trio.run(main)
