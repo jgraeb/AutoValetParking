@@ -16,6 +16,7 @@ from shapely import affinity
 from shapely.ops import nearest_points, split
 from variables.parking_data import parking_spots
 from ipdb import set_trace as st
+from collections import OrderedDict
 
 class Game(BoxComponent):
     def __init__(self):
@@ -32,7 +33,7 @@ class Game(BoxComponent):
         self.lane1box = Polygon([(155*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 160*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 160*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN)])
         self.lane2box = Polygon([(190*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN), (223*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN), (223*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN)])
         self.reserved_areas = dict()
-        self.reserved_areas_requested = dict()
+        self.reserved_areas_requested = OrderedDict()
         self.trajs = dict()
 
     async def keep_track_influx(self):
@@ -139,7 +140,7 @@ class Game(BoxComponent):
     def reserve_replanning(self,car,newtraj,obs): # find area to reserve
         # new trajectory from planner around obstacle
         newlinestring = make_line(newtraj)
-        print(car.ref)
+        #print(car.ref)
         if len(car.ref)>1: # if we have an old trajectory stored for the car
             oldpath = car.ref[car.idx:]
             oldlinestring = make_line(oldpath)
@@ -158,10 +159,14 @@ class Game(BoxComponent):
                 st()
         else: # if the car does not have an old trajectory or was reversing last
             intersection = newlinestring.intersection(self.accept_box)
+            print(intersection)
             try:
                 point = Point(intersection.coords[-1]) 
             except:
-                point = Point(intersection[-1].coords[-1]) 
+                try:
+                    point = Point(intersection[-1].coords[-1]) 
+                except:
+                    st()
         print('Intersection is at: {0}, {1}'.format(point.x,point.y))
         traj = split(newlinestring,point)
         # reserve new path until getting back to original path
@@ -195,17 +200,34 @@ class Game(BoxComponent):
     
     def update_reserved_areas(self): # check this again
         items_to_delete=[]
+        # find if a reserved area is in requested and reserved list, should only happen one at a time due to update fcn
+        rep_key = None
+        accept = True
         for key_req,val_req in self.reserved_areas_requested.items():
-            accept = True
-            del_key = None
             for key,val in self.reserved_areas.items():
                 if key_req == key:
-                    del_key = key
-                elif val_req.intersects(val):
+                    rep_key = key
+                    break
+        # if yes check if it intersects another requested area, 
+        if rep_key:
+            rep_val = self.reserved_areas_requested.get(rep_key)
+            for key,val in self.reserved_areas.items():
+                if rep_key != key:
+                    if rep_val.intersects(val):
+                        accept = False
+            self.reserved_areas.pop(rep_key)
+            if accept: # put on reserved list and delete from requested list
+                self.reserved_areas.update({rep_key: rep_val})
+                self.reserved_areas_requested.pop(rep_key)
+            else:
+                self.reserved_areas_requested.move_to_end(rep_key, False) # move to the top of the ordered dict in request list
+        # check if every value in requested list intersects any of the reserved entries or entries higher up in requested
+        for key_req,val_req in self.reserved_areas_requested.items():
+            accept = True
+            for key,val in self.reserved_areas.items():
+                if val_req.intersects(val):
                     accept = False
-                    #break
-            if del_key:
-                self.reserved_areas.pop(del_key)
+                    break
             for key_before,val_before in self.reserved_areas_requested.items():
                 if key_req == key_before:
                     break
@@ -216,6 +238,7 @@ class Game(BoxComponent):
                 self.reserved_areas.update({key_req: val_req})
                 items_to_delete.append(key_req)
                 key_req.reserved = True
+        # remove the accepted entries from requested ordered dict
         for item in items_to_delete:
             self.reserved_areas_requested.pop(item)
         print('Areas Reserved:')

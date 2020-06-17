@@ -6,7 +6,7 @@
 from prepare.boxcomponent import BoxComponent
 import trio
 import random
-from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2, SCALE_FACTOR_PLAN
+from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2, SCALE_FACTOR_PLAN as SFP
 from environment.pedestrian import Pedestrian
 from components.planner import Planner
 from variables.parking_data import parking_spots #bad_parking_spot as parking_spots
@@ -27,9 +27,10 @@ class Supervisor(BoxComponent):
         self.priority = dict()
         self.conflicts = []
         self.counter = 1
-        self.upper_spots = Polygon([(30*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 175*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 175*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN)])
-        self.lower_spots = Polygon([(30*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 240*SCALE_FACTOR_PLAN), (220*SCALE_FACTOR_PLAN, 240*SCALE_FACTOR_PLAN), (220*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN), (30*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN)])
-        
+        self.upper_spots = Polygon([(30*SFP, 120*SFP), (155*SFP, 120*SFP), (155*SFP, 175*SFP), (30*SFP, 175*SFP), (30*SFP, 120*SFP)])
+        self.lower_spots = Polygon([(30*SFP, 190*SFP), (30*SFP, 240*SFP), (220*SFP, 240*SFP), (220*SFP, 190*SFP), (30*SFP, 190*SFP)])
+        self.middle_box = Polygon([(5*SFP,130*SFP),(5*SFP,230*SFP),(30*SFP,230*SFP),(30*SFP,130*SFP),(5*SFP,130*SFP)])
+
     async def send_directive_to_planner(self, car,ref):
         directive = [car,ref]
         print('Supervisor sending {0} - {1} to Planner'.format(car.name,directive))
@@ -91,14 +92,23 @@ class Supervisor(BoxComponent):
                         print('Wait until resolved')
                 elif resp == 'RequestReservedArea':
                     #car.reserved = True
-                    print("Car ID {0} has delay: {1} - Reserving Area".format(car.id,car.delay))
-                    await self.reserve_reverse_area(car)
+                    if car.status != 'Failure':
+                        print("Car ID {0} has delay: {1} - Reserving Area".format(car.id,car.delay))
+                        await self.reserve_reverse_area(car)
                 elif resp[0] == 'SpotUnreachable':
                     obs = resp[1]
-                    spot = self.pick_new_spot(car,obs,Planner)
-                    if spot: # if there exits a possible new spot send updated command
-                        Simulation.spots.update({spot: car.id})
-                        await self.send_directive_to_planner(car,('Park',spot))
+                    for key, value in self.parking_spots.items(): 
+                        if value == ('Assigned',car.name): 
+                            oldspot = key
+                    newspot = self.pick_new_spot(car,obs,Planner)
+                    if newspot: # if there exits a possible new spot send updated command
+                        Simulation.spots.update({newspot: car.id})
+                        self.parking_spots[newspot]=(('Assigned',car.name))
+                        Simulation.spots.pop(oldspot)
+                        self.parking_spots[oldspot]=(('Vacant','None'))
+                        await self.send_directive_to_planner(car,('Park',newspot))
+                    else: # drive to old spot
+                        await self.send_directive_to_planner(car,('Park',oldspot))
                 elif resp[0] == 'Conflict':
                     car_list = resp[1]
                     for cars in car_list:
@@ -115,16 +125,6 @@ class Supervisor(BoxComponent):
                                 await self.reserve_reverse_area(car)
                         elif cars.unparking and not car.unparking:
                             print('{0} has priority, ID {1}'.format(car.name,car.id))
-                        # elif prio>prio_1:
-                        #     print('Opposed car has priority')
-                        #     #await self.send_directive_to_planner(car,('Reverse'))
-                        # elif prio_1>prio:
-                        #     print('Car has priority')
-                        # elif cars.delay>car.delay:
-                        #     print('Opposed car has priority')
-                        #     #await self.send_directive_to_planner(car,('Reverse'))
-                        # elif car.delay>cars.delay:
-                        #     print('Car has priority')
                         else:
                             print('Conflict resolving by ID')
                             if id(car)>id(cars):
@@ -135,7 +135,8 @@ class Supervisor(BoxComponent):
                                     await self.send_directive_to_planner(car,('Back2spot'))
                                     self.conflicts.append(car)
                                 else:
-                                    await self.send_directive_to_planner(car,('Reverse'))
+                                    print('Conflict resoling needed at supervisor level')
+                                    #await self.send_directive_to_planner(car,('Reverse'))
                 await trio.sleep(0)
     
     async def tow(self,car, Simulation): # tow the failed car, remove it after t_tow
@@ -168,53 +169,68 @@ class Supervisor(BoxComponent):
         # is another spot reachable before the failure
         buffer = 3.0 # m
         ordered_dict = dict()
-        obs_x = obs.x
+        obs_x = obs.x*SFP
+        obs_y = obs.y*SFP
+        obs = Point([(obs_x,obs_y)])
         car_loc = Point([(car.x,car.y)])
         car_x = car.x
-        if obs.intersects(self.upper_spots): # if failure is in upper row
+        if obs.intersects(self.upper_spots) or obs.intersects(self.middle_box): # if failure is in upper row
+            print('Failure in upper row')
+            st()
             for key,val in self.parking_spots.items():
                 loc_x = val[0]
                 loc_y = val[1]
-                loc = Point([(loc_x/SCALE_FACTOR_PLAN,loc_y/SCALE_FACTOR_PLAN)])
-                if loc.intersects(self.upper_spots):
-                    print('Check if between')
+                loc = Point([(loc_x/SFP,loc_y/SFP)])
+                if loc.intersects(self.upper_spots): # if spot in upper row
+                    print('Check if between car and failure')
                     if loc_x > (obs_x + buffer) and loc_x < (car_x - buffer): # if between car and failure
                         ordered_dict.update({key: val})
+            print('Possible spots:')
+            for key,val in ordered_dict.items():
+                print(key)
         elif obs.intersects(self.lower_spots):
-            if car_loc.intersects(self.lower_spots):
+            print('Failure in lower row')
+            st()
+            if car_loc.intersects(self.lower_spots): # if car in lower row only pick spots in lowr row
                 for key,val in self.parking_spots.items():
                     loc_x = val[0]
                     loc_y = val[1]
-                    loc = Point([(loc_x/SCALE_FACTOR_PLAN,loc_y/SCALE_FACTOR_PLAN)])
+                    loc = Point([(loc_x/SFP,loc_y/SFP)])
                     if loc.intersects(self.lower_spots):
                         if loc_x > (obs_x + buffer) and loc_x < (car_x - buffer): # if between car and failure
                             ordered_dict.update({key: val})
             else:
-                for key,val in self.parking_spots.items():
+                for key,val in self.parking_spots.items(): # if car in upper row, can pick spots in upper row and lower row
                     loc_x = val[0]
                     loc_y = val[1]
-                    loc = Point([(loc_x/SCALE_FACTOR_PLAN,loc_y/SCALE_FACTOR_PLAN)])
+                    loc = Point([(loc_x/SFP,loc_y/SFP)])
                     if loc.intersects(self.lower_spots):
                         if loc_x < (obs_x + buffer):
                             ordered_dict.update({key: val})
                     else:
                         if loc_x < (car_x - buffer):
                             ordered_dict.update({key: val})
-            # ordered dict contains all possible parking spots
-            # delete the occupied ones and unreachable ones
-            for key,val in ordered_dict:
-                if not (self.parking_spots[key]==('Vacant','None')):
-                    ordered_dict.pop(key)
-                elif not pln.check_reachable(key):
-                    ordered_dict.pop(key)
-            # pick one of the remaining ones
-            if len(ordered_dict)!=0:
-                chosen_spot = random.sample(list(ordered_dict.keys()),1)
-                print('Picking spot {0} for Car {1}'.format(chosen_spot,car.id))
-                return chosen_spot
-            else:
-                print('No other spot possible')
-                return None
+            print('Possible spots:')
+            for key,val in ordered_dict.items():
+                print(key)
+        # ordered dict contains all possible parking spots
+        # delete the occupied ones and unreachable ones
+        for key,val in ordered_dict:
+            if not (self.parking_spots[key]==('Vacant','None')):
+                ordered_dict.pop(key)
+            elif not pln.check_reachable(key):
+                ordered_dict.pop(key)
+        print('Possible vacant and reachable spots:')
+        for key,val in ordered_dict.items():
+            print(key)
+        # pick one of the remaining ones
+        if len(ordered_dict)!=0:
+            chosen_spot = random.sample(list(ordered_dict.keys()),1)
+            print('Picking spot {0} for Car {1}'.format(chosen_spot,car.id))
+            return chosen_spot
+        else:
+            print('No other spot possible')
+            return None
 
     async def process_queue(self,Planner, Simulation): # process arriving customers
         async for car in self.in_channels['Customer']:

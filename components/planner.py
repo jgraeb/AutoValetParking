@@ -71,9 +71,10 @@ class Planner(BoxComponent):
                 print('Reserve Replanning Area for Car {0}!!!'.format(car.id))
                 Game.reserve_replanning(car, traj, obstacle)
                 #Game.check_and_reserve_other_lane(car,traj)
-            if not car.replan and Game.check_and_reserve_other_lane(car,traj):
-                car.hold = True
-                Game.reserve_replanning(car, traj, obstacle)
+            if not car.replan:
+                if Game.check_and_reserve_other_lane(car,traj):
+                    car.hold = True
+                    Game.reserve_replanning(car, traj, obstacle)
             print('Planner - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
         else:
@@ -104,37 +105,44 @@ class Planner(BoxComponent):
                 self.reachable[i]=0
 
     async def check_obs_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
-        #if self.is_single_failure_in_acceptable_area(obscar, gme):
-            obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
-            for carname in list(self.cars):
-                if carname != obscar.name:
-                    for car in gme.cars:
-                        if carname == car.name:
-                            if len(car.ref)!=0:
-                                ref = car.ref
-                                ref = ref[car.idx:]
+        obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
+        print('Checking if obs on path')
+        for carname in list(self.cars):
+            if carname != obscar.name:
+                for car in gme.cars:
+                    if carname == car.name:
+                        if len(car.ref)!=0:
+                            ref = car.ref
+                            ref = ref[car.idx:]
+                            try:
                                 ref = np.concatenate(ref, axis=0) 
-                                ref = ref.tolist()
-                                del_idx = []
-                                for i in range(0,len(ref)-1): # remove duplicates
-                                    if np.all(ref[i]==ref[i+1]):
-                                        del_idx.append(i)
-                                del_idx = np.flip(del_idx)
-                                for k in del_idx:
-                                    ref.pop(k)
-                                line = [(entry[0],entry[1]) for entry in ref]
-                                path = LineString(line)
-                                if obstacle.intersects(path):
-                                    obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)])
-                                    if self.is_single_failure_in_acceptable_area(obscar, gme):
-                                        print('FAILURE ON PATH - NEED NEW PATH CAR ID {0}'.format(car.id))
-                                        car.status == 'Replan'
-                                        await self.replan_path(car, gme, obstacle)
-                                    else: 
-                                        if not car.requested:
-                                            # stop car here and replan
-                                            resp = (('SpotUnreachable',obstacle), car)
-                                            await self.send_response_to_supervisor(resp)
+                            except:
+                                st()
+                            ref = ref.tolist()
+                            del_idx = []
+                            for i in range(0,len(ref)-1): # remove duplicates
+                                if np.all(ref[i]==ref[i+1]):
+                                    del_idx.append(i)
+                            del_idx = np.flip(del_idx)
+                            for k in del_idx:
+                                ref.pop(k)
+                            line = [(entry[0],entry[1]) for entry in ref]
+                            path = LineString(line)
+                            if obstacle.intersects(path):
+                                obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)])
+                                if self.is_single_failure_in_acceptable_area(obscar, gme):
+                                    print('FAILURE ON PATH - NEED NEW PATH CAR ID {0}'.format(car.id))
+                                    car.status == 'Replan'
+                                    await self.replan_path(car, gme, obstacle)
+                                else: 
+                                    if not car.requested:
+                                        # stop car here and replan
+                                        resp = (('SpotUnreachable',obstacle), car)
+                                        print('Spot for Car {0} became unreachable'.format(car.id))
+                                        car.replan = True
+                                        car.status = 'Replan'
+                                        st()
+                                        await self.send_response_to_supervisor(resp) # to pick other spot
                             
     async def replan_path(self, car, Game, obstacle):
         car.status = 'Replan'
@@ -151,8 +159,8 @@ class Planner(BoxComponent):
 
     def is_in_buffer(self,node_x,node_y,obs,): # find nodes in a buffer area around the obstacle to delete from grid
         # get car box around x,y
-        buffer_back = 5
-        buffer_side = 4
+        buffer_back = 6
+        buffer_side = 5
         buffer_front = 10
         for i in range(0,len(obs)):
             # create a buffer box around the obstacle coordinates
@@ -244,9 +252,10 @@ class Planner(BoxComponent):
                         await self.send_directive_to_car(car, end,Game, False, None)
                     if self.cars.get(car.name,0)=='Assigned':
                         self.cars.update({car.name: 'Parked'})
+                        await self.send_response_to_supervisor((resp,car))
                     elif self.cars.get(car.name,0)=='Request':
                         self.cars.pop(car.name)
-                    await self.send_response_to_supervisor((resp,car))
+                        await self.send_response_to_supervisor((resp,car))
                 elif response[1]=='Failure': # car reports Failure
                     await self.add_obstacle(car,Game) # add obstacle to list
                     self.cars.update({car.name: 'Failure'})
@@ -282,7 +291,9 @@ class Planner(BoxComponent):
                     #     st()
                     # Game.check_and_reserve_other_lane(car,directive) 
                 elif resp[0]=='Blocked': # compute a path around the blockage if possiblw, if not possible, wait
-                    if self.is_failure_in_acceptable_area(Game):
+                    obscar = resp[1]
+                    obs = obscar
+                    if self.is_failure_in_acceptable_area(Game,obs):
                         print('Obstacles are in acceptable area.')
                         if self.cars.get(car.name,0)=='Assigned':
                             for key, val in self.spots.items(): 
@@ -293,7 +304,7 @@ class Planner(BoxComponent):
                             car.status = 'Replan'
                             car.replan = True
                             blocked_car = resp[1]
-                            print('Blocked Car {0} receives a new directive'.format(car.id))
+                            print('Blocked Car {0} needs a new directive'.format(car.id))
                             obs = Point([(blocked_car.x/SCALE_FACTOR_PLAN, blocked_car.y/SCALE_FACTOR_PLAN)])
                             # try to get path
                             pos = await self.get_car_position(car) # in meters
@@ -319,7 +330,8 @@ class Planner(BoxComponent):
                     Game.reserve(None,car)
                     #await self.send_response_to_supervisor((resp,car))
                 elif resp=='RequestReservedArea':
-                    await self.send_response_to_supervisor((resp,car))
+                    if car.status != 'Failure':
+                        await self.send_response_to_supervisor((resp,car))
                 elif resp[0]=='Conflict':
                     await self.send_response_to_supervisor((resp,car))
                 await trio.sleep(0)
@@ -361,10 +373,9 @@ class Planner(BoxComponent):
             elif todo == 'Wait':
                 print('Planner - {0} has to wait until path clears'.format(car.name))
                 await self.send_directive_to_car(car, todo,Game, False, None)
-            elif todo == 'Reverse':
+            elif todo == 'Reverse': # not used currently
                 print('Planner - {0} has to drive out of the way'.format(car.name))
-                st()
-                await self.out_channels[car.name].send('Reverse')
+                #await self.out_channels[car.name].send('Reverse')
             elif todo == 'OriginalPath':
                 if len(car.ref) != 0: # fix here
                     await self.out_channels[car.name].send('OriginalPath')
@@ -387,8 +398,9 @@ class Planner(BoxComponent):
                 car.replan = True
                 await self.out_channels[car.name].send('Back2spot')
             elif todo == 'ReserveReverse':
-                Res_Area = Game.reserve_reverse(car)
-                self.reserved_areas.update({car.name: Res_Area})
+                if car.status != 'Failure':
+                    Res_Area = Game.reserve_reverse(car)
+                    self.reserved_areas.update({car.name: Res_Area})
 
     async def send_reverse(self,car, Game):
         print('Car {0} - Reversing first'.format(car.id))
@@ -404,8 +416,14 @@ class Planner(BoxComponent):
         car.status = 'Replan'
         await self.out_channels[car.name].send(directive)
 
-    def is_failure_in_acceptable_area(self,gme):
-        is_acceptable = gme.is_failure_acceptable(self.obstacles)
+    def is_failure_in_acceptable_area(self,gme, obscar=None):
+        obs = dict()
+        if obscar:
+            obs.clear()
+            obs.update({obscar : (obscar.x,obscar.y)})
+            is_acceptable = gme.is_failure_acceptable(obs)
+        else:
+            is_acceptable = gme.is_failure_acceptable(self.obstacles)
         return is_acceptable
 
     def is_single_failure_in_acceptable_area(self,car,gme):

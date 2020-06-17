@@ -110,7 +110,8 @@ def label_spots(ax, background, spots): # put car ids on the assigned parking sp
 
 def draw_car(ax, background,x,y,theta,status,car_id, car=None):
     vehicle_fig = Image.open(car_fig)
-    #w_orig, h_orig = vehicle_fig.size
+    w_orig, h_orig = vehicle_fig.size
+    #print(str(w_orig)+','+str(h_orig))
     # convert angle to degrees and positive counter-clockwise
     theta_d = -theta/np.pi * 180
     # set expand=True so as to disable cropping of output image

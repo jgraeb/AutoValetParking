@@ -168,6 +168,8 @@ class Car(BoxComponent):
 
     async def back_2_spot(self,Time,send_response_channel,Game):
         st()
+        self.status = 'Replan'
+        self.replan = True
         directive = self.ref[:][0]
         directive = [np.flip(directive, 0)]
         direc = [[self.x/SCALE_FACTOR_PLAN, self.y/SCALE_FACTOR_PLAN, -1*np.rad2deg(self.yaw)]]
@@ -200,25 +202,19 @@ class Car(BoxComponent):
             return
         if not self.status == 'Failure' and len(directive)!=0:
             self.last_segment = True
-            self.idx = len(self.ref)-1
+            self.idx = 0
             path = directive
-            n = len(path)
-            for i in range(0,n-1):
-                #print('i'+str(i))
-                path_seg = path[i:i+2]
-                cx = path_seg[:,0]*SCALE_FACTOR_PLAN
-                cy = path_seg[:,1]*SCALE_FACTOR_PLAN
-                cyaw = np.deg2rad(path[:,2])*-1
-                self.direction = tracking.check_direction(path)
-                state = np.array([self.x, self.y,self.yaw])
-                initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-                end_speed = TARGET_SPEED/2
-                if i == len(path)-2:
-                    end_speed = 0.0
-                sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
-                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
-                if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
-                    return
+            cx = path[:,0]*SCALE_FACTOR_PLAN #[entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
+            cy = path[:,1]*SCALE_FACTOR_PLAN #[entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
+            cyaw = np.deg2rad(path[:,1])*(-1) #[np.deg2rad(entry[2])*-1 for entry in path[0]]
+            self.direction = tracking.check_direction(path)
+            state = np.array([self.x, self.y,self.yaw])
+            initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+            end_speed = 0.0
+            sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
+            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
+            if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
+                return
             self.status = 'Completed'
             self.is_at_pickup = self.check_at_pickup(Game)
             if self.is_at_pickup:
@@ -259,6 +255,7 @@ class Car(BoxComponent):
                     await self.stop_car()
                     return
             while self.hold and not Game.is_reserved_area_clear(self):
+                self.status = 'Stop'
                 print('Car {0} holding for other lane to clear'.format(self.id))
                 await trio.sleep(3)
             while not self.path_clear(Game):# or blocked:
@@ -277,8 +274,11 @@ class Car(BoxComponent):
                         # request reserved area
                         await self.request_area(send_response_channel)
                 if self.reverse:
+                    self.waiting = True
                     print('Car {0} sending max reverse'.format(self.name))
                     await self.send_max_reverse(send_response_channel)
+                    self.status == 'Replan'
+                    return
                 # insert here for replanning!!
                 # self.update_delay(Time)
                 # if self.delay > DELAY_THRESH and not self.area_requested:
@@ -320,6 +320,7 @@ class Car(BoxComponent):
                         print('Car {0} sending max reverse'.format(self.name))
                         await self.send_max_reverse(send_response_channel)
                     elif self.replan:
+                        #st()
                         await self.send_blocked_again(blocked_by, send_response_channel)
                         print('{0} Stopping the Tracking, ID {1}, B'.format(self.name, self.id))
                         return
@@ -403,7 +404,7 @@ class Car(BoxComponent):
         if self.status == 'Removed':
             print('{0} Removed'.format(self.name))
             self.v = 0
-            return
+            return 
         if not self.status == 'Replan':
             try:
                 self.check_if_car_is_in_spot(Game)
