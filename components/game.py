@@ -4,6 +4,7 @@
 # March, 2020
 
 from prepare.boxcomponent import BoxComponent
+from variables.geometries import DROPOFF_BOX, PICKUP_BOX, PARK_BOXES, PARK_BOXES_AREA, FAILURE_ACCEPT_BOX_1, LANE_1_BOX, LANE_2_BOX
 import trio
 import numpy as np
 import math
@@ -25,13 +26,13 @@ class Game(BoxComponent):
         self.cars = []
         self.peds = []
         self.car_boxes = dict()
-        self.dropoff_box = Polygon([(40, 18), (40, 15), (47, 18), (47, 15), (40, 18)])
-        self.pickup_box = Point(260*SCALE_FACTOR_PLAN, 60*SCALE_FACTOR_PLAN).buffer(1.0)
-        self.park_boxes = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(1.0) for i in list(parking_spots.keys())]
-        self.park_boxes_area = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(3.0) for i in list(parking_spots.keys())]
-        self.accept_box = Polygon([(155*SCALE_FACTOR_PLAN, 71*SCALE_FACTOR_PLAN), (156*SCALE_FACTOR_PLAN, 133*SCALE_FACTOR_PLAN), (174*SCALE_FACTOR_PLAN, 133*SCALE_FACTOR_PLAN), (174*SCALE_FACTOR_PLAN, 158*SCALE_FACTOR_PLAN), (156*SCALE_FACTOR_PLAN, 158*SCALE_FACTOR_PLAN), (156*SCALE_FACTOR_PLAN, 202*SCALE_FACTOR_PLAN), (185*SCALE_FACTOR_PLAN, 203*SCALE_FACTOR_PLAN), (185*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN), (223*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN), (223*SCALE_FACTOR_PLAN, 71*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 71*SCALE_FACTOR_PLAN)])
-        self.lane1box = Polygon([(155*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 160*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 160*SCALE_FACTOR_PLAN), (155*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN)])
-        self.lane2box = Polygon([(190*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN), (223*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN), (223*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN), (190*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN)])
+        self.dropoff_box = DROPOFF_BOX
+        self.pickup_box = PICKUP_BOX
+        self.park_boxes = PARK_BOXES
+        self.park_boxes_area = PARK_BOXES_AREA
+        self.accept_box = FAILURE_ACCEPT_BOX_1
+        self.lane1box = LANE_1_BOX
+        self.lane2box = LANE_2_BOX
         self.reserved_areas = dict()
         self.reserved_areas_requested = OrderedDict()
         self.trajs = dict()

@@ -4,6 +4,7 @@
 # March, 2020
 
 from prepare.boxcomponent import BoxComponent
+from variables.geometries import LANES_BOX
 import trio
 import numpy as np
 import _pickle as pickle
@@ -30,7 +31,7 @@ class Planner(BoxComponent):
         self.original_lanes_planning_graph = []
         self.original_free_planning_graph = []
         self.planning_graph_in_use = []
-        self.lanes_box = Polygon([(150,50),(150,230),(230,230),(230,50),(150,50)])
+        self.lanes_box = LANES_BOX
         self.reachable = np.ones((max(list(parking_spots.keys()))+1,1)) # if spots can be reached from drop_off, currently all reachable
         self.reserved_areas = dict()
 

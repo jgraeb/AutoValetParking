@@ -4,6 +4,7 @@
 # March, 2020
 
 from prepare.boxcomponent import BoxComponent
+from variables.geometries import UPPER_SPOTS, LOWER_SPOTS, MIDDLE_BOX
 import trio
 import random
 from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2, SCALE_FACTOR_PLAN as SFP
@@ -27,9 +28,9 @@ class Supervisor(BoxComponent):
         self.priority = dict()
         self.conflicts = []
         self.counter = 1
-        self.upper_spots = Polygon([(30*SFP, 120*SFP), (155*SFP, 120*SFP), (155*SFP, 175*SFP), (30*SFP, 175*SFP), (30*SFP, 120*SFP)])
-        self.lower_spots = Polygon([(30*SFP, 190*SFP), (30*SFP, 240*SFP), (220*SFP, 240*SFP), (220*SFP, 190*SFP), (30*SFP, 190*SFP)])
-        self.middle_box = Polygon([(5*SFP,130*SFP),(5*SFP,230*SFP),(30*SFP,230*SFP),(30*SFP,130*SFP),(5*SFP,130*SFP)])
+        self.upper_spots = UPPER_SPOTS
+        self.lower_spots = LOWER_SPOTS 
+        self.middle_box = MIDDLE_BOX
 
     async def send_directive_to_planner(self, car,ref):
         directive = [car,ref]
