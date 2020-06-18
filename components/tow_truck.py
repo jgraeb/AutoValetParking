@@ -17,8 +17,7 @@ class TowTruck(BoxComponent):
             async for car in self.in_channels['Supervisor']:
                 print('Towing request received!')
                 await trio.sleep(TOW_TIME)
-                directive = [car, 'Towed'] 
-                await self.out_channels['Supervisor'].send(directive)
+                await self.out_channels['Supervisor'].send(car)
 
     async def run(self):
         async with trio.open_nursery() as nursery:
