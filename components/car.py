@@ -66,6 +66,7 @@ class Car(BoxComponent):
         self.reverse = False
         self.idx = 0
         self.hold = False
+        self.new_spot = False
 
     async def update_planner_command(self,send_response_channel,Game, Time): # directive/response system - receiving directives
         async with self.in_channels['Planner']:
@@ -204,9 +205,19 @@ class Car(BoxComponent):
             self.last_segment = True
             self.idx = 0
             path = directive
-            cx = path[:,0]*SCALE_FACTOR_PLAN #[entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
-            cy = path[:,1]*SCALE_FACTOR_PLAN #[entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
-            cyaw = np.deg2rad(path[:,1])*(-1) #[np.deg2rad(entry[2])*-1 for entry in path[0]]
+            st()
+            try:
+                print('a')
+                cx = path[:,0]*SCALE_FACTOR_PLAN #[entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
+                cy = path[:,1]*SCALE_FACTOR_PLAN #[entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
+                cyaw = np.deg2rad(path[:,1])*(-1) #[np.deg2rad(entry[2])*-1 for entry in path[0]]
+            except:
+                print('b')
+                cx = [entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
+                cy = [entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
+                cyaw = [np.deg2rad(entry[2])*-1 for entry in path[0]]
+                st()
+            st()
             self.direction = tracking.check_direction(path)
             state = np.array([self.x, self.y,self.yaw])
             initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
@@ -294,6 +305,8 @@ class Car(BoxComponent):
                     if self.unparking:
                         try:
                             await self.back_2_spot(Time,send_response_channel,Game)
+                            self.replan = True
+                            return
                         except:
                             st()
                         #await self.track_reference(Game,send_response_channel, Time)
@@ -421,23 +434,21 @@ class Car(BoxComponent):
         # including a failure in 20% of cars
         failidx = len(self.ref)
         chance = random.randint(1,100) # changed to 0!!!
-        if self.id == 0:
+        if self.id ==1:
             chance = 1
-        elif self.id ==1:
-            chance = 0
         if not self.replan:
-            if len(self.ref)-1>4 and chance <=30:
-                failidx = np.random.randint(low=4, high=6, size=1)
-                if self.parking:
-                    print('{0} will fail at acceptable spot: {1}'.format(self.name,failidx))
-                else:
-                    print('{0} will fail in narrow path: {1}'.format(self.name,failidx))
-            elif len(self.ref)-1>10 and chance <=30:
+            if len(self.ref)-1>10 and chance <=30:
                 failidx = np.random.randint(low=len(self.ref)-5, high=len(self.ref)-1, size=1)
                 if self.parking:
                     print('{0} will fail in narrow path: {1}'.format(self.name,failidx))
                 else:
                     print('{0} will fail at acceptable spot: {1}'.format(self.name,failidx))
+            elif len(self.ref)-1>4 and chance <=30:
+                failidx = np.random.randint(low=4, high=6, size=1)
+                if self.parking:
+                    print('{0} will fail at acceptable spot: {1}'.format(self.name,failidx))
+                else:
+                    print('{0} will fail in narrow path: {1}'.format(self.name,failidx))
         # start tracking segments
         elif self.status == 'Replan':
             print('{0} Stopping the Tracking, ID {1}'.format(self.name, self.id))

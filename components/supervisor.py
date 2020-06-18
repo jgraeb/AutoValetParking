@@ -43,6 +43,7 @@ class Supervisor(BoxComponent):
                         self.parking_spots[spot]=(('Occupied',car.name))
                         self.cars.update({car.name: 'Parked'})
                         car.parked = True
+                        car.new_spot = False
                     elif car.is_at_pickup:
                         print('Supervisor - Car {0} is picked up'.format(car.name))
                         car.requested = False
@@ -102,12 +103,15 @@ class Supervisor(BoxComponent):
                             oldspot = key
                     newspot = self.pick_new_spot(car,obs,Planner)
                     if newspot: # if there exits a possible new spot send updated command
+                        car.new_spot = True
                         Simulation.spots.update({newspot: car.id})
                         self.parking_spots[newspot]=(('Assigned',car.name))
                         Simulation.spots.pop(oldspot)
                         self.parking_spots[oldspot]=(('Vacant','None'))
                         await self.send_directive_to_planner(car,('Park',newspot))
                     else: # drive to old spot
+                        car.replan = False
+                        car.new_spot = False
                         await self.send_directive_to_planner(car,('Park',oldspot))
                 elif resp[0] == 'Conflict':
                     car_list = resp[1]
@@ -165,67 +169,81 @@ class Supervisor(BoxComponent):
         return None
 
     def pick_new_spot(self,car,obs, pln): # strategy to pick a different parking spot, if spot becomes unreachable
-        st()
+        #st()
         # is another spot reachable before the failure
-        buffer = 3.0 # m
+        buffer = 1.0 # m
+        buffer_back = buffer
+        buffer_front = buffer
         ordered_dict = dict()
         obs_x = obs.x*SFP
         obs_y = obs.y*SFP
         obs = Point([(obs_x,obs_y)])
         car_loc = Point([(car.x,car.y)])
         car_x = car.x
+        print('Obs:'+str(obs_x)+','+str(obs_y))
         if obs.intersects(self.upper_spots) or obs.intersects(self.middle_box): # if failure is in upper row
             print('Failure in upper row')
-            st()
-            for key,val in self.parking_spots.items():
-                loc_x = val[0]
-                loc_y = val[1]
-                loc = Point([(loc_x/SFP,loc_y/SFP)])
+            for key,val in parking_spots.items():
+                loc_x = val[0]*SFP
+                loc_y = val[1]*SFP
+                print(str(key)+': '+str(loc_x)+','+str(loc_y))
+                loc = Point([(loc_x,loc_y)])
                 if loc.intersects(self.upper_spots): # if spot in upper row
-                    print('Check if between car and failure')
-                    if loc_x > (obs_x + buffer) and loc_x < (car_x - buffer): # if between car and failure
+                    #print('Check if between car and failure')
+                    if loc_x > (obs_x + buffer_back) and loc_x < (car_x - buffer_front): # if between car and failure
+                        print('Adding spot {0} to list'.format(key))
                         ordered_dict.update({key: val})
-            print('Possible spots:')
-            for key,val in ordered_dict.items():
-                print(key)
+            #print('Possible spots:')
+            #for key,val in ordered_dict.items():
+            #    print(key)
         elif obs.intersects(self.lower_spots):
             print('Failure in lower row')
-            st()
-            if car_loc.intersects(self.lower_spots): # if car in lower row only pick spots in lowr row
-                for key,val in self.parking_spots.items():
-                    loc_x = val[0]
-                    loc_y = val[1]
-                    loc = Point([(loc_x/SFP,loc_y/SFP)])
+            if car_loc.intersects(self.lower_spots): # if car in lower row only pick spots in lower row
+                for key,val in parking_spots.items():
+                    loc_x = val[0]*SFP
+                    loc_y = val[1]*SFP
+                    loc = Point([(loc_x,loc_y)])
+                    print(str(key)+': '+str(loc_x)+','+str(loc_y))
                     if loc.intersects(self.lower_spots):
-                        if loc_x > (obs_x + buffer) and loc_x < (car_x - buffer): # if between car and failure
+                        if loc_x < (obs_x - buffer_back) and loc_x > (car_x + buffer_front): # if between car and failure
+                            print('Adding spot {0} to list'.format(key))
                             ordered_dict.update({key: val})
             else:
-                for key,val in self.parking_spots.items(): # if car in upper row, can pick spots in upper row and lower row
-                    loc_x = val[0]
-                    loc_y = val[1]
-                    loc = Point([(loc_x/SFP,loc_y/SFP)])
+                for key,val in parking_spots.items(): # if car in upper row, can pick spots in upper row and lower row
+                    loc_x = val[0]*SFP
+                    loc_y = val[1]*SFP
+                    loc = Point([(loc_x,loc_y)])
+                    print(str(key)+': '+str(loc_x)+','+str(loc_y))
                     if loc.intersects(self.lower_spots):
-                        if loc_x < (obs_x + buffer):
+                        if loc_x < (obs_x - buffer_back):
+                            print('Adding spot {0} to list'.format(key))
                             ordered_dict.update({key: val})
                     else:
-                        if loc_x < (car_x - buffer):
+                        if loc_x < (car_x - buffer_front):
+                            print('Adding spot {0} to list'.format(key))
                             ordered_dict.update({key: val})
-            print('Possible spots:')
-            for key,val in ordered_dict.items():
-                print(key)
+            #print('Possible spots:')
+            #for key,val in ordered_dict.items():
+            #    print(key)
         # ordered dict contains all possible parking spots
         # delete the occupied ones and unreachable ones
-        for key,val in ordered_dict:
+        #st()
+        del_keys = []
+        for key,val in ordered_dict.items():
             if not (self.parking_spots[key]==('Vacant','None')):
-                ordered_dict.pop(key)
-            elif not pln.check_reachable(key):
-                ordered_dict.pop(key)
+                del_keys.append(key)
+            elif not pln.check_reachable_from_car(key,car):
+                del_keys.append(key)
+        for key in del_keys:
+            ordered_dict.pop(key)
         print('Possible vacant and reachable spots:')
         for key,val in ordered_dict.items():
             print(key)
+        #st()
         # pick one of the remaining ones
         if len(ordered_dict)!=0:
             chosen_spot = random.sample(list(ordered_dict.keys()),1)
+            chosen_spot = chosen_spot[0]
             print('Picking spot {0} for Car {1}'.format(chosen_spot,car.id))
             return chosen_spot
         else:

@@ -61,7 +61,7 @@ class Planner(BoxComponent):
         traj, weight = self.get_path(start,end) 
         print('Path weight: '+str(weight))
         if traj:
-            if car.replan:
+            if car.replan and not car.new_spot:
                 # pos = Point([(car.x/SCALE_FACTOR_PLAN,car.y/SCALE_FACTOR_PLAN)])
                 # if not obstacle:
                 #     dist = []
@@ -69,12 +69,15 @@ class Planner(BoxComponent):
                 #         obst = Point([(key.x/SCALE_FACTOR_PLAN,key.y/SCALE_FACTOR_PLAN)])
                 #         dist.append(obst.distance(pos))
                 print('Reserve Replanning Area for Car {0}!!!'.format(car.id))
-                Game.reserve_replanning(car, traj, obstacle)
+                if obstacle:
+                    Game.reserve_replanning(car, traj, obstacle)
                 #Game.check_and_reserve_other_lane(car,traj)
             if not car.replan:
                 if Game.check_and_reserve_other_lane(car,traj):
-                    car.hold = True
-                    Game.reserve_replanning(car, traj, obstacle)
+                    #car.hold = True
+                    if obstacle:
+                        Game.reserve_replanning(car, traj, obstacle)
+                        car.hold = True
             print('Planner - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
         else:
@@ -141,7 +144,7 @@ class Planner(BoxComponent):
                                         print('Spot for Car {0} became unreachable'.format(car.id))
                                         car.replan = True
                                         car.status = 'Replan'
-                                        st()
+                                        #st()
                                         await self.send_response_to_supervisor(resp) # to pick other spot
                             
     async def replan_path(self, car, Game, obstacle):
@@ -430,6 +433,15 @@ class Planner(BoxComponent):
         obs = {car.name : [car.x,car.y,car.yaw]}
         is_acceptable = gme.is_failure_acceptable(obs)
         return is_acceptable
+
+    def check_reachable_from_car(self,spot,car):
+        start = (car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, np.rad2deg(car.yaw)*(-1),0) # start position on the grid
+        end = self.find_spot_coordinates(spot)
+        traj, _ = self.get_path(start,end) 
+        if traj:
+            return True
+        else:
+            return False
 
     def check_reachability(self,spot):
         if self.reachable[spot]:
