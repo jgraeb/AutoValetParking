@@ -8,7 +8,7 @@ modified for Automated Valet Parking (AVP)
 """
 from scipy.spatial.distance import cdist
 import random
-
+from ipdb import set_trace as st
 import matplotlib.pyplot as plt
 import cvxpy
 import math
@@ -62,7 +62,7 @@ T = 3  # horizon length
 
 # mpc parameters
 R = np.diag([0.01, 0.01])  # input cost matrix
-Rd = np.diag([0.01, 1.0])  # input difference cost matrix
+Rd = np.diag([0.01, 0.01])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
 GOAL_DIS = 2.5  # goal distance
@@ -276,7 +276,7 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od):
     for i in range(MAX_ITER):
         xbar = predict_motion(x0, oa, od, xref)
         poa, pod = oa[:], od[:]
-        oa, od, ox, oy, oyaw, ov = linear_mpc_control(xref, xbar, x0, dref)
+        oa, od, ox, oy, oyaw, ov = linear_mpc_control(xref, xbar, x0, dref, True)
         du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
         if du <= DU_TH:
             break
@@ -286,7 +286,7 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od):
     return oa, od, ox, oy, oyaw, ov
 
 
-def linear_mpc_control(xref, xbar, x0, dref):
+def linear_mpc_control(xref, xbar, x0, dref, breaking=None):
     """
     linear mpc control
 
@@ -322,7 +322,11 @@ def linear_mpc_control(xref, xbar, x0, dref):
     constraints += [x[:, 0] == x0]
     constraints += [x[2, :] <= MAX_SPEED]
     constraints += [x[2, :] >= MIN_SPEED]
+    MAX_ACCEL = 1.0 #m/ss
+    if breaking:
+        MAX_ACCEL = 7.0 #m/ss emergency braking
     constraints += [cvxpy.abs(u[0, :]) <= MAX_ACCEL]
+    MAX_ACCEL = 1.0 #m/ss
     constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
@@ -391,7 +395,7 @@ def check_goal(state, goal, tind, nind,goalspeed, last_segment):
     if not last_segment:
         isgoal = (d <= GOAL_DIS)
     else: 
-        isgoal = (d <= 1)
+        isgoal = (d <= GOAL_DIS)
     if abs(tind - nind) >= 5:
         isgoal = False
     # modified
@@ -471,8 +475,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed):
         d.append(di)
         a.append(ai)
         #vkmh.append(state.v*3.6) # mod storing speed in km/h
-
-        if check_goal(state, goal, target_ind, len(cx),goalspeed): # modified goal speed
+        if check_goal(state, goal, target_ind, len(cx),goalspeed,True): # modified goal speed
             print("Goal")
             break
 
@@ -1137,6 +1140,62 @@ def main_guarantee():
     f.close()
 
 
+def stop_car(path,startv): # bringing car to a full stop asap
+    #if not self.status == 'Stop' or not self.status=='Blocked' or not self.status=='Conflict':
+    # bring car to a full stop
+    #print('STOPPING CAR {0}, velocity {1}'.format(self.id, self.v))
+    odelta, oa = None, None
+    #buffer = startv / 10 * 0.4
+    print(path)
+    cx = path[:,0]
+    print(cx)
+    cy = path[:,1]
+    cyaw = path[:,2]
+    print(cyaw)
+    ck = 0
+    dl = 1.0
+    sp = [startv, 0,0]
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=startv)
+    t, x, y, yaw, v, d, a = do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state,0.0)
+
+    if show_animation:  # pragma: no cover
+        plt.close("all")
+        plt.subplots()
+        plt.plot(cx, cy, "-r", label="Reference Trajectory")
+        plt.plot(x, y, "--g", label="Tracking")
+        
+        plt.grid(True)
+        plt.axis("equal")
+        plt.xlabel("x[m]")
+        plt.ylabel("y[m]")
+        plt.legend()
+        # mod
+        plt.subplots()
+        plt.plot(t, v, "-r", label="speed")
+        plt.grid(True)
+        plt.xlabel("Time [s]")
+        plt.ylabel("Speed [m/s]")
+
+        plt.show()
+
+    # target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
+    # sp = [self.v/2, self.v/4, 0]
+    # xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
+    # x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
+    # st()
+    # oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
+    # if odelta is not None:
+    #     di, ai = odelta[0], oa[0]
+    # self.state = tracking.update_state(self.state, ai, di)
+    # st()
+    # self.x = self.state.x
+    # self.y = self.state.y
+    # self.yaw = self.state.yaw
+    # self.v = self.state.v
+    # self.status == 'Stop'
+    # #self.v = 0
+
+
 def track_path_forward(ref):
     dl = 1
     ck = 0
@@ -1151,13 +1210,13 @@ def track_path_forward(ref):
     for i in range(0,len(ref)-1):  
         path = ref[i:i+2][:]
         print(path)
-        cx = path[:,0]*SCALE_FACTOR_PLAN
+        cx = path[:,0]
         print(cx)
-        cy = path[:,1]*SCALE_FACTOR_PLAN
-        cyaw = np.deg2rad(path[:,2])*-1
+        cy = path[:,1]
+        cyaw = path[:,2]
         #state = np.array([self.x, self.y,self.yaw])
         #  check  direction of the segment
-        direction = check_direction(cx,cy,cyaw)
+        direction = check_direction(path)
         print("Direction is "+str(direction))
         sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,0.0,direction)
         initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0], v=0.0)
@@ -1175,7 +1234,7 @@ def track_path_forward(ref):
         plt.legend()
         # mod
         plt.subplots()
-        plt.plot(t, vkmh, "-r", label="speed")
+        plt.plot(t, v, "-r", label="speed")
         plt.grid(True)
         plt.xlabel("Time [s]")
         plt.ylabel("Speed [m/s]")
@@ -1188,7 +1247,27 @@ def test(path):
 if __name__ == '__main__':
     #main()
     #main_guarantee()
-    track_path_forward(extraj2)
+
+    x = 0
+    y = 0
+    yaw = np.pi/4
+
+
+    direction = 1
+    startv = 7/3.6
+    buffer = startv * 3.6 / 10 * 0.4 * 2
+    path = np.array([[ x, y, yaw,   startv],[ x + 0.5 * direction*buffer*np.cos(yaw), y + 0.5 * direction*buffer*np.sin(yaw), yaw,   startv/2],[ x + direction*buffer*np.cos(yaw), y + direction*buffer*np.sin(yaw), yaw,  0]])
+
+    direc = [[x, y, yaw]]
+    direc.append([x-direction*5*np.cos(yaw), y-direction*5*np.sin(yaw), yaw])
+    direc.append([x-direction*10*np.cos(yaw), y-direction*10*np.sin(yaw), yaw])
+    directive = np.array(direc)
+    #st()
+    #print(path)
+    #print('buffer'+str(buffer))
+    print(directive)
+    #stop_car(path,startv)
+    track_path_forward(directive)
 
     #path = np.array([[140.,  60.,   90.],[140.,  70.,   90.]])
     #path = np.array([[  40.,  140.,  -90.],[  40.,  150., -135.]])
