@@ -75,7 +75,7 @@ class Supervisor(BoxComponent):
                     await self.out_channels['Failure'].send(car)
                     self.cars.update({car.name: 'Failure'})
                     print('Supervisor initiating towing of {0}'.format(car.name))
-                    await self.tow(car, Simulation)
+                    await self.initiate_towing(car, Simulation)
                 elif resp == 'NoPath':
                     if self.cars.get(car.name)== 'Assigned':
                         spot = self.pick_spot(car,Planner, Simulation)
@@ -143,23 +143,27 @@ class Supervisor(BoxComponent):
                                     #await self.send_directive_to_planner(car,('Reverse'))
                 await trio.sleep(0)
     
-    async def tow(self,car, Simulation): # tow the failed car, remove it after t_tow
-        await trio.sleep(TOW_TIME)
-        # removing car from lot
-        directive = [car, 'Towed'] 
-        await self.out_channels['Planner'].send(directive)
-        self.cars.pop(car.name)
-        self.priority.pop(car.name)
-        self.failures.pop(car.name)
-        await self.out_channels['GameExit'].send(car)
-        for spot, value in self.parking_spots.items(): 
-            if value == ('Assigned',car.name) or value == ('Occupied', car.name) or value == ('Requested', car.name): 
-                val = spot
-        self.parking_spots[val]=(('Vacant','None'))
-        if val in Simulation.spots:
-            Simulation.spots.pop(val)
-        self.spot_no=self.spot_no+1
-        print(str(self.spot_no)+' parking Spots vacant')
+    async def initiate_towing(self,car, Simulation): # tow the failed car
+        print('Supervisor sending towing request')
+        await self.out_channels['TowTruck'].send(car)
+
+    async def update_towed_cars(self,Simulation):
+        async with self.in_channels['TowTruck']:
+            async for car in self.in_channels['TowTruck']:
+                directive = [car, 'Towed'] 
+                await self.out_channels['Planner'].send(directive)
+                self.cars.pop(car.name)
+                self.priority.pop(car.name)
+                self.failures.pop(car.name)
+                await self.out_channels['GameExit'].send(car)
+                for spot, value in self.parking_spots.items(): 
+                    if value == ('Assigned',car.name) or value == ('Occupied', car.name) or value == ('Requested', car.name): 
+                        val = spot
+                self.parking_spots[val]=(('Vacant','None'))
+                if val in Simulation.spots:
+                    Simulation.spots.pop(val)
+                self.spot_no=self.spot_no+1
+                print(str(self.spot_no)+' parking Spots vacant')
 
     def pick_spot(self,car,pln,sim): # pick a parking spot randomly
         random_list = random.sample(list(self.parking_spots.keys()),len(list(self.parking_spots.keys())))
@@ -309,3 +313,4 @@ class Supervisor(BoxComponent):
             nursery.start_soon(self.process_queue, Planner, Simulation)
             nursery.start_soon(self.request_queue, Simulation)
             nursery.start_soon(self.update_planner_response,Planner, Simulation)
+            nursery.start_soon(self.update_towed_cars,Simulation)

@@ -22,7 +22,7 @@ def create_bidirectional_channel(compA, compB, max_buffer_size):
     create_unidirectional_channel(sender=compA, receiver=compB, max_buffer_size=max_buffer_size)
     create_unidirectional_channel(sender=compB, receiver=compA, max_buffer_size=max_buffer_size)
 
-def set_up_channels(supervisor,planner, game, map_sys, customer, simulation):
+def set_up_channels(supervisor,planner, game, map_sys, customer, simulation, tow_truck): # all communication channels used in the simulation
         create_bidirectional_channel(supervisor,planner,max_buffer_size=np.inf)
         create_bidirectional_channel(customer, supervisor, max_buffer_size=np.inf)
         create_unidirectional_channel(sender=customer, receiver=supervisor, max_buffer_size=np.inf, name='Request')
@@ -37,3 +37,4 @@ def set_up_channels(supervisor,planner, game, map_sys, customer, simulation):
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf, name='PedSimulation')
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf, name='ExitSim')
         create_unidirectional_channel(sender=supervisor, receiver= game, max_buffer_size=np.inf,name='Failure')
+        create_bidirectional_channel(supervisor, tow_truck,max_buffer_size=np.inf)

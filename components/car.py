@@ -205,37 +205,25 @@ class Car(BoxComponent):
             self.last_segment = True
             self.idx = 0
             path = directive
-            try:
-                cx = path[:,0]*SCALE_FACTOR_PLAN #[entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
-                cy = path[:,1]*SCALE_FACTOR_PLAN #[entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
-                cyaw = np.deg2rad(path[:,1])*(-1) #[np.deg2rad(entry[2])*-1 for entry in path[0]]
-                print('a')
-            except:
-                st()
-                cx = [entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
-                cy = [entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
-                cyaw = [np.deg2rad(entry[2])*-1 for entry in path[0]]
-                print('b')
-                st()
-            try:
-                self.direction = tracking.check_direction(path[0])
-                state = np.array([self.x, self.y,self.yaw])
-                initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-                end_speed = 0.0
-                sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
-                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
-                if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
-                    return
-                self.status = 'Completed'
-                self.is_at_pickup = self.check_at_pickup(Game)
-                if self.is_at_pickup:
-                    self.retrieving = False
-                self.last_segment = False
-                if self.check_if_car_is_in_spot(Game):
-                    self.in_spot = True
-                self.parking = False
-            except:
-                st()
+            cx = [entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
+            cy = [entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
+            cyaw = [np.deg2rad(entry[2])*-1 for entry in path[0]]
+            self.direction = tracking.check_direction(path[0])
+            state = np.array([self.x, self.y,self.yaw])
+            initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+            end_speed = 0.0
+            sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
+            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
+            if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
+                return
+            self.status = 'Completed'
+            self.is_at_pickup = self.check_at_pickup(Game)
+            if self.is_at_pickup:
+                self.retrieving = False
+            self.last_segment = False
+            if self.check_if_car_is_in_spot(Game):
+                self.in_spot = True
+            self.parking = False
         print('Car back in spot')
         await trio.sleep(0)
         self.track_reference(Game, send_response_channel,Time)

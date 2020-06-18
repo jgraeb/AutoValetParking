@@ -19,6 +19,7 @@ from environment.pedestrian import Pedestrian
 from components.car import Car
 from components.supervisor import Supervisor
 from environment.customer import Customer
+from components.tow_truck import TowTruck
 
 async def main():
     #global START_TIME
@@ -41,7 +42,9 @@ async def main():
         #all_components.append(planner)
         customer = Customer(average_arrival_rate = average_arrival_rate, average_park_time = average_park_time)
         #create communication channels
-        set_up_channels(supervisor,planner, game, map_sys, customer, simulation)
+        tow_truck = TowTruck()
+        all_components.append(tow_truck)
+        set_up_channels(supervisor,planner, game, map_sys, customer, simulation,tow_truck)
         # start nursery
         for comp in all_components:
             nursery.start_soon(comp.run)
