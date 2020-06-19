@@ -43,7 +43,7 @@ async def main():
         supervisor = Supervisor(nursery = nursery)
         #all_components.append(supervisor)
         game = Game()
-        all_components.append(game)
+        #all_components.append(game)
         planner = Planner(nursery=nursery)
         #all_components.append(planner)
         customer = Customer(average_arrival_rate = average_arrival_rate, average_park_time = average_park_time)
@@ -55,6 +55,7 @@ async def main():
         for comp in all_components:
             nursery.start_soon(comp.run)
             await trio.sleep(0)
+        nursery.start_soon(game.run,logger)
         nursery.start_soon(planner.run, game, time_sys, logger)
         nursery.start_soon(supervisor.run, planner, time_sys, simulation,logger)
         nursery.start_soon(customer.run,END_TIME,START_TIME, game)

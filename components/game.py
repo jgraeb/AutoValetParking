@@ -4,7 +4,7 @@
 # March, 2020
 
 from prepare.boxcomponent import BoxComponent
-from variables.geometries import DROPOFF_BOX, PICKUP_BOX, PARK_BOXES, PARK_BOXES_AREA, FAILURE_ACCEPT_BOX_1, LANE_1_BOX, LANE_2_BOX
+from variables.geometries import DROPOFF_BOX, PICKUP_BOX, PARK_BOXES, PARK_BOXES_AREA, FAILURE_ACCEPT_BOX_1,FAILURE_ACCEPT_BOX_2, LANE_1_BOX, LANE_2_BOX
 import trio
 import numpy as np
 import math
@@ -15,7 +15,7 @@ sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
 from shapely import affinity
 from shapely.ops import nearest_points, split
-from variables.parking_data import parking_spots
+from variables.parking_data import parking_spots_original as parking_spots
 from ipdb import set_trace as st
 from collections import OrderedDict
 
@@ -31,16 +31,18 @@ class Game(BoxComponent):
         self.park_boxes = PARK_BOXES
         self.park_boxes_area = PARK_BOXES_AREA
         self.accept_box = FAILURE_ACCEPT_BOX_1
+        self.accept_box_2 = FAILURE_ACCEPT_BOX_2
         self.lane1box = LANE_1_BOX
         self.lane2box = LANE_2_BOX
         self.reserved_areas = dict()
         self.reserved_areas_requested = OrderedDict()
         self.trajs = dict()
+        self.Logger = None
 
     async def keep_track_influx(self):
         async with self.in_channels['GameEnter']:
             async for car in self.in_channels['GameEnter']:
-                print('Game System - Adding new car to Game')
+                self.Logger.info('GAME - Adding new car to Game')
                 await self.out_channels['Enter'].send(car)
                 await self.out_channels['Simulation'].send(car)
                 self.cars.append(car)
@@ -51,14 +53,14 @@ class Game(BoxComponent):
                 await self.out_channels['ExitSim'].send(car)
                 await self.out_channels['Exit'].send(car)
                 #await self.out_channels['ExitSim'].send(car)
-                print('Game System - Removing {0} from Game / ID {1}'.format(car.name,car.id))
+                self.Logger.info('GAME - Removing {0} from Game / ID {1}'.format(car.name,car.id))
                 self.cars.remove(car)
                 #car.cancel = True
 
     async def keep_track_influx_peds(self):
         async with self.in_channels['GameEnterPeds']:
             async for pedestrian in self.in_channels['GameEnterPeds']:
-                print('Game System - Adding new pedestrian to Game')
+                self.Logger.info('GAME - Adding new pedestrian to Game')
                 #await self.out_channels['PedEnter'].send(pedestrian) # for Map
                 await self.out_channels['PedSimulation'].send(pedestrian)
                 self.peds.append(pedestrian)
@@ -67,7 +69,7 @@ class Game(BoxComponent):
         if not ref:
             path = car.ref[car.idx:]
             newlinestring = make_line(path) # compute shapely line in meters
-            print('Reserving for Car ID {0}'.format(car.id))
+            self.Logger.info('GAME - Reserving for Car ID {0}'.format(car.id))
             res_path = newlinestring.intersection(self.accept_box)
             # reserve new path until getting back to original path
             if len(res_path.coords)>=1:
@@ -107,7 +109,7 @@ class Game(BoxComponent):
         line = [(entry[0]*SCALE_FACTOR_PLAN,entry[1]*SCALE_FACTOR_PLAN) for entry in area]
         linestring = LineString(line)
         area = linestring.buffer(3.5)
-        print('Reserving for Car ID {0}'.format(car.id))
+        self.Logger.info('GAME - Reserving for Car ID {0}'.format(car.id))
         print(car.current_segment)
         print(line)
         self.reserved_areas_requested.update({car: area})
@@ -115,10 +117,10 @@ class Game(BoxComponent):
 
     def check_and_reserve_other_lane(self,car,newtraj):
         # here reserve other lane if necessary
-        print('Checking if Car {0} is crossing into other lane'.format(car.id))
+        self.Logger.info('GAME - Checking if Car {0} is crossing into other lane'.format(car.id))
         newlinestring = make_line(newtraj)
         if newlinestring.intersects(self.lane2box) and newlinestring.intersects(self.lane1box):
-            print('Have to reserve other lane for  Car {0}'.format(car.id))
+            self.Logger.info('GAME - Have to reserve other lane for  Car {0}'.format(car.id))
             # make sure car starts on path only if reserved area is free
             return True
         return False
@@ -173,7 +175,7 @@ class Game(BoxComponent):
         # reserve new path until getting back to original path
         traj = traj[0]
         area = traj.buffer(3.5)
-        print('Reserving Replanning Area for Car ID {0}'.format(car.id))
+        self.Logger.info('GAME - Reserving Replanning Area for Car ID {0}'.format(car.id))
         self.reserved_areas_requested.update({car: area})
         self.trajs.update({car: (traj,point)})
         self.update_reserved_areas()
@@ -244,15 +246,20 @@ class Game(BoxComponent):
             self.reserved_areas_requested.pop(item)
         print('Areas Reserved:')
         print(self.reserved_areas)
+        keys_res = []
         for key in self.reserved_areas.keys():
             print(key.id)
+            keys_res.append(key.id)
         print('Areas Requested:')
         print(self.reserved_areas_requested)
+        keys_req = []
         for key in self.reserved_areas_requested.keys():
             print(key.id)
+            keys_req.append(key.id)
+        self.Logger.info('GAME - Reserved: {0}, Requested: {1}'.format(keys_res,keys_req))
 
     def release_reserved_area(self,car):
-        print('{0} releasing reserved area'.format(car.id))
+        self.Logger.info('GAME - {0} releasing reserved area'.format(car.id))
         if car in self.reserved_areas:
             self.reserved_areas.pop(car)
         if car in self.reserved_areas_requested:
@@ -272,14 +279,14 @@ class Game(BoxComponent):
         mybox = self.car_boxes.get(car.name,0)
         try:
             if mycone.intersects(area) or mybox.intersects(area):
-                print('Car {} still in reserved area'.format(car.id))
+                self.Logger.info('GAME - Car {} still in reserved area'.format(car.id))
                 return False
         except:
             st()
         return True
 
     def get_vision_cone(self,car):
-        buffer = car.v*3.6/10*0.4*2
+        buffer = abs(car.v)*3.6/10*0.4*2
         # if car.replan and car.last_segment:# and not car.retrieving:
         #     openangle = 30
         #     length = 3
@@ -305,7 +312,7 @@ class Game(BoxComponent):
         return rotated_cone
 
     def get_vision_cone_blocked(self,car):
-        buffer = car.v/10*0.4
+        buffer = abs(car.v)/10*0.4
         openangle = 45
         length = 8 + buffer # m # was 6
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
@@ -380,7 +387,7 @@ class Game(BoxComponent):
                                 if cars.status=='Failure':# or cars.status =='Blocked':
                                     blocked = True 
                                     blocked_by = cars
-                                    print('Failure or blocked car {0} ahead'.format(cars.id))
+                                    self.Logger.info('GAME - Failure or blocked car {0} ahead of Car {1}'.format(cars.id, car.id))
         clearpath = True
         mysmallcone = self.get_forward_vision_cone(car)
         for key,val in self.car_boxes.items():
@@ -393,10 +400,10 @@ class Game(BoxComponent):
                                 #failed_cars.append(cars)
                                 failed_car = True
                                 if mysmallcone.intersects(val):
-                                    print('{0} blocked by a failed car, ID {1}'.format(car.name, car.id))
+                                    self.Logger.info('GAME - {0} blocked by a failed car, ID {1}'.format(car.name, car.id))
                                     clearpath = False
                             elif cars.parked:
-                                print('Blocked by a parked car - Go on ID {0}'.format(car.id))
+                                self.Logger.info('GAME - Blocked by a parked car - Go on ID {0}'.format(car.id))
                                 #clearpath = True
                             else:
                                 conflict_cars.append(cars)
@@ -409,7 +416,7 @@ class Game(BoxComponent):
             ped_point = Polygon([(x_m+2,y_m+1),(x_m+2,y_m-1),(x_m-1,y_m-1), (x_m-1,y_m+1),(x_m+2,y_m+1)])
             if ped_point.intersects(mypedcone) and not car.last_segment and not mybox.intersects(ped_point):
                 clearpath = False
-                print('{0} stops because a pedestrian is in the path, ID {1}'.format(car.name, car.id))
+                self.Logger.info('GAME - {0} stops because a pedestrian is in the path, ID {1}'.format(car.name, car.id))
         # check if they have a conflict with me
         for cars in conflict_cars:
             cone = self.get_vision_cone(cars)
@@ -432,12 +439,12 @@ class Game(BoxComponent):
                         if not myarea.intersects(mybox):
                             stop_reserved = True
                             clearpath = False
-                            print('BBBBBBBBBB ---- {0} stopped because of reserved area for Car {1} ahead'.format(car.id,key.id))
+                            self.Logger.info('GAME - {0} stopped because of reserved area for Car {1} ahead'.format(car.id,key.id))
                     else:
                         stop_reserved = True
                         clearpath = False
-                        print('BBBBBBBBBB ---- {0} stopped because of reserved area for Car {1} ahead'.format(car.id,key.id))
-                    print('Stopping for reserved area ID {0}'.format(car.id))
+                        self.Logger.info('GAME - {0} stopped because of reserved area for Car {1} ahead'.format(car.id,key.id))
+                    self.Logger.info('GAME - Stopping for reserved area ID {0}'.format(car.id))
         return clearpath, conflict_cars, failed_car, conflict, blocked, stop_reserved, blocked_by
 
     def clear_before_unparking(self,car):
@@ -446,7 +453,7 @@ class Game(BoxComponent):
         for key,val in self.car_boxes.items():
             if key != car.name:
                 if mycone.intersects(val):
-                    print('{0} Waiting'.format(car.name))
+                    self.Logger.info('GAME - {0} Waiting'.format(car.name))
                     return False
         # check neighbors are not in driving status
         my_area = Point(car.x,car.y).buffer(4.0)
@@ -476,7 +483,7 @@ class Game(BoxComponent):
         self.update_car_boxes()
         mybox = self.car_boxes.get(car.name)
         if self.pickup_box.intersects(mybox):
-            print('{0} is at pick up, ID {1}'.format(car.name,car.id))
+            self.Logger.info('GAME - 0} is at pick up, ID {1}'.format(car.name,car.id))
             return True
         return False
 
@@ -502,7 +509,9 @@ class Game(BoxComponent):
                 return False
         return True
 
-    async def run(self):
+    async def run(self, Logger):
+        self.Logger = Logger
+        self.Logger.info('GAME - started')
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.keep_track_influx)
             nursery.start_soon(self.keep_track_influx_peds)
