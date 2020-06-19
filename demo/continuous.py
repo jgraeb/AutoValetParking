@@ -21,14 +21,20 @@ from components.supervisor import Supervisor
 from environment.customer import Customer
 from components.tow_truck import TowTruck
 
+import logging
+import logging.config
+logging.config.fileConfig('../prepare/Logging/logging.conf', disable_existing_loggers=False, defaults={'logfilename': 'logs/AVP_sim.log'})
+# create logger
+logger = logging.getLogger('AVP')
+
+
 async def main():
     #global START_TIME
     START_TIME = trio.current_time()
     END_TIME = START_TIME + OPEN_TIME
     time_sys = Time(START_TIME, END_TIME)
     all_components = []
-    print('--- Starting Parking Garage ---')
-    print('At time: '+str(START_TIME))
+    print('--- Starting Parking Garage at time: '+str(START_TIME))
     async with trio.open_nursery() as nursery:
         map_sys = Map()
         all_components.append(map_sys)
@@ -49,8 +55,8 @@ async def main():
         for comp in all_components:
             nursery.start_soon(comp.run)
             await trio.sleep(0)
-        nursery.start_soon(planner.run, game, time_sys)
-        nursery.start_soon(supervisor.run, planner, time_sys, simulation)
+        nursery.start_soon(planner.run, game, time_sys, logger)
+        nursery.start_soon(supervisor.run, planner, time_sys, simulation,logger)
         nursery.start_soon(customer.run,END_TIME,START_TIME, game)
 
 trio.run(main)

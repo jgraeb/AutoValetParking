@@ -285,16 +285,16 @@ class Game(BoxComponent):
         #     length = 3
         if car.last_segment and not car.retrieving:
             openangle = 45
-            length = 4 # m
+            length = 4 + buffer # m
         elif car.unparking:
             openangle = 60
-            length = 4+buffer # m # changes here to try
+            length = 4 + buffer # m # changes here to try
         elif car.close:# or car.replan:
             openangle = 30
-            length = 5.0+buffer # m
+            length = 5.0 + buffer # m
         elif car.reserved and car.reverse:
             openangle = 30
-            length = 4.0+buffer # m
+            length = 4.0 + buffer # m
         else:
             openangle = 30
             length = 6 + buffer # m

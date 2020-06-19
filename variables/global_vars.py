@@ -32,6 +32,7 @@ START_X = 140*SCALE_FACTOR_PLAN # m
 START_Y = 55*SCALE_FACTOR_PLAN # m
 START_YAW = 0 # rad
 DROP_OFF = (START_X,START_Y,START_YAW,0) # (x,y,yaw,vel)
+DROP_OFF_PIX = (140,55,0,0)
 # Pickup Position
 PICK_UP = (260,60,0,0) # in pixels
 # Pedestrian Pathway Dropoff

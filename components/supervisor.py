@@ -31,10 +31,11 @@ class Supervisor(BoxComponent):
         self.upper_spots = UPPER_SPOTS
         self.lower_spots = LOWER_SPOTS 
         self.middle_box = MIDDLE_BOX
+        self.Logger = None
 
     async def send_directive_to_planner(self, car,ref):
         directive = [car,ref]
-        print('Supervisor sending {0} - {1} to Planner'.format(car.name,directive))
+        self.Logger.info('SUPERVISOR - sending {0} - {1} to Planner'.format(car.name,directive[1]))
         await self.out_channels['Planner'].send(directive)
 
     async def update_parking_spots(self,car):
@@ -46,7 +47,7 @@ class Supervisor(BoxComponent):
                         car.parked = True
                         car.new_spot = False
                     elif car.is_at_pickup:
-                        print('Supervisor - Car {0} is picked up'.format(car.name))
+                        self.Logger.info('SUPERVISOR - Car {0} is picked up'.format(car.name))
                         car.requested = False
                         car.picked_up = True
                         car.ref = []
@@ -68,14 +69,14 @@ class Supervisor(BoxComponent):
             async for response in self.in_channels['Planner']:
                 car = response[0]
                 resp = response[1]
-                print('Supervisor - receiving "{0} - {1}" Response from Planner'.format(car.name,resp))
+                self.Logger.info('SUPERVISOR - receiving "{0} - {1}" Response from Planner'.format(car.name,resp))
                 if resp == 'Completed':
                     await self.update_parking_spots(car)
                 elif resp == 'Failure':
                     self.failures.update({car.name: (car.x,car.y,car.yaw)})
                     await self.out_channels['Failure'].send(car)
                     self.cars.update({car.name: 'Failure'})
-                    print('Supervisor initiating towing of {0}'.format(car.name))
+                    self.Logger.info('SUPERVISOR - initiating towing of {0}'.format(car.name))
                     await self.initiate_towing(car, Simulation)
                 elif resp == 'NoPath':
                     if self.cars.get(car.name)== 'Assigned':
@@ -95,7 +96,7 @@ class Supervisor(BoxComponent):
                 elif resp == 'RequestReservedArea':
                     #car.reserved = True
                     if car.status != 'Failure':
-                        print("Car ID {0} has delay: {1} - Reserving Area".format(car.id,car.delay))
+                        self.Logger.info('SUPERVISOR - Car ID {0} has delay: {1} - Reserving Area'.format(car.id,car.delay))
                         await self.reserve_reverse_area(car)
                 elif resp[0] == 'SpotUnreachable':
                     obs = resp[1]
@@ -125,7 +126,7 @@ class Supervisor(BoxComponent):
                                 await self.send_directive_to_planner(car,('Back2spot'))
                                 self.conflicts.append(car)
                             else:
-                                print('Opposed car has priority {0} - Delay high, Reserve Unparking Area Next'.format(cars.id))
+                                self.Logger.info('SUPERVISOR - Opposed car has priority {0} - Delay high, Reserve Unparking Area Next'.format(cars.id))
                                 await self.send_directive_to_planner(car,('Back2spot'))
                                 await self.reserve_reverse_area(car)
                         elif cars.unparking and not car.unparking:
@@ -145,7 +146,7 @@ class Supervisor(BoxComponent):
                 await trio.sleep(0)
     
     async def initiate_towing(self,car, Simulation): # tow the failed car
-        print('Supervisor sending towing request')
+        self.Logger.info('SUPERVISOR - sending towing request')
         await self.out_channels['TowTruck'].send(car)
 
     async def update_towed_cars(self,Simulation):
@@ -164,7 +165,7 @@ class Supervisor(BoxComponent):
                 if val in Simulation.spots:
                     Simulation.spots.pop(val)
                 self.spot_no=self.spot_no+1
-                print(str(self.spot_no)+' parking Spots vacant')
+                self.Logger.info('SUPERVISOR - '+str(self.spot_no)+' parking Spots vacant')
 
     def pick_spot(self,car,pln,sim): # pick a parking spot randomly
         random_list = random.sample(list(self.parking_spots.keys()),len(list(self.parking_spots.keys())))
@@ -177,7 +178,7 @@ class Supervisor(BoxComponent):
         #st()
         # is another spot reachable before the failure
         buffer = 1.0 # m
-        buffer_back = buffer
+        buffer_back = 0.0
         buffer_front = buffer
         ordered_dict = dict()
         obs_x = obs.x*SFP
@@ -258,14 +259,14 @@ class Supervisor(BoxComponent):
     async def process_queue(self,Planner, Simulation): # process arriving customers
         async for car in self.in_channels['Customer']:
             accept_condition = False
-            print(str(self.spot_no)+' parking Spots vacant')
-            print(self.parking_spots)
+            self.Logger.info('SUPERVISOR - '+str(self.spot_no)+' parking Spots vacant')
+            #print(self.parking_spots)
             await self.start_random_ped()
             spot = self.pick_spot(car,Planner, Simulation)
             if spot is not None:
                 accept_condition = True
             if accept_condition:
-                print('{} has been accepted!'.format(car.name))
+                self.Logger.info('SUPERVISOR - {} has been accepted!'.format(car.name))
                 car.id = self.counter
                 self.counter=self.counter+1
                 Simulation.spots.update({spot: car.id})
@@ -281,7 +282,7 @@ class Supervisor(BoxComponent):
                 await self.out_channels['GameEnterPeds'].send(ped)
             else:
                 await self.out_channels['Customer'].send(False)
-                print('Garage fully occupied - A car has been rejected!')
+                self.Logger.info('SUPERVISOR - Garage fully occupied - A car has been rejected!')
 
     async def request_queue(self, Simulation): # process customer retrieval requests
         async for car in self.in_channels['Request']:
@@ -293,7 +294,7 @@ class Supervisor(BoxComponent):
                     val = key
             self.parking_spots[val]=(('Requested',car.name))
             Simulation.spots.pop(val)
-            print('Supervisor - sending Directive to Planner to retrieve {}'.format(car.name))
+            self.Logger.info('SUPERVISOR - sending Directive to Planner to retrieve {}'.format(car.name))
             await self.send_directive_to_planner(car, 'Pickup')
 
     async def start_random_ped(self): # randomly start a pedestrian on the lower crosswalk
@@ -305,11 +306,13 @@ class Supervisor(BoxComponent):
             ped = Pedestrian(pedestrian_type=random.choice(['1','2','3','4','5','6']))
             self.nursery.start_soon(ped.run,start_walk_lane_2,end_walk_lane_2)
             await self.out_channels['GameEnterPeds'].send(ped)
-            print('Adding random pedestrian')
+            self.Logger.info('SUPERVISOR - Adding random pedestrian to lower crosswalk')
 
 
-    async def run(self, Planner, Time, Simulation):
-        print(self.parking_spots)
+    async def run(self, Planner, Time, Simulation, Logger):
+        self.Logger = Logger
+        self.Logger.info('SUPERVISOR - started')
+        #print(self.parking_spots)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.process_queue, Planner, Simulation)
             nursery.start_soon(self.request_queue, Simulation)
