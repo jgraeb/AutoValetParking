@@ -133,16 +133,16 @@ class Planner(BoxComponent):
                             line = [(entry[0],entry[1]) for entry in ref]
                             path = LineString(line)
                             if obstacle.intersects(path):
-                                obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)])
-                                obs = {obscar.name : [obscar.x,obscar.y,obscar.yaw]}
+                                obstacle_plan = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]) # in grid pixels for planning
+                                obs = {obscar.name : [obscar.x,obscar.y,obscar.yaw]} # in meters
                                 if self.is_single_failure_in_acceptable_area(obs, gme):
                                     self.Logger.info('PLANNER - FAILURE ON CAR ID {0} PATH - NEED NEW PATH'.format(car.id))
                                     car.status == 'Replan'
-                                    await self.replan_path(car, gme, obstacle)
+                                    await self.replan_path(car, gme, obstacle_plan)
                                 else: 
                                     if not car.requested:
                                         # stop car here and replan
-                                        resp = (('SpotUnreachable',obstacle), car)
+                                        resp = (('SpotUnreachable',obstacle_plan), car)
                                         self.Logger.info('PLANNER - Spot for Car {0} became unreachable'.format(car.id))
                                         car.replan = True
                                         car.status = 'Replan'
@@ -374,9 +374,12 @@ class Planner(BoxComponent):
             print(self.spots)
             if todo[0] == 'Park':
                 self.Logger.info('PLANNER - receiving directive from Supervisor to park {0} in Spot {1}'.format(car.name,todo[1]))
+                if self.cars.get(car.name,0)==0:
+                    create_unidirectional_channel(self, car, max_buffer_size=np.inf)
+                    self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
                 self.cars.update({car.name: 'Assigned'})
-                create_unidirectional_channel(self, car, max_buffer_size=np.inf)
-                self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
+                # create_unidirectional_channel(self, car, max_buffer_size=np.inf)
+                # self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end, Game, False, None)
