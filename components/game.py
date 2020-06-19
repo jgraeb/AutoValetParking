@@ -505,7 +505,7 @@ class Game(BoxComponent):
 
     def is_failure_acceptable(self, obsdict):
         for key,val in obsdict.items():
-            if not Point(val[0],val[1]).buffer(3).intersects(self.accept_box):
+            if not self.accept_box.contains(Point(val[0],val[1]).buffer(3)):
                 return False
         return True
 
