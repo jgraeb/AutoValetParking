@@ -10,7 +10,7 @@ import random
 from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2, SCALE_FACTOR_PLAN as SFP
 from environment.pedestrian import Pedestrian
 from components.planner import Planner
-from variables.parking_data import parking_spots #bad_parking_spot as parking_spots
+from variables.parking_data import parking_spots_original as parking_spots #bad_parking_spot as parking_spots
 from ipdb import set_trace as st
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')

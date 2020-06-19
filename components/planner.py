@@ -11,7 +11,7 @@ import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import create_bidirectional_channel, create_unidirectional_channel, get_current_time
 from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP, DROP_OFF_PIX
-from variables.parking_data import parking_spots,parking_spots_original
+from variables.parking_data import parking_spots_original as parking_spots#,parking_spots_original
 import math
 from ipdb import set_trace as st
 import sys
