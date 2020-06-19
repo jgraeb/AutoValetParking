@@ -10,7 +10,7 @@ import numpy as np
 import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import create_bidirectional_channel, create_unidirectional_channel, get_current_time
-from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP
+from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP, DROP_OFF_PIX
 from variables.parking_data import parking_spots,parking_spots_original
 import math
 from ipdb import set_trace as st
@@ -28,15 +28,18 @@ class Planner(BoxComponent):
         self.spots = dict([(i, (0)) for i in list(parking_spots.keys())])
         self.obstacles = dict()
         self.planning_graph = []
-        self.original_lanes_planning_graph = []
-        self.original_free_planning_graph = []
-        self.planning_graph_in_use = []
+        self.original_lanes_planning_graph = [] # Planning graph with lane separation
+        self.original_free_planning_graph = [] # Planning graph without lane separation
+        #self.planning_graph_in_use = [] # Storing planning graph when updating
+        self.planning_graph_reachability = [] # Planning graph for reachability analysis (ensuring loop in lot)
+        self.planning_graph_all = [] # Planning graph containing all the failures for reachability analysis
         self.lanes_box = LANES_BOX
         self.reachable = np.ones((max(list(parking_spots.keys()))+1,1)) # if spots can be reached from drop_off, currently all reachable
         self.reserved_areas = dict()
+        self.Logger = None
 
     async def get_car_position(self,car):
-        print('Planner - Sending position request to Map system')
+        self.Logger.info('PLANNER - Sending position request to Map system')
         await self.out_channels['Map'].send(car)
         car, pos = await self.in_channels['Map'].receive()
         return pos
@@ -45,9 +48,6 @@ class Planner(BoxComponent):
         return parking_spots[spot]
 
     async def send_directive_to_car(self, car, end, Game, original, obstacle): # directive/response system
-        # if end == 'Reverse':
-        #     end = (car.x/SCALE_FACTOR_PLAN-car.direction*10, car.y/SCALE_FACTOR_PLAN-car.direction*10, car.yaw, 0)
-        #     print('Car moving out of the way to: '+str(end))
         pos = await self.get_car_position(car)
         start = np.zeros(4)
         start[0] = pos[0]/SCALE_FACTOR_PLAN
@@ -58,18 +58,11 @@ class Planner(BoxComponent):
             self.planning_graph = self.original_lanes_planning_graph
         else:
             self.get_current_planning_graph(Game)
-        print('Planning - {0} driving from {1} to {2}'.format(car.name,start,end))
-        traj, weight = self.get_path(start,end) 
-        print('Path weight: '+str(weight))
+            traj, weight = self.get_path(start,end) 
+        self.Logger.info('PLANNER - {0} driving from {1} to {2}, Path weight: {3}'.format(car.name,start,end,weight))
         if traj:
             if car.replan and not car.new_spot:
-                # pos = Point([(car.x/SCALE_FACTOR_PLAN,car.y/SCALE_FACTOR_PLAN)])
-                # if not obstacle:
-                #     dist = []
-                #     for key,val in self.obstacles.items():
-                #         obst = Point([(key.x/SCALE_FACTOR_PLAN,key.y/SCALE_FACTOR_PLAN)])
-                #         dist.append(obst.distance(pos))
-                print('Reserve Replanning Area for Car {0}!!!'.format(car.id))
+                self.Logger.info('PLANNER - Reserving Replanning Area for Car {0}!!!'.format(car.id))
                 if obstacle:
                     Game.reserve_replanning(car, traj, obstacle)
                 #Game.check_and_reserve_other_lane(car,traj)
@@ -79,10 +72,10 @@ class Planner(BoxComponent):
                     if obstacle:
                         Game.reserve_replanning(car, traj, obstacle)
                         car.hold = True
-            print('Planner - sending Directive to {0}'.format(car.name))
+            self.Logger.info('PLANNER - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
         else:
-            print('Planner - No Path found - sending Response to Supervisor')
+            self.Logger.info('PLANNER - No Path found - sending Response to Supervisor')
             resp = ('NoPath', car)
             await self.send_response_to_supervisor(resp)
             #await self.out_channels[car.name].send('OriginalPath')
@@ -97,20 +90,27 @@ class Planner(BoxComponent):
         self.obstacles.pop(car.name)
         self.update_reachability_matrix(Game)
 
-    def update_reachability_matrix(self,Game): # check which parking spots are still reachable and update self.reachable
-        start = (140,55,0,0) # start position on the grid
+    def update_reachability_matrix(self,Game): 
+        # check which parking spots are still reachable and update self.reachable
+        # using planning graph which contains all obstacles on the grid
+        start = DROP_OFF_PIX#(140,55,0,0) # start position on the grid
         self.get_current_planning_graph(Game)
         for i in list(parking_spots.keys()):
             end = self.find_spot_coordinates(i)
-            traj, _ = self.get_path(start,end) 
-            if traj:
+            try:
+                traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph_all)
+            except:
+                traj = None
+                weight = None
+            if traj and not weight == np.inf:
                 self.reachable[i]=1
-            else:
+            else: 
                 self.reachable[i]=0
+        print(self.reachable)
 
     async def check_obs_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
         obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
-        print('Checking if obs on path')
+        self.Logger.info('PLANNER - Checking if obstacle is on path')
         for carname in list(self.cars):
             if carname != obscar.name:
                 for car in gme.cars:
@@ -134,15 +134,16 @@ class Planner(BoxComponent):
                             path = LineString(line)
                             if obstacle.intersects(path):
                                 obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)])
-                                if self.is_single_failure_in_acceptable_area(obscar, gme):
-                                    print('FAILURE ON PATH - NEED NEW PATH CAR ID {0}'.format(car.id))
+                                obs = {obscar.name : [obscar.x,obscar.y,obscar.yaw]}
+                                if self.is_single_failure_in_acceptable_area(obs, gme):
+                                    self.Logger.info('PLANNER - FAILURE ON CAR ID {0} PATH - NEED NEW PATH'.format(car.id))
                                     car.status == 'Replan'
                                     await self.replan_path(car, gme, obstacle)
                                 else: 
                                     if not car.requested:
                                         # stop car here and replan
                                         resp = (('SpotUnreachable',obstacle), car)
-                                        print('Spot for Car {0} became unreachable'.format(car.id))
+                                        self.Logger.info('PLANNER - Spot for Car {0} became unreachable'.format(car.id))
                                         car.replan = True
                                         car.status = 'Replan'
                                         #st()
@@ -156,7 +157,7 @@ class Planner(BoxComponent):
                     spot = key
             end = self.find_spot_coordinates(spot)
             car.replan = True
-            print('Car {} receives a new directive'.format(car.id))
+            self.Logger.info('PLANNER - sends a new directive to Car {}'.format(car.id))
             await self.send_directive_to_car(car, end, Game, False, obstacle)
         elif self.cars.get(car.name,0)=='Request':
             await self.send_directive_to_car(car, PICK_UP, Game, False, obstacle)
@@ -181,45 +182,61 @@ class Planner(BoxComponent):
     def get_current_planning_graph(self,Game): # includes all current obstacles
         # loop through obstacles and generate new graph
         if self.obstacles:
-            print('Updating Planning Graph')
-            if self.is_failure_in_acceptable_area(Game):
-                print('Failure is in acceptable area')
-                obs = []
-                obs_boxes = []
-                for key,value in self.obstacles.items():
+            self.Logger.info('PLANNER - Updating Planning Graph')
+            obs = []
+            obs_boxes = []
+            obs_all = []
+            obs_boxes_all = []
+            for key,value in self.obstacles.items():
+                obstacle = {key : [value[0],value[1],value[2]]}
+                if self.is_single_failure_in_acceptable_area(obstacle, Game):
+                    #print('Failure is in acceptable area')
                     obs.append(value)
                     obs_boxes.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(15.0))
-                obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs]
-                print(obs)
-                # assume obs not in the acceptable area to use graph with lanes
-                self.planning_graph_in_use = self.original_lanes_planning_graph
-                # check if obstacle is in lanes_box (acceptable area)
-                for obs_box in obs_boxes:
-                    if obs_box.intersects(self.lanes_box):
-                        self.planning_graph_in_use = self.original_free_planning_graph
-                # find grid nodes around obstacle
-                nodes = self.planning_graph_in_use['graph']._nodes
-                del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs)]
-                DEL_XY_NODES = []
-                for del_node in del_nodes:
-                    if (del_node[0], del_node[1]) not in DEL_XY_NODES:
-                        DEL_XY_NODES.append((del_node[0], del_node[1]))
-                print('del_xy_nodes:')
-                print(DEL_XY_NODES)
-                self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, DEL_XY_NODES)
-                #self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, del_nodes)
-            else:
-                print('Failure blocks the narrow path')
-                self.planning_graph = self.original_lanes_planning_graph
+                obs_all.append(value)
+                obs_boxes_all.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(15.0))
+            obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs]
+            obs_all = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs_all]
+            #print(obs)
+            #print(obs_all)
+            # assume obs not in the acceptable area to use graph with lanes
+            planning_graph_in_use = self.original_lanes_planning_graph
+            # check if obstacle is in lanes_box (acceptable area)
+            for obs_box in obs_boxes:
+                if obs_box.intersects(self.lanes_box):
+                    planning_graph_in_use = self.original_free_planning_graph
+            # find grid nodes around obstacle
+            nodes = planning_graph_in_use['graph']._nodes
+            del_nodes = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs)]
+            DEL_XY_NODES = []
+            for del_node in del_nodes:
+                if (del_node[0], del_node[1]) not in DEL_XY_NODES:
+                    DEL_XY_NODES.append((del_node[0], del_node[1]))
+            del_nodes_all = [(node) for node in nodes if self.is_in_buffer(node[0],node[1],obs_all)]
+            DEL_XY_NODES_all = []
+            for del_node_all in del_nodes_all:
+                if (del_node_all[0], del_node_all[1]) not in DEL_XY_NODES_all:
+                    DEL_XY_NODES_all.append((del_node_all[0], del_node_all[1]))
+            # print('del_xy_nodes:')
+            # print(DEL_XY_NODES)
+            # print(DEL_XY_NODES_all)
+            self.planning_graph = path_planner.update_planning_graph(planning_graph_in_use, DEL_XY_NODES)
+            self.planning_graph_all = path_planner.update_planning_graph(self.planning_graph_reachability, DEL_XY_NODES_all)
+            #self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, del_nodes)
+            # else:
+            #     print('Failure blocks the narrow path')
+            #     self.planning_graph = self.original_lanes_planning_graph
         else:
             self.planning_graph = self.original_lanes_planning_graph
+            self.planning_graph_all = self.original_lanes_planning_graph
 
     def get_path(self, start, end): # compute path using grid_planner + end_planner
         traj = None
         try:
             traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph)
         except:
-            st()
+            traj = None
+            weight = None
         if traj and not weight == np.inf:
             return traj, weight
         else: 
@@ -242,7 +259,7 @@ class Planner(BoxComponent):
             async for response in receive_response_channel:
                 car = response[0]
                 resp = response[1]
-                print('Planner - receiving "{0}" response from {1}'.format(resp,car.name))
+                self.Logger.info('PLANNER - receiving "{0}" response from {1}'.format(resp,car.name))
                 if response[1]=='Completed':
                     if car.reverse:
                         if self.cars.get(car.name)=='Request':
@@ -308,7 +325,7 @@ class Planner(BoxComponent):
                             car.status = 'Replan'
                             car.replan = True
                             blocked_car = resp[1]
-                            print('Blocked Car {0} needs a new directive'.format(car.id))
+                            self.Logger.info('PLANNER - Blocked Car {0} needs a new directive'.format(car.id))
                             obs = Point([(blocked_car.x/SCALE_FACTOR_PLAN, blocked_car.y/SCALE_FACTOR_PLAN)])
                             # try to get path
                             pos = await self.get_car_position(car) # in meters
@@ -329,7 +346,7 @@ class Planner(BoxComponent):
                             car.status = 'Replan'
                             await self.send_directive_to_car(car, PICK_UP, Game, False, None)
                     else:
-                        print('No way to plan around the failure - {0} must wait'.format(car.name))
+                        self.Logger.info('PLANNER - No way to plan around the failure - {0} must wait'.format(car.name))
                 elif resp=='RequestArea':
                     Game.reserve(None,car)
                     #await self.send_response_to_supervisor((resp,car))
@@ -346,7 +363,7 @@ class Planner(BoxComponent):
         response = resp[0]
         car = resp[1]
         #print(resp)
-        print('Planner - sending "{0} - {1}" response to Supervisor'.format(response,car.name))
+        self.Logger.info('PLANNER - sending "{0} - {1}" response to Supervisor'.format(response,car.name))
         await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
     
@@ -356,29 +373,29 @@ class Planner(BoxComponent):
             todo = directive[1]
             print(self.spots)
             if todo[0] == 'Park':
-                print('Planner - receiving directive from Supervisor to park {0} in Spot {1}'.format(car.name,todo[1]))
+                self.Logger.info('PLANNER - receiving directive from Supervisor to park {0} in Spot {1}'.format(car.name,todo[1]))
                 self.cars.update({car.name: 'Assigned'})
                 create_unidirectional_channel(self, car, max_buffer_size=np.inf)
-                self.nursery.start_soon(car.run,send_response_channel,Game, Time)
+                self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end, Game, False, None)
             elif todo == 'Pickup':
-                print('Planner -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
+                self.Logger.info('PLANNER -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
                 car.replan = False
                 await self.send_directive_to_car(car, PICK_UP,Game, False, None)
                 self.cars.update({car.name : 'Request'})
                 self.spots.update({self.spots.get(car.name): 0})
             elif todo == 'Towed': # remove the car
-                print('Planner - {0} is being towed'.format(car.name))
+                self.Logger.info('PLANNER - {0} is being towed'.format(car.name))
                 self.cars.pop(car.name)
                 self.rmv_obstacle(car,Game)
                 self.spots.update({self.spots.get(car.name): 0})
             elif todo == 'Wait':
-                print('Planner - {0} has to wait until path clears'.format(car.name))
+                self.Logger.info('PLANNER - {0} has to wait until path clears'.format(car.name))
                 await self.send_directive_to_car(car, todo,Game, False, None)
             elif todo == 'Reverse': # not used currently
-                print('Planner - {0} has to drive out of the way'.format(car.name))
+                self.Logger.info('PLANNER - {0} has to drive out of the way'.format(car.name))
                 #await self.out_channels[car.name].send('Reverse')
             elif todo == 'OriginalPath':
                 if len(car.ref) != 0: # fix here
@@ -397,7 +414,7 @@ class Planner(BoxComponent):
                         end = self.find_spot_coordinates(spot)
                     await self.send_directive_to_car(car, end,Game, True, None) # original graph
             elif todo == 'Back2spot':
-                print('Planner - {0} has to drive back into the spot to make space'.format(car.name))
+                self.Logger.info('PLANNER - {0} has to drive back into the spot to make space'.format(car.name))
                 car.status = 'Replan'
                 car.replan = True
                 await self.out_channels[car.name].send('Back2spot')
@@ -407,14 +424,14 @@ class Planner(BoxComponent):
                     self.reserved_areas.update({car.name: Res_Area})
 
     async def send_reverse(self,car, Game):
-        print('Car {0} - Reversing first'.format(car.id))
+        self.Logger.info('PLANNER - Car {0} - Reversing first'.format(car.id))
         direc = [[car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, -np.rad2deg(car.yaw)]]
         direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*5*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*5*np.sin(car.yaw), -np.rad2deg(car.yaw)])
         direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), -np.rad2deg(car.yaw)])
         directive = [np.array(direc)]
         Res_Area = Game.reserve(directive,car)
         self.reserved_areas.update({car.name: Res_Area})
-        print('Planner - sending Directive to {0} to reverse'.format(car.name))
+        self.Logger.info('PLANNER - sending Directive to {0} to reverse'.format(car.name))
         car.reverse = True
         car.replan = True
         car.status = 'Replan'
@@ -430,8 +447,8 @@ class Planner(BoxComponent):
             is_acceptable = gme.is_failure_acceptable(self.obstacles)
         return is_acceptable
 
-    def is_single_failure_in_acceptable_area(self,car,gme):
-        obs = {car.name : [car.x,car.y,car.yaw]}
+    def is_single_failure_in_acceptable_area(self,obs,gme):
+        #obs = {car.name : [car.x,car.y,car.yaw]}
         is_acceptable = gme.is_failure_acceptable(obs)
         return is_acceptable
 
@@ -450,13 +467,18 @@ class Planner(BoxComponent):
         else:
             return False
 
-    async def run(self,Game, Time): # run in trio nursery
+    async def run(self,Game, Time, Logger): # run in trio nursery
+        self.Logger = Logger
+        self.Logger.info('PLANNER - started')
         sys.path.append('../motionplanning')
         with open('planning_graph_lanes.pkl', 'rb') as f:
             self.original_lanes_planning_graph = pickle.load(f)
         with open('planning_graph_free.pkl', 'rb') as f:
             self.original_free_planning_graph = pickle.load(f)
+        with open('planning_graph_reachability.pkl', 'rb') as f:
+            self.planning_graph_reachability = pickle.load(f)
         self.planning_graph = self.original_lanes_planning_graph
+        self.planning_graph_all = self.planning_graph_reachability
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.check_supervisor,send_response_channel,Game, Time)
