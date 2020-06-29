@@ -41,3 +41,6 @@ end_walk_lane = (3412,509)
 # Pedestrian lower crosswalk
 start_walk_lane_2 = (458,2090)
 end_walk_lane_2 = (3428,2090)
+
+#Gazebo/ros parameters
+nbr_of_robots = 2
