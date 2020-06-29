@@ -1,3 +1,8 @@
+# Automated Valet Parking - Test Publisher
+# Tom Andersson
+# California Institute of Technology
+# June, 2020
+
 import rospy
 import sys
 from std_msgs.msg import Float32MultiArray

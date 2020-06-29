@@ -1,3 +1,7 @@
+# Automated Valet Parking - Robot Commander
+# Tom Andersson
+# California Institute of Technology
+# June, 2020
 
 import rospy
 import sys
