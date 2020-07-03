@@ -8,7 +8,7 @@
   <group ns="robot0">
     <param name="tf_prefix" value="robot0_tf" />
     <include file="$(find gazebo)/launch/one_robot.launch" >
-      <arg name="init_pose" value="-x 1 -y 1 -z 0" />
+      <arg name="init_pose" value="-x 2.25 -y -0.7 -z 0 -Y 3.14" />
       <arg name="robot_name"  value="Robot0" />
     </include>
   </group>
@@ -17,7 +17,7 @@
   <group ns="robot1">
     <param name="tf_prefix" value="robot1_tf" />
     <include file="$(find gazebo)/launch/one_robot.launch" >
-      <arg name="init_pose" value="-x -1 -y 1 -z 0" />
+      <arg name="init_pose" value="-x 2.5 -y -0.7 -z 0 -Y 3.14" />
       <arg name="robot_name"  value="Robot1" />
     </include>
   </group>

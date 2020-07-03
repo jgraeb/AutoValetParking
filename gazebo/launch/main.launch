@@ -3,7 +3,7 @@
 
   <!-- start world -->
   <node name="gazebo" pkg="gazebo_ros" type="gazebo" 
-   args="$(find gazebo)/worlds/empty.world" respawn="false" output="screen" />
+   args="$(find gazebo)/worlds/parking_lot_world" respawn="false" output="screen" />
 
   <!-- include our robots -->
   <include file="$(find gazebo)/launch/robots.launch"/>

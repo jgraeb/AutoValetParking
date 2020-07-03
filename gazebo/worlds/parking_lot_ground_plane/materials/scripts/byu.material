@@ -1,0 +1,17 @@
+material PARKING_LOT_GROUND_PLANE/ground
+{
+  technique
+  {
+    pass
+    {
+      ambient 2.0 2.0 2.0 2.0
+      diffuse 0.8 0.8 0.8 1.0
+      specular 0.0 0.0 0.0 1.0 2.0
+
+      texture_unit
+      {
+        texture parking_lot_reduced.png
+      }
+    }
+  }
+}

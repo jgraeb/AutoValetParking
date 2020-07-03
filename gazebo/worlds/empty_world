@@ -12,6 +12,10 @@
       <uri>model://sun</uri>
     </include>
 
+    <include>
+      <uri>model://person_walking</uri>
+    </include>
+
     <!-- A ground plane -->
     <include>
       <uri>model://ground_plane</uri>

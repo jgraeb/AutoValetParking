@@ -44,3 +44,4 @@ end_walk_lane_2 = (3428,2090)
 
 #Gazebo/ros parameters
 nbr_of_robots = 2
+ground_plane_length = 90/14 # [m]
