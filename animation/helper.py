@@ -186,10 +186,19 @@ def draw_car(ax, background,x,y,theta,status,car_id, car=None):
         draw.text((center_x-20, center_y-25), str(car_id),fill='black',font=font,fontsize=3)
 
 def show_traj(ax,background, ref):
-    #st()
     for segment in ref:
-        #st()
         ax.plot(segment[:,0]*global_vars.SCALE_FACTOR_SIM*global_vars.SCALE_FACTOR_PLAN, segment[:,1]*global_vars.SCALE_FACTOR_SIM*global_vars.SCALE_FACTOR_PLAN, 'k--')
+
+def draw_obs(ax,background,obs):
+    draw = ImageDraw.Draw(background) 
+    rad = obs[3]*global_vars.SCALE_FACTOR_SIM*global_vars.SCALE_FACTOR_PLAN
+    xcen = obs[0]*global_vars.SCALE_FACTOR_SIM*global_vars.SCALE_FACTOR_PLAN
+    ycen = obs[1]*global_vars.SCALE_FACTOR_SIM*global_vars.SCALE_FACTOR_PLAN
+    xl = xcen - rad
+    yl = ycen - rad
+    xr = xcen + rad
+    yr = ycen + rad
+    draw.ellipse([(xl, yl), (xr, yr)], fill='red', outline='black')
 
 def draw_grey_car(background,x,y,theta):
     gray_vehicle_fig = Image.open(gray_car_fig)

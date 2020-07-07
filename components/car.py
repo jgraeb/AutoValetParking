@@ -256,10 +256,13 @@ class Car(BoxComponent):
                     self.Logger.info('{0} Stopping the Tracking, ID {1}, A'.format(self.name, self.id))
                     await self.stop_car()
                     return
-            while self.hold and not Game.is_reserved_area_clear(self):
+            while self.hold:
                 self.status = 'Stop'
                 self.Logger.info('{0} holding for other lane to clear'.format(self.name))
                 await trio.sleep(3)
+                if Game.is_reserved_area_clear(self):
+                    self.hold = False
+                    break
             while not self.path_clear(Game):# or blocked:
                 self.hold = False
                 await self.stop_car()

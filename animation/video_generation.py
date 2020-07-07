@@ -12,7 +12,7 @@ import numpy as np
 import component.pedestrian as Pedestrian
 sys.path.append('..') # enable importing modules from an upper directory:
 from PIL import Image
-from animation.helper import draw_car, show_traj, draw_pedestrian, draw_grey_car, label_spots
+from animation.helper import draw_car, show_traj, draw_pedestrian, draw_grey_car, label_spots, draw_obs
 import time, platform, warnings, matplotlib, random
 import datetime
 # if platform.system() == 'Darwin': # if the operating system is MacOS
@@ -92,6 +92,7 @@ def animate(frame_idx): # update animation by dt
                  break    
         f.close() 
             
+
     with open('stored_data/pedestrian_file.pkl','rb') as f:
         i = 0
         begin = 0
@@ -139,6 +140,33 @@ def animate(frame_idx): # update animation by dt
                 spots=pickle.load(f)
                 if i > begin and i < end:
                     label_spots(ax,background,spots)
+                if i >= end:
+                    break
+            except EOFError:
+                break
+
+    with open('stored_data/obs.pkl','rb') as f:
+        i = 0
+        begin = 0
+        end = 0
+        while True:
+            i += 1
+            spots=pickle.load(f)
+            if spots == 'FRAME'+ str(frame_idx)+'\n':
+                begin = i
+            if spots == 'FRAME'+ str(frame_idx+1)+'\n':
+                end = i
+                break
+
+    with open('stored_data/obs.pkl','rb') as f:
+        i = 0
+        while True:
+            i = i+1
+            try:
+                obs=pickle.load(f)
+                if i > begin and i < end:
+                    for key,val in obs.items():
+                        draw_obs(ax,background,val)
                 if i >= end:
                     break
             except EOFError:
