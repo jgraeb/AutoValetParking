@@ -87,10 +87,10 @@
       <pose frame=''>3.20986 -3.22057 0 0 -0 0</pose>
     </model>
     <state world_name='default'>
-      <sim_time>798 370000000</sim_time>
-      <real_time>7 576613317</real_time>
-      <wall_time>1593771311 61698071</wall_time>
-      <iterations>7417</iterations>
+      <sim_time>833 342000000</sim_time>
+      <real_time>35 789359456</real_time>
+      <wall_time>1594112211 527385218</wall_time>
+      <iterations>34972</iterations>
       <model name='parking_lot_ground_plane'>
         <pose frame=''>3.2117 -3.2142 0 0 -0 0</pose>
         <scale>1 1 1</scale>
@@ -101,7 +101,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='wallsedited'>
+      <model name='walls'>
         <pose frame=''>3.03308 -3.2116 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='Wall_33'>
@@ -441,12 +441,12 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose frame=''>0.144744 -3.31785 1.24703 0 0.6698 0.823369</pose>
+        <pose frame=''>-1.4871 -5.67505 3.22484 0 0.6698 0.823369</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
-    <model name='wallsedited'>
+    <model name='walls'>
       <link name='Wall_33'>
         <pose frame=''>-0.352583 3.02287 0 0 0 -1.5708</pose>
         <self_collide>0</self_collide>

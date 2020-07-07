@@ -7,4 +7,7 @@
 
   <!-- include our robots -->
   <include file="$(find gazebo)/launch/robots.launch"/>
+
+  <!-- include pedestrians -->
+  <include file="$(find gazebo)/launch/spawn_pedestrians.launch"/>
 </launch>
