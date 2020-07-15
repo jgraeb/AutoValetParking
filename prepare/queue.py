@@ -62,21 +62,30 @@ class Queue():
 
         '''
         self._queue[-1] = new_item
+
     def replace_element_at_index(self, new_item, idx):
         '''
         replace the element corresponding to the index by new_item
 
         '''
         self._queue[idx] = new_item
+
     def remove(self, item): # remove all matching items in queue      
         while item in self._queue:
             self._queue.remove(item)
+
     def print_queue(self):
         '''
         print the queue
 
         '''
         print(self._queue)
+
+    def delete(self):
+        '''
+        delete the queue
+        '''
+        self._queue.delete()
 
 #prim_queue = Queue()
 #prim_queue.enqueue((1, 0))

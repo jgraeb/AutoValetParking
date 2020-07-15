@@ -20,7 +20,7 @@ from components.car import Car
 from components.supervisor import Supervisor
 from environment.customer import Customer
 from components.tow_truck import TowTruck
-from environment.static_obstacle import Obstacles
+from testing.static_obstacle import Obstacles
 
 import logging
 import logging.config

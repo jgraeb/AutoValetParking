@@ -145,7 +145,7 @@ class Game(BoxComponent):
         # new trajectory from planner around obstacle
         newlinestring = make_line(newtraj)
         #print(car.ref)
-        if len(car.ref)>1: # if we have an old trajectory stored for the car
+        if len(car.ref)>1 and obs is not None: # if we have an old trajectory stored for the car
             oldpath = car.ref[car.idx:]
             oldlinestring = make_line(oldpath)
             # find location of failure on path
@@ -478,7 +478,7 @@ class Game(BoxComponent):
             self.car_boxes.update({cars.name: rot_box})
 
     def update_obstacles(self, obs):
-        self.obstacles = dict()
+        self.obstacles.clear()
         for key,val in obs.items():
             self.obstacles.update({key: Point(val[0],val[1]).buffer(val[3])})
 

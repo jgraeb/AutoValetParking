@@ -65,8 +65,14 @@ class Simulation(BoxComponent):
                     #print(self.peds)
 
     def add_obs_to_sim(self,obs):
-        self.obs = obs
+        self.obs.update(obs)
         print('Static obstacles added to simulation')
+
+    def update_obs_in_sim(self,obs):
+        self.obs.clear()
+        for key,val in obs.items():
+            self.obs.update(key)
+        print('Obstacles updated in simulation')
 
     def animate(self, frame_idx): # update animation by dt
         global ind

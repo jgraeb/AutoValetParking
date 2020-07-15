@@ -71,7 +71,10 @@ class Planner(BoxComponent):
                 if Game.check_and_reserve_other_lane(car,traj):
                     #car.hold = True
                     #if obstacle:
+                    #st()
                     Game.reserve_replanning(car, traj, obstacle)
+                    #else:
+                        #Game.reserve(None,car)
                     car.hold = True
             self.Logger.info('PLANNER - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
@@ -97,6 +100,15 @@ class Planner(BoxComponent):
             self.obstacles.update({obskey: (val)})
         Game.update_obstacles(self.obstacles)
         self.update_reachability_matrix(Game)
+
+    def update_obstacle_map(self,Game,Obstacles,Simulation):
+        self.obstacles.clear()
+        for obskey,val in Obstacles.obs.items():
+            val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]]
+            self.obstacles.update({obskey: (val)})
+        Game.update_obstacles(self.obstacles)
+        self.update_reachability_matrix(Game)
+        Simulation.update_obs_in_sim(self.obstacles)
 
     def update_reachability_matrix(self,Game): 
         # check which parking spots are still reachable and update self.reachable
@@ -392,6 +404,12 @@ class Planner(BoxComponent):
                 self.cars.update({car.name: 'Assigned'})
                 # create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 # self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
+                delidx = None
+                for key,val in self.spots.items():
+                    if val == car.name:
+                        delidx = key      
+                if delidx:
+                    self.spots.pop(key)
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end, Game, False, None)
