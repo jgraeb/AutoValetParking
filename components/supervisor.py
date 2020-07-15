@@ -106,6 +106,7 @@ class Supervisor(BoxComponent):
                     newspot = self.pick_new_spot(car,obs,Planner)
                     if newspot: # if there exits a possible new spot send updated command
                         car.new_spot = True
+                        car.status = 'Replan'
                         Simulation.spots.update({newspot: car.id})
                         self.parking_spots[newspot]=(('Assigned',car.name))
                         Simulation.spots.pop(oldspot)
