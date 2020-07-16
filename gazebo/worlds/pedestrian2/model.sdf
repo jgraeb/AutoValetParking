@@ -1,6 +1,6 @@
 <?xml version='1.0'?>
 <sdf version='1.6'>
-  <model name='pedestrian'>
+  <model name='pedestrian2'>
     <link name='link'>
       <inertial>
         <pose frame=''>0 0 0 0 -0 0</pose>
@@ -62,10 +62,10 @@
               <slip2>0</slip2>
             </ode>
             <torsional>
-              <coefficient>1</coefficient>
+              <coefficient>0</coefficient>
               <patch_radius>0</patch_radius>
               <surface_radius>0</surface_radius>
-              <use_patch_radius>1</use_patch_radius>
+              <use_patch_radius>0</use_patch_radius>
               <ode>
                 <slip>0</slip>
               </ode>
@@ -118,10 +118,10 @@
               <slip2>0</slip2>
             </ode>
             <torsional>
-              <coefficient>1</coefficient>
+              <coefficient>0</coefficient>
               <patch_radius>0</patch_radius>
               <surface_radius>0</surface_radius>
-              <use_patch_radius>1</use_patch_radius>
+              <use_patch_radius>0</use_patch_radius>
               <ode>
                 <slip>0</slip>
               </ode>
@@ -157,5 +157,6 @@
     </link>
     <static>0</static>
     <allow_auto_disable>1</allow_auto_disable>
+  <plugin name="movepedestrian2_plugin" filename="libmovepedestrian2_plugin.so"/>
   </model>
 </sdf>

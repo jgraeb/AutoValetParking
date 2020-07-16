@@ -18,7 +18,7 @@ class RobotCtrl:
     
     def __init__(self):
         "Initializes the ros node, sets up subscribed and published topics and creates variables for storing the data."
-        rospy.init_node('robot_ctrl')        
+        #rospy.init_node('robot_ctrl')        
         self.pub_vel = rospy.Publisher('robot_set_vel', Float32MultiArray, queue_size=1)
         self.pub_state_request = rospy.Publisher('robot_state_request', UInt16, queue_size=1)
         rospy.Subscriber('robot_state', Float32MultiArray)
@@ -29,7 +29,7 @@ class RobotCtrl:
 
 
     def set_lin_vel(self, robot_nbr, lin_vel):
-        "Sets a new linnear velocity for a given robot number. [m/s]"
+        "Sets a new linear velocity for a given robot number. [m/s]"
         if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
             raise Exception("Invalid robot number")
         self.vel_commands[robot_nbr][0] = lin_vel
