@@ -1,13 +1,12 @@
+<!--Automated Valet Parking - World Launch
+    Tom Andersson
+    California Institute of Technology
+    July, 2020 -->
+
 <launch>
   <param name="/use_sim_time" value="true" />
 
   <!-- start world -->
   <node name="gazebo" pkg="gazebo_ros" type="gazebo" 
    args="$(find gazebo)/worlds/parking_lot_world" respawn="false" output="screen" />
-
-  <!-- include our robots -->
-  <include file="$(find gazebo)/launch/robots.launch"/>
-
-  <!-- include pedestrians -->
-  <include file="$(find gazebo)/launch/spawn_models.launch"/>
 </launch>

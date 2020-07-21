@@ -1,0 +1,15 @@
+<!--Automated Valet Parking - Obstacle Launch
+    Tom Andersson
+    California Institute of Technology
+    July, 2020 -->
+
+<launch>
+    <arg name="obstacle_nbr"/>
+    <arg name="x"/>
+    <arg name="y"/>
+    <arg name="yaw"/>
+    <arg name="sdf_robot_file" value="$(find gazebo)/worlds/obstacle/model.sdf" />
+
+    <node name="obstacle$(arg obstacle_nbr)_spawn_urdf" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+    args="-file $(arg sdf_robot_file) -sdf -x $(arg x) -y $(arg y) -z 0 -R 0 -P 0 -Y $(arg yaw) -model obstacle$(arg obstacle_nbr)"/>
+</launch>

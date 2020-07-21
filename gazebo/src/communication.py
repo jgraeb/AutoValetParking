@@ -3,7 +3,6 @@
 # California Institute of Technology
 # June, 2020
 
-import time
 import rospy
 import sys
 from std_msgs.msg import UInt16
@@ -107,6 +106,7 @@ Additionally this program is subscribed to the topic that publishes the model st
 Upon request through another node the program is subscribed to, the program will publish the relevant data of the model states
 i.e the x and y position, the orientation, the velocity in the x- and y-axis and the rotational velocity"""
 
+
 twists = [Twist() for i in range(nbr_of_robots)]
 for i in range(nbr_of_robots):
     twists[i].linear.x = 0
@@ -123,14 +123,14 @@ spec_model_names = ('walls', 'parking_lot_ground_plane')
 rospy.init_node("gazebo_com")
 
 for i in range(nbr_of_robots):
-    rospy.Subscriber('robot{}/odom'.format(i), Odometry, update_robot_states, i)
+    rospy.Subscriber('Robot{}/odom'.format(i), Odometry, update_robot_states, i)
 
 rospy.Subscriber('robot_set_vel', Float32MultiArray, set_velocity)
 rospy.Subscriber('robot_state_request', UInt16, publish_robot_state)
 rospy.Subscriber('gazebo/model_states', ModelStates, update_model_states)
-rospy.Subscriber('model_state_request', String, publish_model_state) 
+rospy.Subscriber('model_state_request', String, publish_model_state)
 
-pub_vel = tuple(rospy.Publisher('robot{}/cmd_vel'.format(i), Twist, queue_size = 1) for i in range(nbr_of_robots))
+pub_vel = tuple(rospy.Publisher('Robot{}/cmd_vel'.format(i), Twist, queue_size = 1) for i in range(nbr_of_robots))
 pub_robot_state = rospy.Publisher('robot_state', Float32MultiArray, queue_size = 1)
 pub_model_state = rospy.Publisher('model_state', Float32MultiArray, queue_size = 1)
 

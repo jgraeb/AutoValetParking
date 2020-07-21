@@ -1,0 +1,25 @@
+<!--Automated Valet Parking - Robot Launch
+    Tom Andersson
+    California Institute of Technology
+    July, 2020 -->
+
+<launch>
+    <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_burger.urdf.xacro" />
+    
+    <arg name="robot_nbr"/>
+    <arg name="x"/>
+    <arg name="y"/>
+    <arg name="yaw"/>
+
+    <group ns="Robot$(arg robot_nbr)">
+        <param name="tf_prefix" value="robot$(arg robot_nbr)_tf" />
+        <node name="spawn_minibot_model" pkg="gazebo_ros" type="spawn_model"
+        args="-x $(arg x) -y $(arg y) -z 0 -Y $(arg yaw) -urdf -param /robot_description -model Robot$(arg robot_nbr)"
+        respawn="false" output="screen" />
+
+        <node pkg="robot_state_publisher" type="robot_state_publisher" 
+            name="robot_state_publisher" output="screen"/>
+    </group>
+</launch>
+
+

@@ -1,0 +1,15 @@
+<!--Automated Valet Parking - Pedestrian Launch
+    Tom Andersson
+    California Institute of Technology
+    July, 2020 -->
+
+<launch>
+    <arg name="pedestrian_nbr"/>
+    <arg name="x"/>
+    <arg name="y"/>
+    <arg name="yaw"/>
+    <arg name="sdf_robot_file" value="$(find gazebo)/worlds/pedestrian$(arg pedestrian_nbr)/model.sdf" />
+
+    <node name="pedestrian$(arg pedestrian_nbr)_spawn_urdf" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+    args="-file $(arg sdf_robot_file) -sdf -x $(arg x) -y $(arg y) -z 0 -R 0 -P 0 -Y $(arg yaw) -model pedestrian$(arg pedestrian_nbr)"/>
+</launch>

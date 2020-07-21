@@ -1,20 +1,34 @@
-# Automated Valet Parking - Test of Robot Control
+# Automated Valet Parking - Test of Gazebo simulations
 # Tom Andersson
 # California Institute of Technology
 # June, 2020
 
 import rospy
+import time
+
 from RobotCtrl import RobotCtrl
 from ModelCtrl import ModelCtrl
+from GazeboCtrl import GazeboCtrl
 
 """This is a test program for seting and reading linear and rotational velocities
-as well as reading position and orientation of a seleccted robot or model.
-This is done using the RobotCtrl and ModelCtrl class"""
-rospy.init_node('test_ctrl')     
+as well as reading position and orientation of a seleccted robot or model in a launched gazebo world with models and robots placed out.
+This is done using the RobotCtrl, ModelCtrl and GazeboCtrl class.
+The number of robots, pedestrians and obstacles need to match with the variables in global_vars.py"""
+
+rospy.init_node('test_ctrl')
+    
 robot_ctrl = RobotCtrl()
 model_ctrl = ModelCtrl()
+gazebo_ctrl = GazeboCtrl()
 
-while(1):
+robots = [[2.75, -1.5, 0], [2.25, -0.7, 3.14]]
+pedestrians = [[2.5, -4.6, 1.57], [2.5, -4.77, 1.57]]
+obstacles = [[3.63, -2.89, 0], [3.63, -2.73, 0]]
+gazebo_ctrl.launch_gazebo(robots, pedestrians, obstacles)
+
+terminate = False
+
+while(not terminate):
     test = int(input("""Select test
                 Robot, set linear velocity: 1
                 Robot, set rotational velocity: 2
@@ -25,7 +39,8 @@ while(1):
                 Model, set x and y velocity: 7
                 Model, set rotational velocity: 8
                 Model, set linear and rotational velocity: 9
-                Model, get states: 10\n"""))
+                Model, get states: 10
+                Terminate: 11\n"""))
 
     if test == 1:
         robot_nbr = int(input("Select robot \n"))
@@ -81,3 +96,7 @@ while(1):
         model_name = input("Select model \n")
         print(model_ctrl.get_pos(model_name))
         print(model_ctrl.get_vel(model_name))
+
+    elif test == 11:
+        terminate = True
+        gazebo_ctrl.terminate_gazebo()

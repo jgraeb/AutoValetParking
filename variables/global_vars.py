@@ -47,3 +47,4 @@ nbr_of_robots = 2
 nbr_of_pedestrians = 2
 nbr_of_obstacles = 2
 ground_plane_length = 90/14 # [m]
+catkin_ws_folder = "/home/tom/SURF/catkin_ws_surf"

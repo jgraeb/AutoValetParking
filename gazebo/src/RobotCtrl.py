@@ -17,8 +17,8 @@ class RobotCtrl:
     Topics are only published and received opon request."""
     
     def __init__(self):
-        "Initializes the ros node, sets up subscribed and published topics and creates variables for storing the data."
-        #rospy.init_node('robot_ctrl')        
+        "Initializes the ros node, sets up subscribed and published topics and creates variables for storing the data."     
+        
         self.pub_vel = rospy.Publisher('robot_set_vel', Float32MultiArray, queue_size=1)
         self.pub_state_request = rospy.Publisher('robot_state_request', UInt16, queue_size=1)
         rospy.Subscriber('robot_state', Float32MultiArray)
