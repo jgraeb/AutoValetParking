@@ -34,13 +34,14 @@ while(not terminate):
                 Robot, set rotational velocity: 2
                 Robot, set linear and rotational velocity: 3
                 Robot, get states: 4
-                Model, set x velocity: 5
-                Model, set y velocity: 6
-                Model, set x and y velocity: 7
-                Model, set rotational velocity: 8
-                Model, set linear and rotational velocity: 9
-                Model, get states: 10
-                Terminate: 11\n"""))
+                Pedestrian, set x velocity: 5
+                Pedestrian, set y velocity: 6
+                Pedestrian, set x and y velocity: 7
+                Pedestrian, set rotational velocity: 8
+                Pedestrian, set linear and rotational velocity: 9
+                Pedestrian, get states: 10
+                Obstacle, get states: 11
+                Terminate: 12\n"""))
 
     if test == 1:
         robot_nbr = int(input("Select robot \n"))
@@ -64,39 +65,43 @@ while(not terminate):
         print(robot_ctrl.get_vel(robot_nbr))
 
     elif test == 5:
-        model_name = input("Select model \n")
+        pedestrian_nbr = int(input("Select pedestrian \n"))
         x_vel = float(input("Set x velocity \n"))
-        model_ctrl.set_x_vel(model_name, x_vel)
+        model_ctrl.set_x_vel(pedestrian_nbr, x_vel)
 
     
     elif test == 6:
-        model_name = input("Select model \n")
+        pedestrian_nbr = int(input("Select pedestrian \n"))
         y_vel = float(input("Set y velocity \n"))
-        model_ctrl.set_y_vel(model_name, y_vel)
+        model_ctrl.set_y_vel(pedestrian_nbr, y_vel)
 
     elif test == 7:
-        model_name = input("Select model \n")
+        pedestrian_nbr = int(input("Select pedestrian \n"))
         x_vel = float(input("Set x velocity \n"))
         y_vel = float(input("Set y velocity \n"))
-        model_ctrl.set_lin_vel(model_name, x_vel, y_vel)
+        model_ctrl.set_lin_vel(pedestrian_nbr, x_vel, y_vel)
 
     elif test == 8:
-        model_name = input("Select model \n")
+        pedestrian_nbr = int(input("Select pedestrian \n"))
         rot_vel = float(input("Set rotational velocity \n"))
-        model_ctrl.set_rot_vel(model_name, rot_vel)   
+        model_ctrl.set_rot_vel(pedestrian_nbr, rot_vel)   
 
     elif test == 9:
-        model_name = input("Select model \n")
+        pedestrian_nbr = int(input("Select pedestrian \n"))
         x_vel = float(input("Set x velocity \n"))
         y_vel = float(input("Set y velocity \n"))
         rot_vel = float(input("Set rotational velocity \n"))
-        model_ctrl.set_vel(model_name, x_vel, y_vel, rot_vel)
+        model_ctrl.set_vel(pedestrian_nbr, x_vel, y_vel, rot_vel)
 
     elif test == 10:
-        model_name = input("Select model \n")
-        print(model_ctrl.get_pos(model_name))
-        print(model_ctrl.get_vel(model_name))
+        pedestrian_nbr = int(input("Select pedestrian \n"))
+        print(model_ctrl.get_pedestrian_pos(pedestrian_nbr))
+        print(model_ctrl.get_vel(pedestrian_nbr))
 
     elif test == 11:
+        obstacle_nbr = int(input("Select obstacle \n"))
+        print(model_ctrl.get_obstacle_pos(obstacle_nbr))
+
+    elif test == 12:
         terminate = True
         gazebo_ctrl.terminate_gazebo()

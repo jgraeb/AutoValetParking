@@ -48,8 +48,7 @@ class RobotCtrl:
         "Sets a new linear and rotational velocity for a given robot number. [m/s], [rad/s]"
         if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
             raise Exception("Invalid robot number")
-        self.vel_commands[robot_nbr][0] = lin_vel
-        self.vel_commands[robot_nbr][1] = rot_vel
+        self.vel_commands[robot_nbr] = [lin_vel, rot_vel]
         self.__publish_vel(robot_nbr)
 
 
@@ -62,6 +61,8 @@ class RobotCtrl:
 
     
     def __update_state(self, robot_nbr):
+        if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
+            raise Exception("Invalid robot number")
         self.pub_state_request.publish(robot_nbr)
         self.robot_states[robot_nbr] = rospy.wait_for_message('robot_state', Float32MultiArray).data
 
