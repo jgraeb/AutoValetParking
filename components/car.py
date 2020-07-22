@@ -388,7 +388,7 @@ class Car(BoxComponent):
 
     async def request_area(self,send_response_channel):
         self.area_requested = True
-        self.Logger.info('{0} - Requesting reserved area for Car ID {0} due to delay {1}'.format(self.name, self.id, self.delay))   
+        self.Logger.info('{0} - Requesting reserved area for Car ID {1} due to delay {2}'.format(self.name, self.id, self.delay))   
         response = 'RequestArea'
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
         await send_response_channel.send((self,response))
