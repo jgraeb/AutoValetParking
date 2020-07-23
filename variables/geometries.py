@@ -25,5 +25,6 @@ PICKUP_BOX = Point(260*SFP, 60*SFP).buffer(1.0)
 PARK_BOXES = [Point(parking_spots[i][0]*SFP,parking_spots[i][1]*SFP).buffer(1.0) for i in list(parking_spots.keys())]
 PARK_BOXES_AREA = [Point(parking_spots[i][0]*SFP,parking_spots[i][1]*SFP).buffer(3.0) for i in list(parking_spots.keys())]
 FAILURE_ACCEPT_BOX_1 = Polygon([(155*SFP, 71*SFP), (156*SFP, 133*SFP), (174*SFP, 133*SFP), (174*SFP, 158*SFP), (156*SFP, 158*SFP), (156*SFP, 202*SFP), (185*SFP, 203*SFP), (185*SFP, 227*SFP), (223*SFP, 227*SFP), (223*SFP, 71*SFP), (155*SFP, 71*SFP)])
+FAILURE_ACCEPT_BOX_2 = Polygon([(5*SFP, 160*SFP), (40*SFP, 160*SFP), (40*SFP, 205*SFP), (5*SFP, 205*SFP), (5*SFP, 160*SFP)])
 LANE_1_BOX = Polygon([(155*SFP, 50*SFP), (190*SFP, 50*SFP), (190*SFP, 160*SFP), (155*SFP, 160*SFP), (155*SFP, 50*SFP)])
 LANE_2_BOX = Polygon([(190*SFP, 50*SFP), (190*SFP, 227*SFP), (223*SFP, 227*SFP), (223*SFP, 50*SFP), (190*SFP, 50*SFP)])

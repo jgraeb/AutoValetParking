@@ -6,6 +6,9 @@ sys.path.append('..')
 current_time = 0
 
 ###
+# Testing Mode On/Off
+TESTING_MODE = True # Launches Test Suite to read test script
+
 # Car parking parameters
 average_arrival_rate = 0.1 # per second
 beta = 1/average_arrival_rate
