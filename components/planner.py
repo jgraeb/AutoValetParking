@@ -37,6 +37,7 @@ class Planner(BoxComponent):
         self.reachable = np.ones((max(list(parking_spots.keys()))+1,1)) # if spots can be reached from drop_off, currently all reachable
         self.reserved_areas = dict()
         self.Logger = None
+        self.static_obstacle_map = dict()
 
     async def get_car_position(self,car):
         self.Logger.info('PLANNER - Sending position request to Map system')
@@ -69,9 +70,12 @@ class Planner(BoxComponent):
             if not car.replan:
                 if Game.check_and_reserve_other_lane(car,traj):
                     #car.hold = True
-                    if obstacle:
-                        Game.reserve_replanning(car, traj, obstacle)
-                        car.hold = True
+                    #if obstacle:
+                    #st()
+                    Game.reserve_replanning(car, traj, obstacle)
+                    #else:
+                        #Game.reserve(None,car)
+                    car.hold = True
             self.Logger.info('PLANNER - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
         else:
@@ -90,6 +94,22 @@ class Planner(BoxComponent):
         self.obstacles.pop(car.name)
         self.update_reachability_matrix(Game)
 
+    def initialize_static_obstacle_map(self,Game):
+        for obskey,val in self.static_obstacle_map.items():
+            val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]]
+            self.obstacles.update({obskey: (val)})
+        Game.update_obstacles(self.obstacles)
+        self.update_reachability_matrix(Game)
+
+    def update_obstacle_map(self,Game,Obstacles,Simulation):
+        self.obstacles.clear()
+        for obskey,val in Obstacles.obs.items():
+            val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]]
+            self.obstacles.update({obskey: (val)})
+        Game.update_obstacles(self.obstacles)
+        self.update_reachability_matrix(Game)
+        Simulation.update_obs_in_sim(self.obstacles)
+
     def update_reachability_matrix(self,Game): 
         # check which parking spots are still reachable and update self.reachable
         # using planning graph which contains all obstacles on the grid
@@ -106,7 +126,7 @@ class Planner(BoxComponent):
                 self.reachable[i]=1
             else: 
                 self.reachable[i]=0
-        print(self.reachable)
+        #print(self.reachable)
 
     async def check_obs_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
         obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
@@ -189,12 +209,16 @@ class Planner(BoxComponent):
             obs_boxes_all = []
             for key,value in self.obstacles.items():
                 obstacle = {key : [value[0],value[1],value[2]]}
+                try:
+                    buff = value[3]
+                except:
+                    buff = 15.0
                 if self.is_single_failure_in_acceptable_area(obstacle, Game):
                     #print('Failure is in acceptable area')
                     obs.append(value)
-                    obs_boxes.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(15.0))
+                    obs_boxes.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(buff))
                 obs_all.append(value)
-                obs_boxes_all.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(15.0))
+                obs_boxes_all.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(buff))
             obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs]
             obs_all = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs_all]
             #print(obs)
@@ -380,6 +404,12 @@ class Planner(BoxComponent):
                 self.cars.update({car.name: 'Assigned'})
                 # create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 # self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
+                delidx = None
+                for key,val in self.spots.items():
+                    if val == car.name:
+                        delidx = key      
+                if delidx:
+                    self.spots.pop(key)
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end, Game, False, None)
@@ -470,7 +500,7 @@ class Planner(BoxComponent):
         else:
             return False
 
-    async def run(self,Game, Time, Logger): # run in trio nursery
+    async def run(self,Game, Time, Logger, Obstacles, Simulation): # run in trio nursery
         self.Logger = Logger
         self.Logger.info('PLANNER - started')
         sys.path.append('../motionplanning')
@@ -482,6 +512,12 @@ class Planner(BoxComponent):
             self.planning_graph_reachability = pickle.load(f)
         self.planning_graph = self.original_lanes_planning_graph
         self.planning_graph_all = self.planning_graph_reachability
+        await trio.sleep(0)
+        # create obstacles
+        self.static_obstacle_map = Obstacles.create_obstacle_map()
+        self.initialize_static_obstacle_map(Game)
+        Simulation.add_obs_to_sim(self.static_obstacle_map)
+        #
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.check_supervisor,send_response_channel,Game, Time)

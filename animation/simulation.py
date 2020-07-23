@@ -10,7 +10,7 @@ import numpy as np
 sys.path.append('..') # enable importing modules from an upper directory
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from animation.helper import draw_car, draw_pedestrian, show_traj, label_spots
+from animation.helper import draw_car, draw_pedestrian, show_traj, label_spots, draw_obs
 from animation.component import parking_lot
 from variables.global_vars import SCALE_FACTOR_SIM, SCALE_FACTOR_PLAN
 from variables.parking_data import parking_spots
@@ -38,6 +38,7 @@ class Simulation(BoxComponent):
         self.ax = []
         self.fig = []
         self.background = []
+        self.obs = dict()
         self.start_walk_lane = (2908,665)
         self.end_walk_lane = (3160,665)
     
@@ -63,10 +64,28 @@ class Simulation(BoxComponent):
                     self.peds.append(ped)
                     #print(self.peds)
 
+    def add_obs_to_sim(self,obs):
+        self.obs.update(obs)
+        print('Static obstacles added to simulation')
+
+    def update_obs_in_sim(self,obs):
+        self.obs.clear()
+        for key,val in obs.items():
+            self.obs.update(key)
+        print('Obstacles updated in simulation')
+
     def animate(self, frame_idx): # update animation by dt
         global ind
         ind = ind + 1
         self.ax.clear()
+        # store obstacle data
+        f = open('../animation/stored_data/obs_new.pkl','ab')
+        pickle.dump('FRAME'+str(ind)+'\n',f)
+        pickle.dump(self.obs,f)
+        f.close()
+        # draw obstacles
+        for key,val in self.obs.items():
+            draw_obs(self.ax,self.background,val)
         # store pedestrian data
         f = open('../animation/stored_data/pedestrian_file_new.pkl','ab')
         #g = open('../animation/stored_data/car_file_new.pkl','ab')
@@ -152,6 +171,10 @@ class Simulation(BoxComponent):
             print('------------Figure updating-------------')
 
     async def run(self):
+        try:
+            os.remove("../animation/stored_data/obs_new.pkl")
+        except:
+            print('No static obstacle file to delete.')
         try:
             os.remove("../animation/stored_data/pedestrian_file_new.pkl")
         except:

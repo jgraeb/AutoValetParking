@@ -38,6 +38,7 @@ class Game(BoxComponent):
         self.reserved_areas_requested = OrderedDict()
         self.trajs = dict()
         self.Logger = None
+        self.obstacles = dict()
 
     async def keep_track_influx(self):
         async with self.in_channels['GameEnter']:
@@ -144,7 +145,7 @@ class Game(BoxComponent):
         # new trajectory from planner around obstacle
         newlinestring = make_line(newtraj)
         #print(car.ref)
-        if len(car.ref)>1: # if we have an old trajectory stored for the car
+        if len(car.ref)>1 and obs is not None: # if we have an old trajectory stored for the car
             oldpath = car.ref[car.idx:]
             oldlinestring = make_line(oldpath)
             # find location of failure on path
@@ -408,6 +409,10 @@ class Game(BoxComponent):
                             else:
                                 conflict_cars.append(cars)
                                 clearpath = False
+        # check if an obstacle is in the way
+        for key,val in self.obstacles.items():
+            if mycone.intersects(val):
+                clearpath = False
         # check if a pedestrian is in the cone and I am not in the pedestrian's way
         mypedcone = self.get_vision_cone_pedestrian(car)
         for ped in self.peds:
@@ -472,6 +477,11 @@ class Game(BoxComponent):
             rot_box = affinity.rotate(box, np.rad2deg(cars.yaw), origin = (cars.x,cars.y))
             self.car_boxes.update({cars.name: rot_box})
 
+    def update_obstacles(self, obs):
+        self.obstacles.clear()
+        for key,val in obs.items():
+            self.obstacles.update({key: Point(val[0],val[1]).buffer(val[3])})
+
     def dropoff_free(self):
         self.update_car_boxes()
         for key,val in self.car_boxes.items():
@@ -483,7 +493,7 @@ class Game(BoxComponent):
         self.update_car_boxes()
         mybox = self.car_boxes.get(car.name)
         if self.pickup_box.intersects(mybox):
-            self.Logger.info('GAME - 0} is at pick up, ID {1}'.format(car.name,car.id))
+            self.Logger.info('GAME - {0} is at pick up, ID {1}'.format(car.name,car.id))
             return True
         return False
 

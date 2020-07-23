@@ -256,10 +256,13 @@ class Car(BoxComponent):
                     self.Logger.info('{0} Stopping the Tracking, ID {1}, A'.format(self.name, self.id))
                     await self.stop_car()
                     return
-            while self.hold and not Game.is_reserved_area_clear(self):
+            while self.hold:
                 self.status = 'Stop'
                 self.Logger.info('{0} holding for other lane to clear'.format(self.name))
                 await trio.sleep(3)
+                if Game.is_reserved_area_clear(self):
+                    self.hold = False
+                    break
             while not self.path_clear(Game):# or blocked:
                 self.hold = False
                 await self.stop_car()
@@ -385,7 +388,7 @@ class Car(BoxComponent):
 
     async def request_area(self,send_response_channel):
         self.area_requested = True
-        self.Logger.info('{0} - Requesting reserved area for Car ID {0} due to delay {1}'.format(self.name, self.id, self.delay))   
+        self.Logger.info('{0} - Requesting reserved area for Car ID {1} due to delay {2}'.format(self.name, self.id, self.delay))   
         response = 'RequestArea'
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
         await send_response_channel.send((self,response))

@@ -20,6 +20,7 @@ from components.car import Car
 from components.supervisor import Supervisor
 from environment.customer import Customer
 from components.tow_truck import TowTruck
+from testing.static_obstacle import Obstacles
 
 import logging
 import logging.config
@@ -36,6 +37,7 @@ async def main():
     all_components = []
     print('--- Starting Parking Garage at time: '+str(START_TIME))
     async with trio.open_nursery() as nursery:
+        obstacles = Obstacles()
         map_sys = Map()
         all_components.append(map_sys)
         simulation = Simulation()
@@ -56,7 +58,7 @@ async def main():
             nursery.start_soon(comp.run)
             await trio.sleep(0)
         nursery.start_soon(game.run,logger)
-        nursery.start_soon(planner.run, game, time_sys, logger)
+        nursery.start_soon(planner.run, game, time_sys, logger, obstacles,simulation)
         nursery.start_soon(supervisor.run, planner, time_sys, simulation,logger)
         nursery.start_soon(customer.run,END_TIME,START_TIME, game)
 
