@@ -41,7 +41,7 @@ class Supervisor(BoxComponent):
     async def update_parking_spots(self,car):
         for spot, status in self.parking_spots.items():
                 if (status[1] == car.name) and not car.status == 'Removed':
-                    if (status[0] == 'Assigned') and not car.replan:
+                    if (status[0] == 'Assigned') and not car.reverse:
                         self.parking_spots[spot]=(('Occupied',car.name))
                         self.cars.update({car.name: 'Parked'})
                         car.parked = True
@@ -176,18 +176,17 @@ class Supervisor(BoxComponent):
         return None
 
     def pick_new_spot(self,car,obs, pln): # strategy to pick a different parking spot, if spot becomes unreachable
-        #st()
         # is another spot reachable before the failure
         buffer = 1.0 # m
-        buffer_back = 0.0
-        buffer_front = buffer
+        buffer_back = buffer*2
+        buffer_front = buffer*2
         ordered_dict = dict()
         obs_x = obs.x*SFP
         obs_y = obs.y*SFP
         obs = Point([(obs_x,obs_y)])
         car_loc = Point([(car.x,car.y)])
         car_x = car.x
-        print('Obs:'+str(obs_x)+','+str(obs_y))
+        #print('Obs:'+str(obs_x)+','+str(obs_y))
         if obs.intersects(self.upper_spots) or obs.intersects(self.middle_box): # if failure is in upper row
             #print('Failure in upper row')
             for key,val in parking_spots.items():
@@ -200,9 +199,6 @@ class Supervisor(BoxComponent):
                     if loc_x > (obs_x + buffer_back) and loc_x < (car_x - buffer_front): # if between car and failure
                         #print('Adding spot {0} to list'.format(key))
                         ordered_dict.update({key: val})
-            #print('Possible spots:')
-            #for key,val in ordered_dict.items():
-            #    print(key)
         elif obs.intersects(self.lower_spots):
             #print('Failure in lower row')
             if car_loc.intersects(self.lower_spots): # if car in lower row only pick spots in lower row
@@ -229,12 +225,8 @@ class Supervisor(BoxComponent):
                         if loc_x < (car_x - buffer_front):
                             #print('Adding spot {0} to list'.format(key))
                             ordered_dict.update({key: val})
-            #print('Possible spots:')
-            #for key,val in ordered_dict.items():
-            #    print(key)
         # ordered dict contains all possible parking spots
-        # delete the occupied ones and unreachable ones
-        #st()
+        # delete the occupied spots and unreachable spots
         del_keys = []
         for key,val in ordered_dict.items():
             if not (self.parking_spots[key]==('Vacant','None')):
@@ -246,8 +238,7 @@ class Supervisor(BoxComponent):
         print('Possible vacant and reachable spots:')
         for key,val in ordered_dict.items():
             print(key)
-        #st()
-        # pick one of the remaining ones
+        # pick one of the remaining spots
         if len(ordered_dict)!=0:
             chosen_spot = random.sample(list(ordered_dict.keys()),1)
             chosen_spot = chosen_spot[0]
