@@ -10,6 +10,7 @@ from variables.global_vars import *
 from prepare.communication import *
 from components.car import Car
 from ipdb import set_trace as st
+import numpy as np
 
 class Customer(BoxComponent):
     def __init__(self, average_arrival_rate, average_park_time):
