@@ -73,6 +73,10 @@ class Game(BoxComponent):
             self.Logger.info('GAME - Reserving for Car ID {0}'.format(car.id))
             res_path = newlinestring.intersection(self.accept_box)
             # reserve new path until getting back to original path
+            try:
+                n = len(res_path.coords)
+            except:
+                st()
             if len(res_path.coords)>=1:
                 try:
                     traj = res_path[0] # if reserved path is multilinestring 

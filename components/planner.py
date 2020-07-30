@@ -30,9 +30,10 @@ class Planner(BoxComponent):
         self.planning_graph = []
         self.original_lanes_planning_graph = [] # Planning graph with lane separation
         self.original_free_planning_graph = [] # Planning graph without lane separation
-        #self.planning_graph_in_use = [] # Storing planning graph when updating
+        # self.planning_graph_in_use = [] # Storing planning graph when updating
+        # self.planning_graph_park = [] # Planning graph for way to parking spot to ensure loop
         self.planning_graph_reachability = [] # Planning graph for reachability analysis (ensuring loop in lot)
-        self.planning_graph_all = [] # Planning graph containing all the failures for reachability analysis
+        self.planning_graph_all = [] # Planning graph containing all the failures for reachability analysis and the way to the parking spot
         self.lanes_box = LANES_BOX
         self.reachable = np.ones((max(list(parking_spots.keys()))+1,1)) # if spots can be reached from drop_off, currently all reachable
         self.reserved_areas = dict()
@@ -66,15 +67,9 @@ class Planner(BoxComponent):
                 self.Logger.info('PLANNER - Reserving Replanning Area for Car {0}!!!'.format(car.id))
                 if obstacle:
                     Game.reserve_replanning(car, traj, obstacle)
-                #Game.check_and_reserve_other_lane(car,traj)
             if not car.replan:
                 if Game.check_and_reserve_other_lane(car,traj):
-                    #car.hold = True
-                    #if obstacle:
-                    #st()
                     Game.reserve_replanning(car, traj, obstacle)
-                    #else:
-                        #Game.reserve(None,car)
                     car.hold = True
             self.Logger.info('PLANNER - sending Directive to {0}'.format(car.name))
             await self.out_channels[car.name].send(traj)
@@ -113,7 +108,7 @@ class Planner(BoxComponent):
     def update_reachability_matrix(self,Game): 
         # check which parking spots are still reachable and update self.reachable
         # using planning graph which contains all obstacles on the grid
-        start = DROP_OFF_PIX#(140,55,0,0) # start position on the grid
+        start = DROP_OFF_PIX # start position on the grid
         self.get_current_planning_graph(Game)
         for i in list(parking_spots.keys()):
             end = self.find_spot_coordinates(i)
@@ -126,7 +121,6 @@ class Planner(BoxComponent):
                 self.reachable[i]=1
             else: 
                 self.reachable[i]=0
-        #print(self.reachable)
 
     async def check_obs_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
         obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
@@ -225,6 +219,7 @@ class Planner(BoxComponent):
             #print(obs_all)
             # assume obs not in the acceptable area to use graph with lanes
             planning_graph_in_use = self.original_lanes_planning_graph
+            planning_graph_in_use_park = self.planning_graph_reachability
             # check if obstacle is in lanes_box (acceptable area)
             for obs_box in obs_boxes:
                 if obs_box.intersects(self.lanes_box):
@@ -246,21 +241,39 @@ class Planner(BoxComponent):
             # print(DEL_XY_NODES_all)
             self.planning_graph = path_planner.update_planning_graph(planning_graph_in_use, DEL_XY_NODES)
             self.planning_graph_all = path_planner.update_planning_graph(self.planning_graph_reachability, DEL_XY_NODES_all)
+            #self.planning_graph_park = path_planner.update_planning_graph(self.planning_graph_reachability, DEL_XY_NODES_all)
             #self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, del_nodes)
             # else:
             #     print('Failure blocks the narrow path')
             #     self.planning_graph = self.original_lanes_planning_graph
         else:
             self.planning_graph = self.original_lanes_planning_graph
-            self.planning_graph_all = self.original_lanes_planning_graph
+            self.planning_graph_all = self.planning_graph_reachability
+            #self.planning_graph_all = self.original_lanes_planning_graph
+            #self.planning_graph_park = self.planning_graph_reachability
 
     def get_path(self, start, end): # compute path using grid_planner + end_planner
+        check_block = False
+        # if end in parking spot
+        if end in parking_spots.values():
+            planning_graph = self.planning_graph_all
+            check_block = True
+        else:
+            planning_graph = self.planning_graph
+        # use planning graph all, if that's not possible use planning_graph
         traj = None
         try:
-            traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph)
+            traj, weight = path_planner.get_mpc_path(start,end,planning_graph)
         except:
-            traj = None
-            weight = None
+            if check_block:
+                try:
+                    traj, weight = path_planner.get_mpc_path(start,end,self.planning_graph)
+                except:
+                    traj = None
+                    weight = None
+            else:
+                traj = None
+                weight = None
         if traj and not weight == np.inf:
             return traj, weight
         else: 
@@ -511,12 +524,13 @@ class Planner(BoxComponent):
         with open('planning_graph_reachability.pkl', 'rb') as f:
             self.planning_graph_reachability = pickle.load(f)
         self.planning_graph = self.original_lanes_planning_graph
+        #self.planning_graph_park = self.planning_graph_reachability
         self.planning_graph_all = self.planning_graph_reachability
         await trio.sleep(0)
-        # create obstacles
-        self.static_obstacle_map = Obstacles.create_obstacle_map()
-        self.initialize_static_obstacle_map(Game)
-        Simulation.add_obs_to_sim(self.static_obstacle_map)
+        # create obstacles only used for testing
+        # self.static_obstacle_map = Obstacles.create_obstacle_map()
+        # self.initialize_static_obstacle_map(Game)
+        # Simulation.add_obs_to_sim(self.static_obstacle_map)
         #
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
