@@ -106,7 +106,7 @@ class Car(BoxComponent):
                     # print('Tracking this path:')
                     # print(self.ref)
                 elif directive == 'OriginalPath':
-                    self.Logger.info('{0} - Tracking the original path and wait for failure to be removed ID {0}'.format(self.name,self.id))
+                    self.Logger.info('{0} - Tracking the original path and wait for failure to be removed ID {1}'.format(self.name,self.id))
                     await self.track_reference(Game,send_response_channel, Time)
                 elif len(directive)==0:
                     trio.sleep(0)
