@@ -1,4 +1,4 @@
-# Automated Valet Parking Game Component
+# Automated Valet Parking - Continuous Simulation
 # Josefine Graebener
 # California Institute of Technology
 # March, 2020
