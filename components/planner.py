@@ -10,7 +10,7 @@ import numpy as np
 import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import create_bidirectional_channel, create_unidirectional_channel, get_current_time
-from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP, DROP_OFF_PIX
+from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP, DROP_OFF_PIX, TESTING_MODE
 from variables.parking_data import parking_spots_original as parking_spots#,parking_spots_original
 import math
 from ipdb import set_trace as st
@@ -400,12 +400,21 @@ class Planner(BoxComponent):
         response = resp[0]
         car = resp[1]
         #print(resp)
-        self.Logger.info('PLANNER - sending "{0} - {1}" response to Supervisor'.format(response,car.name))
-        await self.out_channels['Supervisor'].send((car,response))
+        if TESTING_MODE: # send to TestSuite instead
+            self.Logger.info('PLANNER - sending "{0} - {1}" response to TestSuite'.format(response,car.name))
+            await self.out_channels['TestSuite'].send((car,response))
+        else: # send to AVP supervisor
+            self.Logger.info('PLANNER - sending "{0} - {1}" response to Supervisor'.format(response,car.name))
+            await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
+
     
     async def check_supervisor(self,send_response_channel,Game, Time): # directive/response system (receiving directives from supervisor)
-        async for directive in self.in_channels['Supervisor']:
+        if TESTING_MODE:
+            in_channel = self.in_channels['TestSuite']
+        else:
+            in_channel = self.in_channels['Supervisor']
+        async for directive in in_channel:
             car = directive[0]
             todo = directive[1]
             print(self.spots)

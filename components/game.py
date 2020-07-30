@@ -9,7 +9,7 @@ import trio
 import numpy as np
 import math
 from components.camera.gametools import make_line, remove_duplicates, rad2rad
-from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM
+from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM, TESTING_MODE
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
@@ -41,8 +41,12 @@ class Game(BoxComponent):
         self.obstacles = dict()
 
     async def keep_track_influx(self):
-        async with self.in_channels['GameEnter']:
-            async for car in self.in_channels['GameEnter']:
+        if TESTING_MODE:
+            in_channel = self.in_channels['TestSuite']
+        else:
+            in_channel = self.in_channels['GameEnter']
+        async with in_channel:
+            async for car in in_channel:
                 self.Logger.info('GAME - Adding new car to Game')
                 await self.out_channels['Enter'].send(car)
                 await self.out_channels['Simulation'].send(car)

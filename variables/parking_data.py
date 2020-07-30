@@ -1,6 +1,8 @@
 import numpy as np
 from variables.global_vars import *
 
+test_spots = {0: (39, 129, 120, 0)}
+
 parking_spots_original = {0: (39, 129, 120, 0), 
 1: (51, 129, 120, 0), 
 2: (63, 129, 120, 0), 
