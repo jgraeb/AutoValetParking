@@ -40,7 +40,7 @@ class TestSuite(BoxComponent):
         car.x = START_X
         car.y = START_Y
         car.yaw = START_YAW
-        # update game
+        # update Game
         await self.out_channels['Game'].send(car)
         print("Car with Name {0} and ID {1} arrives at {2:.3f}".format(car.name,car.id, car.arrive_time))
         await self.out_channels['Planner'].send([car, ('Park', self.spot_no)])
@@ -56,6 +56,11 @@ class TestSuite(BoxComponent):
         car.requested = True
         await self.out_channels['Planner'].send([car, 'Pickup'])
 
+    async def fail_car(self,car, Game):
+        car.failure()
+        print('{0} / ID {1} Failing'.format(car.name, car.id))
+        await self.failure(Game)
+
     async def start_ped(self,TestPed):
         # spawn the ped in loc A and save to ped list
         print('Spawning ped')
@@ -69,29 +74,41 @@ class TestSuite(BoxComponent):
     async def ped_walk_east(self,TestPed):
         print('Ped walking east')
 
-    def get_next_env_action(self, response):#, TestPed, TestSupervisor, TestObstacles):
+    def get_next_env_action(self, response):#, TestPed, TestObstacles):
         print('Read test script here')
         # read the script
         # call the actions from above here depending on sys state
 
-    async def update_sys_state(self, Planner):
-        print('TEST SUITE - updating system state')
+    async def add_obs(self,obs):
+        directive = ['Add',obs]
+        print('Adding obstacle')
+        await self.out_channels['Obstacles'].send(directive)
+
+    async def receive_response(self, Planner):
+        print('TEST SUITE - receiving response')
         async with self.in_channels['Planner']:
             async for response in self.in_channels['Planner']:
+                car = response[0]
                 print('Response received')
                 self.get_next_env_action(response)
+                await self.add_obs((100, 150, 0, 5))
+                await trio.sleep(5)
+                await self.request_car(car) # requesting car for test
 
-    async def run_test(self,Planner):
+    async def update_system_state(self):
+        print('Updating the system state')
+
+    async def run_test(self,Planner,Game):
         print('Testing')
-        await self.update_sys_state(Planner)
+        await self.receive_response(Planner)
 
-    async def run(self,Planner): #TestPed, TestSupervisor, TestObstacles
+    async def run(self,Planner,Game): #TestPed, TestSupervisor, TestObstacles
         print('TEST SUITE - started')
         now = trio.current_time()
         park_time = 300 #
         await self.generate_car(now, park_time)
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.run_test,Planner)
+            nursery.start_soon(self.run_test,Planner,Game)
 
 
         

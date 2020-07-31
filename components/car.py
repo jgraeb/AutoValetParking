@@ -6,7 +6,7 @@
 from prepare.boxcomponent import BoxComponent
 import trio
 import numpy as np
-from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED
+from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED, TESTING_MODE
 #from prepare.communication import  
 import motiontracking.mpc_tracking as tracking
 import math
@@ -67,9 +67,10 @@ class Car(BoxComponent):
         self.idx = 0
         self.hold = False
         self.new_spot = False
+        self.send_response_channel = None
         self.Logger = None
 
-    async def update_planner_command(self,send_response_channel,Game, Time): # directive/response system - receiving directives
+    async def update_planner_command(self,Game, Time): # directive/response system - receiving directives
         async with self.in_channels['Planner']:
             async for directive in self.in_channels['Planner']:
                 #st()
@@ -107,7 +108,7 @@ class Car(BoxComponent):
                     # print(self.ref)
                 elif directive == 'OriginalPath':
                     self.Logger.info('{0} - Tracking the original path and wait for failure to be removed ID {1}'.format(self.name,self.id))
-                    await self.track_reference(Game,send_response_channel, Time)
+                    await self.track_reference(Game, Time)
                 elif len(directive)==0:
                     trio.sleep(0)
                 elif not self.picked_up:
@@ -119,7 +120,7 @@ class Car(BoxComponent):
                     #print(directive)
                     #if directive=='Unpark':
                     #self.unparking = True
-                    await self.track_reference(Game,send_response_channel, Time)
+                    await self.track_reference(Game, Time)
                     await trio.sleep(0)
                     #await self.send_response(send_response_channel)
 
@@ -168,7 +169,7 @@ class Car(BoxComponent):
         else:
             self.v = 0
 
-    async def back_2_spot(self,Time,send_response_channel,Game):
+    async def back_2_spot(self,Time,Game):
         #st()
         self.status = 'Replan'
         self.replan = True
@@ -186,7 +187,7 @@ class Car(BoxComponent):
         self.current_segment = directive
         self.Logger.info('{0} - delay: {1}'.format(self.name,self.delay))
         if self.delay > DELAY_THRESH and not self.area_requested:
-            await self.request_reserved_area(send_response_channel)
+            await self.request_reserved_area()
         ck = 0 
         dl = 1.0  # course tick
         # check if car shoud be removed
@@ -214,7 +215,7 @@ class Car(BoxComponent):
             initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
             end_speed = 0.0
             sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
-            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
+            await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,Time)
             if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
                 return
             self.status = 'Completed'
@@ -227,9 +228,9 @@ class Car(BoxComponent):
             self.parking = False
         self.Logger.info('{0} - back in spot'.format(self.name))
         await trio.sleep(0)
-        await self.track_reference(Game, send_response_channel,Time)
+        await self.track_reference(Game,Time)
 
-    async def track_async(self, cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed,Game,send_response_channel,Time): # modified from MPC
+    async def track_async(self, cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed,Game,Time): # modified from MPC
         goal = [cx[-1], cy[-1]]
         self.state = initial_state
         # initial yaw compensation
@@ -240,7 +241,7 @@ class Car(BoxComponent):
         time = 0.0
         if self.reserved:
             if self.clear_of_reserved_area(Game):
-                self.release_reserved_area(Game,send_response_channel)
+                self.release_reserved_area(Game)
                 self.reserved = False
         target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
         odelta, oa = None, None
@@ -277,11 +278,11 @@ class Car(BoxComponent):
                     self.Logger.info('{0} STOP ---- stopped because of reserved area ahead'.format(self.name))
                     if not self.area_requested:
                         # request reserved area
-                        await self.request_area(send_response_channel)
+                        await self.request_area()
                 if self.reverse:
                     self.waiting = True
                     self.Logger.info('{0} - sending max reverse'.format(self.name))
-                    await self.send_max_reverse(send_response_channel)
+                    await self.send_max_reverse()
                     self.status == 'Replan'
                     return
                 # insert here for replanning!!
@@ -299,18 +300,18 @@ class Car(BoxComponent):
                     if self.unparking:
                         try:
                             self.Logger.info('{0} - Driving back into the spot'.format(self.name))
-                            await self.back_2_spot(Time,send_response_channel,Game)
+                            await self.back_2_spot(Time,Game)
                             self.replan = True
                             return
                         except:
                             st()
                         #await self.track_reference(Game,send_response_channel, Time)
                         return
-                    await self.send_conflict(conflict_cars, send_response_channel)
+                    await self.send_conflict(conflict_cars)
                     self.waiting = True
                     if self.reverse:
                         self.Logger.info('{0} - sending max reverse'.format(self.name))
-                        await self.send_max_reverse(send_response_channel)
+                        await self.send_max_reverse()
                     # return
                 # elif failed_car or blocked and self.replan and not self.waiting:
                 #     self.status = 'Blocked'
@@ -323,13 +324,13 @@ class Car(BoxComponent):
                     self.Logger.info('{0} - Blocked by a failure'.format(self.name))
                     self.waiting = True
                     if not self.replan:
-                        await self.send_blocked(blocked_by, send_response_channel)
+                        await self.send_blocked(blocked_by)
                     elif self.reverse:
                         self.Logger.info('{0} - sending max reverse'.format(self.name))
-                        await self.send_max_reverse(send_response_channel)
+                        await self.send_max_reverse()
                     elif self.replan:
                         #st()
-                        await self.send_blocked_again(blocked_by, send_response_channel)
+                        await self.send_blocked_again(blocked_by)
                         self.Logger.info('{0} - Stopping the Tracking, ID {1}, B'.format(self.name, self.id))
                         return
                 if self.status == 'Replan':
@@ -365,35 +366,35 @@ class Car(BoxComponent):
                 self.delay = now_del-self.depart_time
             self.Logger.info('{0} - wanted to depart at {1} and has delay {2}'.format(self.name,self.depart_time,self.delay))
 
-    def release_reserved_area(self,Game,send_response_channel):
+    def release_reserved_area(self,Game):
         if self.reserved:
             self.hold = False
-            self.Logger.info('{0} - Releasing the reserved area for Car {0}'.format(self.name, self.id))  
+            self.Logger.info('{0} - Releasing the reserved area for Car {1}'.format(self.name, self.id))  
             Game.release_reserved_area(self)  
             # self.area_requested = False
             # self.replan = False
         elif self in Game.reserved_areas_requested:
             Game.reserved_areas_requested.pop(self)
-            self.Logger.info('{0} - Releasing the requested area for Car {0}'.format(self.name,self.id))  
+            self.Logger.info('{0} - Releasing the requested area for Car {1}'.format(self.name,self.id))  
         self.area_requested = False
         self.replan = False
 
 
-    async def request_reserved_area(self,send_response_channel):
+    async def request_reserved_area(self):
         self.area_requested = True
         self.Logger.info('{0} - Requesting reserved area for Car ID {0} due to delay {1}'.format(self.name,self.id, self.delay))   
         response = 'RequestReservedArea'
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
-        await send_response_channel.send((self,response))
+        await self.send_response_channel.send((self,response))
 
-    async def request_area(self,send_response_channel):
+    async def request_area(self):
         self.area_requested = True
         self.Logger.info('{0} - Requesting reserved area for Car ID {1} due to delay {2}'.format(self.name, self.id, self.delay))   
         response = 'RequestArea'
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
-        await send_response_channel.send((self,response))
+        await self.send_response_channel.send((self,response))
  
-    async def track_reference(self,Game,send_response_channel, Time):
+    async def track_reference(self,Game, Time):
         self.Logger.info('{0} - Tracking path'.format(self.name))
         #print(self.ref)
         self.update_delay(Time)
@@ -403,7 +404,7 @@ class Car(BoxComponent):
             st()
         self.Logger.info('{0} delay: {1}'.format(self.name,self.delay))
         if self.delay > DELAY_THRESH and not self.area_requested:
-            await self.request_reserved_area(send_response_channel)
+            await self.request_reserved_area()
         #print("car.delay: "+str(self.delay))
         self.close = False
         ck = 0 
@@ -426,11 +427,14 @@ class Car(BoxComponent):
         self.status = 'Driving'
         self.in_spot = False
         self.parked = False
-        # including a failure in 20% of cars
+        # including a failure in X% of cars randomly
         failidx = len(self.ref)
-        chance = random.randint(1,100) # changed to 0!!!
-        if self.id ==1:
-            chance = 1
+        if TESTING_MODE: # no random failures
+            chance = 100
+        else:
+            # if self.id ==1:
+            # chance = 1
+            chance = random.randint(1,100) 
         if not self.replan:
             if len(self.ref)-1>10 and chance <=30:
                 failidx = np.random.randint(low=len(self.ref)-5, high=len(self.ref)-1, size=1)
@@ -453,7 +457,7 @@ class Car(BoxComponent):
             self.idx = i
             if (i==failidx):
                 print('{0} Failing'.format(self.name))
-                await self.failure(Game,send_response_channel)
+                await self.failure(Game)
                 return  
             if i >= 1:
                 self.unparking = False
@@ -477,7 +481,7 @@ class Car(BoxComponent):
                 self.direction = tracking.check_direction(path) 
                 sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,self.direction)
                 initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,send_response_channel,Time)
+                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,Time)
                 await trio.sleep(0)
             if self.status == 'Replan' or self.status=='Removed' or self.status =='Blocked':
                 return
@@ -500,7 +504,7 @@ class Car(BoxComponent):
                 if i == len(path)-2:
                     end_speed = 0.0
                 sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
-                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
+                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,Time)
                 if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
                     return
             self.status = 'Completed'
@@ -516,41 +520,41 @@ class Car(BoxComponent):
             self.ref = []
             #if self.reverse:
             #    self.status = '' # change to expecting path
-            await self.send_response(send_response_channel)
+            await self.send_response()
 
-    async def send_response(self,send_response_channel):
+    async def send_response(self,):
         await trio.sleep(1)
         response = self.status
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
-        await send_response_channel.send((self,response))
+        await self.send_response_channel.send((self,response))
         await trio.sleep(1)
 
-    async def send_conflict(self,cars,send_response_channel):
+    async def send_conflict(self,cars):
         response = (self.status,cars)
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
-        await send_response_channel.send((self,response))
+        await self.send_response_channel.send((self,response))
         await trio.sleep(1)
 
-    async def send_blocked(self,cars,send_response_channel):
+    async def send_blocked(self,cars):
         response = (self.status,cars)
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
         try:
-            await send_response_channel.send((self,response))
+            await self.send_response_channel.send((self,response))
         except: 
             st()
         await trio.sleep(1)
 
-    async def send_blocked_again(self,cars,send_response_channel):
+    async def send_blocked_again(self,cars):
         #st()
         response = ('Reverse',cars)
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
-        await send_response_channel.send((self,response))
+        await self.send_response_channel.send((self,response))
         await trio.sleep(1)
 
-    async def send_max_reverse(self,send_response_channel):
+    async def send_max_reverse(self):
         response = 'Completed'
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
-        await send_response_channel.send((self,response))
+        await self.send_response_channel.send((self,response))
         await trio.sleep(1)
 
     def clear_of_reserved_area(self,gme):
@@ -585,21 +589,22 @@ class Car(BoxComponent):
         in_spot = gme.is_car_in_spot(self)
         return in_spot
 
-    async def failure(self,Game,send_response_channel):
+    async def failure(self,Game):
         self.status = 'Failure'
         self.ref = []
         #if self.reserved:
-        self.release_reserved_area(Game,send_response_channel)
+        self.release_reserved_area(Game)
         self.reserved = False
         # elif self in Game.reserved_areas_requested:
         #     Game.reserved_areas_requested.pop(self)
-        await self.send_response(send_response_channel)
+        await self.send_response()
 
     async def run(self,send_response_channel,Game, Time, Logger):
         self.Logger = Logger
         self.Logger.info('{0} (ID {1}) - started'.format(self.name,self.id))
+        self.send_response_channel = send_response_channel
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.update_planner_command,send_response_channel,Game, Time)
+            nursery.start_soon(self.update_planner_command,Game, Time)
             if self.cancel:
                 print('Cancelling {0}'.format(self.name))
                 nursery.cancel_scope.cancel()
