@@ -55,7 +55,7 @@ async def main():
         #create communication channels
         tow_truck = TowTruck()
         all_components.append(tow_truck)
-        set_up_channels(supervisor, planner, game, map_sys, simulation, tow_truck, test_suite, customer)
+        set_up_channels(supervisor, planner, game, map_sys, simulation, tow_truck, test_suite, customer,obstacles)
         # start nursery
         for comp in all_components:
             nursery.start_soon(comp.run)
@@ -64,6 +64,7 @@ async def main():
         nursery.start_soon(planner.run, game, time_sys, logger, obstacles,simulation)
         nursery.start_soon(supervisor.run, planner, time_sys, simulation,logger)
         #nursery.start_soon(customer.run,END_TIME,START_TIME, game)
-        nursery.start_soon(test_suite.run,planner)
+        nursery.start_soon(obstacles.run, game, simulation,planner)
+        nursery.start_soon(test_suite.run,planner,game)
 
 trio.run(main)

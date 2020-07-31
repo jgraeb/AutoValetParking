@@ -7,14 +7,16 @@ from prepare.boxcomponent import BoxComponent
 import trio
 from variables.global_vars import *
 import numpy as np
+from ipdb import set_trace as st
 
 
 class Obstacles(BoxComponent):
     def __init__(self,
                  loc = [110,80,10], # (x, y, radius) in gridpoints
                  ):
+        super().__init__()
         # init_state: initial state by default 
-        self.name = 'Obstacles'
+        self.name = self.__class__.__name__
         self.obs = dict()
         self.num_obs = len(self.obs) # number of obstacles currently in the lot
         self.max_serial_number = 0
@@ -50,7 +52,7 @@ class Obstacles(BoxComponent):
                 elif response[0]=='Remove':
                     obsnum = response[1]
                     self.rmv_obstacle(obsnum)
-                Planner.update_onstacle_map(Game,self,Simulation)
+                Planner.update_obstacle_map(Game,self,Simulation)
 
 
     async def run(self,Game,Simulation,Planner):

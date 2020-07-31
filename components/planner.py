@@ -103,7 +103,7 @@ class Planner(BoxComponent):
             self.obstacles.update({obskey: (val)})
         Game.update_obstacles(self.obstacles)
         self.update_reachability_matrix(Game)
-        Simulation.update_obs_in_sim(self.obstacles)
+        Simulation.update_obs_in_sim(self.obstacles,Obstacles)
 
     def update_reachability_matrix(self,Game): 
         # check which parking spots are still reachable and update self.reachable
@@ -537,9 +537,10 @@ class Planner(BoxComponent):
         self.planning_graph_all = self.planning_graph_reachability
         await trio.sleep(0)
         # create obstacles only used for testing
-        # self.static_obstacle_map = Obstacles.create_obstacle_map()
-        # self.initialize_static_obstacle_map(Game)
-        # Simulation.add_obs_to_sim(self.static_obstacle_map)
+        if TESTING_MODE:
+            self.static_obstacle_map = Obstacles.create_obstacle_map()
+            self.initialize_static_obstacle_map(Game)
+            Simulation.add_obs_to_sim(self.static_obstacle_map)
         #
         send_response_channel, receive_response_channel = trio.open_memory_channel(25)
         async with trio.open_nursery() as nursery:
