@@ -1,5 +1,5 @@
 *.csv
-*.png
+#*.png
 *.mypy_cache*
 *.pyc
 *.avi
