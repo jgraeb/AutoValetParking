@@ -4,7 +4,7 @@
 # March, 2020
 
 from prepare.boxcomponent import BoxComponent
-from variables.geometries import DROPOFF_BOX, PICKUP_BOX, PARK_BOXES, PARK_BOXES_AREA, FAILURE_ACCEPT_BOX_1,FAILURE_ACCEPT_BOX_2, LANE_1_BOX, LANE_2_BOX
+from variables.geometries import DROPOFF_BOX, PICKUP_BOX, PARK_BOXES, PARK_BOXES_AREA, FAILURE_ACCEPT_BOX_1, LANE_1_BOX, LANE_2_BOX#, FAILURE_ACCEPT_BOX_2
 import trio
 import numpy as np
 import math
@@ -25,13 +25,13 @@ class Game(BoxComponent):
         self.name = self.__class__.__name__
         self.cars = []
         self.peds = []
-        self.car_boxes = dict()
+        self.car_boxes = dict() #collision boxes 14*7 pixels
         self.dropoff_box = DROPOFF_BOX
         self.pickup_box = PICKUP_BOX
         self.park_boxes = PARK_BOXES
         self.park_boxes_area = PARK_BOXES_AREA
         self.accept_box = FAILURE_ACCEPT_BOX_1
-        self.accept_box_2 = FAILURE_ACCEPT_BOX_2
+        #self.accept_box_2 = FAILURE_ACCEPT_BOX_2
         self.lane1box = LANE_1_BOX
         self.lane2box = LANE_2_BOX
         self.reserved_areas = dict()

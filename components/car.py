@@ -428,7 +428,7 @@ class Car(BoxComponent):
         self.parked = False
         # including a failure in 20% of cars
         failidx = len(self.ref)
-        chance = random.randint(1,100) # changed to 0!!!
+        chance = random.randint(1,100) # changed to 0!!! 
         if self.id ==1:
             chance = 1
         if not self.replan:
