@@ -15,15 +15,15 @@ class Obstacles(BoxComponent):
                  loc = [110,80,10], # (x, y, radius) in gridpoints
                  ):
         super().__init__()
-        # init_state: initial state by default 
+        # init_state: initial state by default
         self.name = self.__class__.__name__
         self.obs = dict()
         self.num_obs = len(self.obs) # number of obstacles currently in the lot
         self.max_serial_number = 0
 
     def create_obstacle_map(self): # static obstacles initialized at the beginning of the simulation
-        self.obs = {1: (170, 100, 0, 3), 
-        2: (180, 100, 0, 3), 
+        self.obs = {1: (170, 100, 0, 3),
+        2: (180, 100, 0, 3),
         3: (190, 100, 0, 3)}
         self.num_obs = len(self.obs)
         self.max_serial_number = self.max_serial_number + self.num_obs
@@ -31,13 +31,13 @@ class Obstacles(BoxComponent):
         return self.obs
 
     def add_obstacle(self,obs): # add new obstacle
-        num = self.max_serial_number
+        num = self.max_serial_number+1
         self.obs.update({num : obs})
         self.max_serial_number = self.max_serial_number+1
         print('Obstacle added')
 
     def rmv_obstacle(self,obsnum): # remove an obstacle
-        self.obs.pop(obsnum) 
+        self.obs.pop(obsnum)
         print('Obstacle removed')
 
     def get_updated_obstacles(self): # return current obstacle list
@@ -59,4 +59,3 @@ class Obstacles(BoxComponent):
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.listen_for_commands,Game,Simulation,Planner)
             await trio.sleep(0)
-
