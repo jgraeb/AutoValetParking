@@ -33,7 +33,7 @@ def set_up_channels(supervisor,planner, game, map_sys, simulation, tow_truck, te
         create_bidirectional_channel(map_sys, planner, max_buffer_size=np.inf)
         create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameEnter')
         create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameExit')
-        create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameEnterPeds')
+        #create_unidirectional_channel(sender=supervisor, receiver=game, max_buffer_size=np.inf, name='GameEnterPeds')
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf)
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf, name='PedSimulation')
         create_unidirectional_channel(sender=game, receiver=simulation, max_buffer_size=np.inf, name='ExitSim')
@@ -42,4 +42,5 @@ def set_up_channels(supervisor,planner, game, map_sys, simulation, tow_truck, te
         # testing_channels
         create_bidirectional_channel(test_suite, planner,max_buffer_size=np.inf)
         create_unidirectional_channel(sender=test_suite, receiver=game, max_buffer_size=np.inf)
+        create_unidirectional_channel(sender=test_suite, receiver=game, max_buffer_size=np.inf, name='GameEnterPeds')
         create_unidirectional_channel(sender=test_suite, receiver=obstacles, max_buffer_size=np.inf)

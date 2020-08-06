@@ -52,7 +52,7 @@ class Obstacles(BoxComponent):
                 elif response[0]=='Remove':
                     obsnum = response[1]
                     self.rmv_obstacle(obsnum)
-                Planner.update_obstacle_map(Game,self,Simulation)
+                await Planner.update_obstacle_map(Game,self,Simulation)
 
 
     async def run(self,Game,Simulation,Planner):

@@ -9,10 +9,13 @@ from variables.global_vars import start_walk_lane, end_walk_lane
 from prepare.queue import Queue
 import random
 import numpy as np
+from ipdb import set_trace as st
 
-class Pedestrian(BoxComponent):
+(2700,2090)
+
+class TestPed(BoxComponent):
     def __init__(self,
-                 init_state = [start_walk_lane[0],start_walk_lane[1],-np.pi/2,0], # (x, y, theta, gait)
+                 init_state = [2700,2090,np.pi/2,0], # (x, y, theta, gait)
                  number_of_gaits = 6,
                  gait_length = 4,
                  gait_progress = 0,
@@ -20,7 +23,7 @@ class Pedestrian(BoxComponent):
                  prim_queue = None, # primitive queue
                  pedestrian_type = '3',
                  ):
-        # init_state: initial state by default 
+        # init_state: initial state by default
         self.name = 'Pedestrian {}'.format(id(self))
         self.state = np.array(init_state, dtype="float")
         self.alive_time = 0
@@ -104,7 +107,7 @@ class Pedestrian(BoxComponent):
             if total_distance != 0:
                 prim_progress += self.dt / (total_distance / vee)
             self.prim_queue.replace_top((prim_data, prim_progress)) # update primitive queue
-            
+
     async def get_walking_displacement(self, start, finish):
         dx = finish[0] - start[0]
         dy = finish[1] - start[1]
@@ -117,10 +120,29 @@ class Pedestrian(BoxComponent):
         self.start_walk_lane = start_walk
         self.end_walk_lane = end_walk
         self.prim_queue.enqueue(((self.start_walk_lane, self.end_walk_lane, 60), 0))
+        print('Pedestrian is walking from {0} to {1}'.format(self.start_walk_lane,self.end_walk_lane))
 
     async def ped_walk(self):
-        while (self.state[0] < self.end_walk_lane[0]): # if not at the destination
-            await self.prim_next()
+        if self.status == 'WalkE':
+            while (self.state[0] < self.end_walk_lane[0]): # if not at the destination
+                print(self.state)
+                if self.status == 'Stop':
+                    while self.status == 'Stop':
+                        await trio.sleep(3)
+                elif self.status == 'Delete':
+                    break
+                await self.prim_next()
+                await trio.sleep(0)
+        elif self.status =='WalkW':
+            while (self.state[0] > self.end_walk_lane[0]): # if not at the destination
+                print(self.state)
+                if self.status == 'Stop':
+                    while self.status == 'Stop':
+                        await trio.sleep(3)
+                elif self.status == 'Delete':
+                    break
+                await self.prim_next()
+                await trio.sleep(0)
             await trio.sleep(0)
 
     async def listen_for_commands(self):
@@ -134,6 +156,7 @@ class Pedestrian(BoxComponent):
 
 
     async def run(self, start_walk, end_walk):
+        await self.start_ped(start_walk,end_walk)
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.listen_for_commands)
+            nursery.start_soon(self.ped_walk)
             await trio.sleep(0)
