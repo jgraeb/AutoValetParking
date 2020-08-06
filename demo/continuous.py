@@ -6,7 +6,7 @@
 import trio
 import sys
 sys.path.append('..') # enable importing modules from an upper directory:
-# import 
+# import
 from prepare.communication import set_up_channels
 from variables.global_vars import average_arrival_rate, average_park_time, OPEN_TIME
 # import components
@@ -28,6 +28,8 @@ logging.config.fileConfig('../prepare/Logging/logging.conf', disable_existing_lo
 # create logger
 logger = logging.getLogger('AVP')
 
+# set to normal mode
+TESTING_MODE = False
 
 async def main():
     #global START_TIME

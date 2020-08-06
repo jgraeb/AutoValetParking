@@ -60,7 +60,7 @@ class Planner(BoxComponent):
             self.planning_graph = self.original_lanes_planning_graph
         else:
             self.get_current_planning_graph(Game)
-            traj, weight = self.get_path(start,end) 
+            traj, weight = self.get_path(start,end)
         self.Logger.info('PLANNER - {0} driving from {1} to {2}, Path weight: {3}'.format(car.name,start,end,weight))
         if traj:
             if car.replan and not car.new_spot:
@@ -83,7 +83,7 @@ class Planner(BoxComponent):
     async def add_obstacle(self, car,Game): # add failed car coordinates to obstacle list
         self.obstacles.update({car.name: (car.x,car.y,car.yaw)})
         self.update_reachability_matrix(Game)
-        await self.check_obs_on_path(car, Game)
+        await self.check_obscar_on_path(car, Game)
 
     def rmv_obstacle(self, car,Game): # remove towed car from obstacle list
         self.obstacles.pop(car.name)
@@ -96,16 +96,18 @@ class Planner(BoxComponent):
         Game.update_obstacles(self.obstacles)
         self.update_reachability_matrix(Game)
 
-    def update_obstacle_map(self,Game,Obstacles,Simulation):
+    async def update_obstacle_map(self,Game,Obstacles,Simulation):
         self.obstacles.clear()
         for obskey,val in Obstacles.obs.items():
             val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]]
             self.obstacles.update({obskey: (val)})
+            await self.check_obs_on_path(val, Game)
         Game.update_obstacles(self.obstacles)
+        # await self.check_obs_on_path(obstacle, Game)
         self.update_reachability_matrix(Game)
         Simulation.update_obs_in_sim(self.obstacles,Obstacles)
 
-    def update_reachability_matrix(self,Game): 
+    def update_reachability_matrix(self,Game):
         # check which parking spots are still reachable and update self.reachable
         # using planning graph which contains all obstacles on the grid
         start = DROP_OFF_PIX # start position on the grid
@@ -119,10 +121,49 @@ class Planner(BoxComponent):
                 weight = None
             if traj and not weight == np.inf:
                 self.reachable[i]=1
-            else: 
+            else:
                 self.reachable[i]=0
 
-    async def check_obs_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
+    async def check_obs_on_path(self,obs,gme):
+        self.Logger.info('PLANNER - Checking if added obstacle is on path')
+        for carname in list(self.cars):
+            for car in gme.cars:
+                if carname == car.name:
+                    if len(car.ref)!=0:
+                        ref = car.ref
+                        ref = ref[car.idx:]
+                        try:
+                            ref = np.concatenate(ref, axis=0)
+                        except:
+                            st()
+                        ref = ref.tolist()
+                        del_idx = []
+                        for i in range(0,len(ref)-1): # remove duplicates
+                            if np.all(ref[i]==ref[i+1]):
+                                del_idx.append(i)
+                        del_idx = np.flip(del_idx)
+                        for k in del_idx:
+                            ref.pop(k)
+                        line = [(entry[0],entry[1]) for entry in ref]
+                        path = LineString(line)
+                        if obstacle.intersects(path):
+                            obstacle_plan = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]) # in grid pixels for planning
+                            obs = {obscar.name : [obscar.x,obscar.y,obscar.yaw]} # in meters
+                            if self.is_single_failure_in_acceptable_area(obs, gme):
+                                self.Logger.info('PLANNER - OBSTACLE ON CAR ID {0} PATH - NEED NEW PATH'.format(car.id))
+                                car.status == 'Replan'
+                                await self.replan_path(car, gme, obstacle_plan)
+                            else:
+                                if not car.requested:
+                                    # stop car here and replan
+                                    resp = (('SpotUnreachable',obstacle_plan), car)
+                                    self.Logger.info('PLANNER - Spot for Car {0} became unreachable'.format(car.id))
+                                    car.replan = True
+                                    car.status = 'Replan'
+                                    #st()
+                                    await self.send_response_to_supervisor(resp) # to pick other spot
+
+    async def check_obscar_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
         obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
         self.Logger.info('PLANNER - Checking if obstacle is on path')
         for carname in list(self.cars):
@@ -133,7 +174,7 @@ class Planner(BoxComponent):
                             ref = car.ref
                             ref = ref[car.idx:]
                             try:
-                                ref = np.concatenate(ref, axis=0) 
+                                ref = np.concatenate(ref, axis=0)
                             except:
                                 st()
                             ref = ref.tolist()
@@ -153,7 +194,7 @@ class Planner(BoxComponent):
                                     self.Logger.info('PLANNER - FAILURE ON CAR ID {0} PATH - NEED NEW PATH'.format(car.id))
                                     car.status == 'Replan'
                                     await self.replan_path(car, gme, obstacle_plan)
-                                else: 
+                                else:
                                     if not car.requested:
                                         # stop car here and replan
                                         resp = (('SpotUnreachable',obstacle_plan), car)
@@ -162,12 +203,12 @@ class Planner(BoxComponent):
                                         car.status = 'Replan'
                                         #st()
                                         await self.send_response_to_supervisor(resp) # to pick other spot
-                            
+
     async def replan_path(self, car, Game, obstacle):
         car.status = 'Replan'
         if self.cars.get(car.name,0)=='Assigned':
-            for key, val in self.spots.items(): 
-                if val == car.name: 
+            for key, val in self.spots.items():
+                if val == car.name:
                     spot = key
             end = self.find_spot_coordinates(spot)
             car.replan = True
@@ -276,15 +317,15 @@ class Planner(BoxComponent):
                 weight = None
         if traj and not weight == np.inf:
             return traj, weight
-        else: 
+        else:
             traj = False
             weight = None
             return traj, weight
 
     def find_destination(self,car):
         if self.cars.get(car.name,0)=='Assigned':
-            for key, val in self.spots.items(): 
-                if val == car.name: 
+            for key, val in self.spots.items():
+                if val == car.name:
                     spot = key
             end = self.find_spot_coordinates(spot)
         elif self.cars.get(car.name,0)=='Request':
@@ -302,8 +343,8 @@ class Planner(BoxComponent):
                         if self.cars.get(car.name)=='Request':
                             end = PICK_UP
                         else:
-                            for key, val in self.spots.items(): 
-                                if val == car.name: 
+                            for key, val in self.spots.items():
+                                if val == car.name:
                                     spot = key
                             end = self.find_spot_coordinates(spot)
                         car.reverse = False
@@ -347,15 +388,15 @@ class Planner(BoxComponent):
                     #     Game.reserve_replanning(car, directive, obs)
                     # except:
                     #     st()
-                    # Game.check_and_reserve_other_lane(car,directive) 
+                    # Game.check_and_reserve_other_lane(car,directive)
                 elif resp[0]=='Blocked': # compute a path around the blockage if possiblw, if not possible, wait
                     obscar = resp[1]
                     obs = obscar
                     if self.is_failure_in_acceptable_area(Game,obs):
                         print('Obstacles are in acceptable area.')
                         if self.cars.get(car.name,0)=='Assigned':
-                            for key, val in self.spots.items(): 
-                                if val == car.name: 
+                            for key, val in self.spots.items():
+                                if val == car.name:
                                     spot = key
                             end = self.find_spot_coordinates(spot)
                             #car.replan = True
@@ -373,7 +414,7 @@ class Planner(BoxComponent):
                             start[2] = -np.rad2deg(pos[2])
                             start[3] = 0
                             self.get_current_planning_graph(Game)
-                            traj, weight = self.get_path(start,end) 
+                            traj, weight = self.get_path(start,end)
                             # if no path, reverse first
                             if traj:
                                 await self.send_directive_to_car(car, end, Game, False, obs)
@@ -408,7 +449,7 @@ class Planner(BoxComponent):
             await self.out_channels['Supervisor'].send((car,response))
         await trio.sleep(0)
 
-    
+
     async def check_supervisor(self,send_response_channel,Game, Time): # directive/response system (receiving directives from supervisor)
         if TESTING_MODE:
             in_channel = self.in_channels['TestSuite']
@@ -429,7 +470,7 @@ class Planner(BoxComponent):
                 delidx = None
                 for key,val in self.spots.items():
                     if val == car.name:
-                        delidx = key      
+                        delidx = key
                 if delidx:
                     self.spots.pop(key)
                 self.spots.update({todo[1]: car.name})
@@ -463,8 +504,8 @@ class Planner(BoxComponent):
                             spot = self.spots.get(car.name)
                         except:
                             st()
-                            for key, val in self.spots.items(): 
-                                if val == car.name: 
+                            for key, val in self.spots.items():
+                                if val == car.name:
                                     spot = key
                         end = self.find_spot_coordinates(spot)
                     await self.send_directive_to_car(car, end,Game, True, None) # original graph
@@ -510,7 +551,7 @@ class Planner(BoxComponent):
     def check_reachable_from_car(self,spot,car):
         start = (car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, np.rad2deg(car.yaw)*(-1),0) # start position on the grid
         end = self.find_spot_coordinates(spot)
-        traj, _ = self.get_path(start,end) 
+        traj, _ = self.get_path(start,end)
         if traj:
             return True
         else:

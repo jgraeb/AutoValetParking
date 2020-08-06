@@ -20,7 +20,7 @@ class Pedestrian(BoxComponent):
                  prim_queue = None, # primitive queue
                  pedestrian_type = '3',
                  ):
-        # init_state: initial state by default 
+        # init_state: initial state by default
         self.name = 'Pedestrian {}'.format(id(self))
         self.state = np.array(init_state, dtype="float")
         self.alive_time = 0
@@ -104,7 +104,7 @@ class Pedestrian(BoxComponent):
             if total_distance != 0:
                 prim_progress += self.dt / (total_distance / vee)
             self.prim_queue.replace_top((prim_data, prim_progress)) # update primitive queue
-            
+
     async def get_walking_displacement(self, start, finish):
         dx = finish[0] - start[0]
         dy = finish[1] - start[1]
