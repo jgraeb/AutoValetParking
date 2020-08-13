@@ -58,11 +58,11 @@ GOAL_SPEED = 0.0
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
-T = 3  # horizon length
+T = 5  # horizon length (5)
 
 # mpc parameters
 R = np.diag([0.01, 0.01])  # input cost matrix
-Rd = np.diag([0.01, 0.01])  # input difference cost matrix
+Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
 GOAL_DIS = 2.5  # goal distance
@@ -88,7 +88,7 @@ TREAD = 0.7  # [m]
 WB = 2.5  # [m]
 
 MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
-MAX_DSTEER = np.deg2rad(20.0)  # maximum steering speed [rad/s]
+MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
 MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
 MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
 MAX_ACCEL = 1.0  # maximum accel [m/ss]
@@ -310,7 +310,7 @@ def linear_mpc_control(xref, xbar, x0, dref, breaking=None):
 
         A, B, C = get_linear_model_matrix(
             xbar[2, t], xbar[3, t], dref[0, t])
-        constraints += [x[:, t + 1] == A * x[:, t] + B * u[:, t] + C]
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
         if t < (T - 1):
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
@@ -394,7 +394,7 @@ def check_goal(state, goal, tind, nind,goalspeed, last_segment):
 
     if not last_segment:
         isgoal = (d <= GOAL_DIS)
-    else: 
+    else:
         isgoal = (d <= GOAL_DIS)
     if abs(tind - nind) >= 5:
         isgoal = False
@@ -633,7 +633,7 @@ def get_error(pos,reftraj,t):
     enderr = np.amin(err[-5:-1])#np.amin(err[-1])
     # find index at which err is less than tol
     try:
-        idx = next(x for x, val in enumerate(err) if val < TOL) 
+        idx = next(x for x, val in enumerate(err) if val < TOL)
         tmax=t[idx]
     except:
         tmax= 999
@@ -717,7 +717,7 @@ def get_grid_planner_prims(x_d,steps):
                         #print('primindex: '+str((idxa*3)+idxb+k))
                         prims[(idxa*3)+idxb+k][i]= pos
                         #print(prims)
-                
+
         lastpos=next_step
     #print('primitives:')
     #print(prims)
@@ -811,7 +811,7 @@ def get_grid_prims(x_d):
     cx = np.zeros((5,4))
     cy=np.zeros((5,4))
     cyaw=np.zeros((5,4))
-    # Start at 
+    # Start at
     startx = 4
     starty = 3
     # set up x coordinates
@@ -838,14 +838,14 @@ def get_grid_prims(x_d):
     cyaw[3,1] = -1/4*np.pi
     cyaw[4,1] = 1/4*np.pi
     cyaw[3,2] = -1/2*np.pi
-    cyaw[4,2] = 1/2*np.pi   
+    cyaw[4,2] = 1/2*np.pi
     cyaw[3,3] = -1/2*np.pi
-    cyaw[4,3] = 1/2*np.pi  
+    cyaw[4,3] = 1/2*np.pi
     ck = 0
     # print(cx)
     # print(cy)
     #(cyaw)
-    
+
     return cx, cy, cyaw, ck#
 
 
@@ -1163,7 +1163,7 @@ def stop_car(path,startv): # bringing car to a full stop asap
         plt.subplots()
         plt.plot(cx, cy, "-r", label="Reference Trajectory")
         plt.plot(x, y, "--g", label="Tracking")
-        
+
         plt.grid(True)
         plt.axis("equal")
         plt.xlabel("x[m]")
@@ -1207,7 +1207,7 @@ def track_path_forward(ref):
     # cyaw = np.deg2rad(ref[:,2]).reshape(len(ref),1)
     # direction = check_direction(ref)
     print(ref)
-    for i in range(0,len(ref)-1):  
+    for i in range(0,len(ref)-1):
         path = ref[i:i+2][:]
         print(path)
         cx = path[:,0]
