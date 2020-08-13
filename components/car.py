@@ -7,7 +7,7 @@ from prepare.boxcomponent import BoxComponent
 import trio
 import numpy as np
 from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED, TESTING_MODE
-#from prepare.communication import  
+#from prepare.communication import
 import motiontracking.mpc_tracking as tracking
 import math
 from components.game import Game
@@ -188,7 +188,7 @@ class Car(BoxComponent):
         self.Logger.info('{0} - delay: {1}'.format(self.name,self.delay))
         if self.delay > DELAY_THRESH and not self.area_requested:
             await self.request_reserved_area()
-        ck = 0 
+        ck = 0
         dl = 1.0  # course tick
         # check if car shoud be removed
         if self.status == 'Removed':
@@ -207,7 +207,7 @@ class Car(BoxComponent):
             self.last_segment = True
             self.idx = 0
             path = directive
-            cx = [entry[0]*SCALE_FACTOR_PLAN for entry in path[0]] 
+            cx = [entry[0]*SCALE_FACTOR_PLAN for entry in path[0]]
             cy = [entry[1]*SCALE_FACTOR_PLAN for entry in path[0]]
             cyaw = [np.deg2rad(entry[2])*-1 for entry in path[0]]
             self.direction = tracking.check_direction(path[0])
@@ -369,31 +369,31 @@ class Car(BoxComponent):
     def release_reserved_area(self,Game):
         if self.reserved:
             self.hold = False
-            self.Logger.info('{0} - Releasing the reserved area for Car {1}'.format(self.name, self.id))  
-            Game.release_reserved_area(self)  
+            self.Logger.info('{0} - Releasing the reserved area for Car {1}'.format(self.name, self.id))
+            Game.release_reserved_area(self)
             # self.area_requested = False
             # self.replan = False
         elif self in Game.reserved_areas_requested:
             Game.reserved_areas_requested.pop(self)
-            self.Logger.info('{0} - Releasing the requested area for Car {1}'.format(self.name,self.id))  
+            self.Logger.info('{0} - Releasing the requested area for Car {1}'.format(self.name,self.id))
         self.area_requested = False
         self.replan = False
 
 
     async def request_reserved_area(self):
         self.area_requested = True
-        self.Logger.info('{0} - Requesting reserved area for Car ID {0} due to delay {1}'.format(self.name,self.id, self.delay))   
+        self.Logger.info('{0} - Requesting reserved area for Car ID {0} due to delay {1}'.format(self.name,self.id, self.delay))
         response = 'RequestReservedArea'
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
         await self.send_response_channel.send((self,response))
 
     async def request_area(self):
         self.area_requested = True
-        self.Logger.info('{0} - Requesting reserved area for Car ID {1} due to delay {2}'.format(self.name, self.id, self.delay))   
+        self.Logger.info('{0} - Requesting reserved area for Car ID {1} due to delay {2}'.format(self.name, self.id, self.delay))
         response = 'RequestArea'
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
         await self.send_response_channel.send((self,response))
- 
+
     async def track_reference(self,Game, Time):
         self.Logger.info('{0} - Tracking path'.format(self.name))
         #print(self.ref)
@@ -407,17 +407,17 @@ class Car(BoxComponent):
             await self.request_reserved_area()
         #print("car.delay: "+str(self.delay))
         self.close = False
-        ck = 0 
+        ck = 0
         dl = 1.0  # course tick
         # check if car shoud be removed
         if self.status == 'Removed':
             print('{0} Removed'.format(self.name))
             self.v = 0
-            return 
+            return
         if not self.status == 'Replan':
             try:
                 self.check_if_car_is_in_spot(Game)
-            except: 
+            except:
                 st()
             if self.check_if_car_is_in_spot(Game):
                 self.Logger.info('{0} is in a parking spot'.format(self.name))
@@ -434,7 +434,7 @@ class Car(BoxComponent):
         else:
             # if self.id ==1:
             # chance = 1
-            chance = random.randint(1,100) 
+            chance = random.randint(1,100)
         if not self.replan:
             if len(self.ref)-1>10 and chance <=30:
                 failidx = np.random.randint(low=len(self.ref)-5, high=len(self.ref)-1, size=1)
@@ -458,7 +458,7 @@ class Car(BoxComponent):
             if (i==failidx):
                 print('{0} Failing'.format(self.name))
                 await self.failure(Game)
-                return  
+                return
             if i >= 1:
                 self.unparking = False
             self.close = False
@@ -467,7 +467,7 @@ class Car(BoxComponent):
             if self.check_car_close_2_spot(Game):
                 self.close = True
             self.status = 'Driving'
-            if len(self.ref)== 0: 
+            if len(self.ref)== 0:
                 await self.stop_car()
                 return
             path = self.ref[:][i]
@@ -478,7 +478,7 @@ class Car(BoxComponent):
                 cy = path[:,1]*SCALE_FACTOR_PLAN
                 cyaw = np.deg2rad(path[:,2])*-1
                 state = np.array([self.x, self.y,self.yaw])
-                self.direction = tracking.check_direction(path) 
+                self.direction = tracking.check_direction(path)
                 sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,self.direction)
                 initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
                 await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,Time)
@@ -540,7 +540,7 @@ class Car(BoxComponent):
         self.Logger.info('{0} - sending {1} response to Planner'.format(self.name,response))
         try:
             await self.send_response_channel.send((self,response))
-        except: 
+        except:
             st()
         await trio.sleep(1)
 
@@ -566,7 +566,7 @@ class Car(BoxComponent):
     def path_clear(self, gme):
         clear,_,_,_,_,_,_= self.check_path(gme)
         return clear
-    
+
     def check_clear_before_unparking(self,gme):
         self.unparking = True
         clear = gme.clear_before_unparking(self)

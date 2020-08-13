@@ -125,7 +125,7 @@ class TestPed(BoxComponent):
     async def ped_walk(self):
         if self.status == 'WalkE':
             while (self.state[0] < self.end_walk_lane[0]): # if not at the destination
-                print(self.state)
+                # print(self.state)
                 if self.status == 'Stop':
                     while self.status == 'Stop':
                         await trio.sleep(3)
@@ -135,7 +135,7 @@ class TestPed(BoxComponent):
                 await trio.sleep(0)
         elif self.status =='WalkW':
             while (self.state[0] > self.end_walk_lane[0]): # if not at the destination
-                print(self.state)
+                # print(self.state)
                 if self.status == 'Stop':
                     while self.status == 'Stop':
                         await trio.sleep(3)

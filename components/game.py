@@ -83,10 +83,10 @@ class Game(BoxComponent):
                 st()
             if len(res_path.coords)>=1:
                 try:
-                    traj = res_path[0] # if reserved path is multilinestring 
+                    traj = res_path[0] # if reserved path is multilinestring
                 except:
                     traj = res_path
-                
+
                 try:
                     point = Point([traj.coords[-1]])
                 except:
@@ -102,7 +102,7 @@ class Game(BoxComponent):
                 self.update_reserved_areas()
         else:
             #st()
-            newlinestring = make_line(ref) 
+            newlinestring = make_line(ref)
             area = newlinestring.buffer(3.5)
             point = None
             traj = newlinestring
@@ -135,9 +135,9 @@ class Game(BoxComponent):
         return False
 
     def is_reserved_area_clear(self,car): # check that area is already reserved and clear of other cars
-        if car not in self.reserved_areas: 
+        if car not in self.reserved_areas:
             return False
-        else: 
+        else:
             area = self.reserved_areas.get(car)
             self.update_car_boxes()
             for key,val in self.car_boxes.items():
@@ -173,10 +173,10 @@ class Game(BoxComponent):
             intersection = newlinestring.intersection(self.accept_box)
             print(intersection)
             try:
-                point = Point(intersection.coords[-1]) 
+                point = Point(intersection.coords[-1])
             except:
                 try:
-                    point = Point(intersection[-1].coords[-1]) 
+                    point = Point(intersection[-1].coords[-1])
                 except:
                     st()
         print('Intersection is at: {0}, {1}'.format(point.x,point.y))
@@ -192,7 +192,7 @@ class Game(BoxComponent):
     def update_reserved_area_for_car(self,car): # make sure to reserve area on path and release behind car
         if not car.unparking:
             path = car.ref[car.idx:]
-            path = make_line(path) 
+            path = make_line(path)
             if car not in self.trajs:
                 return
             else:
@@ -209,7 +209,7 @@ class Game(BoxComponent):
                         self.reserved_areas.update({car: rem_area})
                     elif self.reserved_areas_requested.get(car,0)!=0:
                         self.reserved_areas_requested.update({car: rem_area})
-    
+
     def update_reserved_areas(self): # check this again
         items_to_delete=[]
         # find if a reserved area is in requested and reserved list, should only happen one at a time due to update fcn
@@ -220,7 +220,7 @@ class Game(BoxComponent):
                 if key_req == key:
                     rep_key = key
                     break
-        # if yes check if it intersects another requested area, 
+        # if yes check if it intersects another requested area,
         if rep_key:
             rep_val = self.reserved_areas_requested.get(rep_key)
             for key,val in self.reserved_areas.items():
@@ -330,6 +330,16 @@ class Game(BoxComponent):
             rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
         return rotated_cone
 
+    def get_vision_cone_obs(self,car):
+        buffer = abs(car.v)/10*0.4
+        openangle = 45
+        length = 4.5 + buffer # m
+        cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
+        rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
+        if car.direction == -1 or car.unparking:
+            rotated_cone = affinity.rotate(rotated_cone, np.rad2deg(np.pi), origin = (car.x,car.y))
+        return rotated_cone
+
     def get_vision_cone_pedestrian(self,car):
         if car.direction == -1:
             length = 3 # m
@@ -376,7 +386,7 @@ class Game(BoxComponent):
         #             angle = self.rad2rad(angle)
         #             print('Angle after conv: '+str(angle))
         #             print('Caryaw'+str(yaw))
-        #             if car.direction ==1: 
+        #             if car.direction ==1:
         #                 if abs(angle-yaw) < np.pi/2 or abs(angle-yaw) > 3/4*np.pi:
         #                     clearpath = False
         #             car_angle = self.rad2rad(yaw+np.pi)
@@ -394,7 +404,7 @@ class Game(BoxComponent):
                         for cars in self.cars:
                             if cars.name == key:
                                 if cars.status=='Failure':# or cars.status =='Blocked':
-                                    blocked = True 
+                                    blocked = True
                                     blocked_by = cars
                                     self.Logger.info('GAME - Failure or blocked car {0} ahead of Car {1}'.format(cars.id, car.id))
         clearpath = True
@@ -418,9 +428,12 @@ class Game(BoxComponent):
                                 conflict_cars.append(cars)
                                 clearpath = False
         # check if an obstacle is in the way
+        myconeobs = self.get_vision_cone_obs(car)
         for key,val in self.obstacles.items():
-            if mycone.intersects(val):
+            if myconeobs.intersects(val):
                 clearpath = False
+                self.Logger.info('GAME - Blocked by an obstacle ID {0}'.format(car.id))
+                st()
         # check if a pedestrian is in the cone and I am not in the pedestrian's way
         mypedcone = self.get_vision_cone_pedestrian(car)
         for ped in self.peds:

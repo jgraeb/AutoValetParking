@@ -8,6 +8,7 @@ import trio
 from variables.global_vars import *
 import numpy as np
 from ipdb import set_trace as st
+import pickle
 
 
 class Obstacles(BoxComponent):
@@ -22,9 +23,17 @@ class Obstacles(BoxComponent):
         self.max_serial_number = 0
 
     def create_obstacle_map(self): # static obstacles initialized at the beginning of the simulation
-        self.obs = {1: (170, 100, 0, 3),
-        2: (180, 100, 0, 3),
-        3: (190, 100, 0, 3)}
+        # self.obs = {1: (170, 100, 0, 3), # example test data
+        # 2: (180, 100, 0, 3),
+        # 3: (190, 100, 0, 3)}
+
+        # read static obstacle map from test data file
+        with open('static_obstacle.dat', 'rb') as f:
+            obs_map = pickle.load(f)
+        obs = [(item[0][0], item[0][1], 0, item[1]) for item in obs_map]
+        self.obs = dict(enumerate(obs))
+        self.obs.pop(0) # delete big obstacle for test
+        #self.obs.pop(1) #  delete obstacle in red area
         self.num_obs = len(self.obs)
         self.max_serial_number = self.max_serial_number + self.num_obs
         print('Obstacle Map created')

@@ -91,7 +91,7 @@ class Planner(BoxComponent):
 
     def initialize_static_obstacle_map(self,Game):
         for obskey,val in self.static_obstacle_map.items():
-            val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]]
+            val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]*SCALE_FACTOR_PLAN]
             self.obstacles.update({obskey: (val)})
         Game.update_obstacles(self.obstacles)
         self.update_reachability_matrix(Game)
@@ -282,16 +282,9 @@ class Planner(BoxComponent):
             # print(DEL_XY_NODES_all)
             self.planning_graph = path_planner.update_planning_graph(planning_graph_in_use, DEL_XY_NODES)
             self.planning_graph_all = path_planner.update_planning_graph(self.planning_graph_reachability, DEL_XY_NODES_all)
-            #self.planning_graph_park = path_planner.update_planning_graph(self.planning_graph_reachability, DEL_XY_NODES_all)
-            #self.planning_graph = path_planner.update_planning_graph(self.planning_graph_in_use, del_nodes)
-            # else:
-            #     print('Failure blocks the narrow path')
-            #     self.planning_graph = self.original_lanes_planning_graph
         else:
             self.planning_graph = self.original_lanes_planning_graph
             self.planning_graph_all = self.planning_graph_reachability
-            #self.planning_graph_all = self.original_lanes_planning_graph
-            #self.planning_graph_park = self.planning_graph_reachability
 
     def get_path(self, start, end): # compute path using grid_planner + end_planner
         check_block = False

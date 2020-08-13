@@ -14,6 +14,8 @@ import trio
 import random
 from ipdb import set_trace as st
 import numpy as np
+import sys
+import pickle
 # import components
 from prepare.boxcomponent import BoxComponent
 from components.car import Car
@@ -66,14 +68,14 @@ class TestSuite(BoxComponent):
 
     async def start_ped(self, start_at, stop_at, ped_type):
         # spawn the ped in loc A and save to pedestrian list
-        print(ped_type)
+        #print(ped_type)
         if not ped_type:
             ped_type=random.choice(['1','2','3','4','5','6'])
         dx = stop_at[0]-start_at[0]
         dy = stop_at[0]-start_at[0]
         heading = np.arctan2(-dy,dx)
-        print(ped_type)
-        st()
+        #print(ped_type)
+        #st()
         ped = TestPed(init_state =(start_at[0],start_at[1],heading,0),pedestrian_type=ped_type)
         if dx >=0:
             ped.status = 'WalkE'
@@ -165,7 +167,7 @@ class TestSuite(BoxComponent):
             # example obstacle action
             if car.status == 'Completed' and not obs_added:
                 obs_added = True
-                await self.add_obs((100, 150, 0, 5))
+                #await self.add_obs((100, 150, 0, 5))
             await trio.sleep(0)
 
     async def run_test(self,Planner,Game):
@@ -178,6 +180,14 @@ class TestSuite(BoxComponent):
         now = trio.current_time()
         park_time = 300
         self.sup_2_ped, self.ped_2_sup = trio.open_memory_channel(25)
+        # read in the testing data
+        # sys.path.append('../static_obstacle_test_data')
+        with open('propositions.dat', 'rb') as f:
+            self.propositions = pickle.load(f)
+        with open('reachgoal.dat', 'rb') as f:
+            self.reachgoal = pickle.load(f)
+        # find which spot to park at from reachgoal test parking_data
+
         await self.generate_car(now, park_time)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.receive_response,Planner)
