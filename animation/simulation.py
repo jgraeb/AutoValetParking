@@ -41,7 +41,7 @@ class Simulation(BoxComponent):
         self.obs = dict()
         self.start_walk_lane = (2908,665)
         self.end_walk_lane = (3160,665)
-    
+
     async def add_car_to_sim(self):
         while True:
             async with self.in_channels['Game']:
@@ -96,7 +96,7 @@ class Simulation(BoxComponent):
         f.close()
         # TO DO figure out how to pickle car objects
         # pickle.dump('FRAME'+str(ind)+'\n',g)
-        # for car in self.cars: 
+        # for car in self.cars:
         #     draw_car(self.ax,self.background, car.x*SCALE_FACTOR_SIM+xoffset,car.y*SCALE_FACTOR_SIM+yoffset,car.yaw,car)
         #     # draw car trajectories when running sim
         #     if car.ref!= None and show_trajs:
@@ -107,7 +107,7 @@ class Simulation(BoxComponent):
         # store car data
         f = open('../animation/stored_data/car_pos_new.txt','a')
         f.write('FRAME'+str(ind)+'\n')
-        for car in self.cars: 
+        for car in self.cars:
             status = car.status
             if car.parked or car.in_spot:
                 status = 'Parked'
@@ -127,7 +127,7 @@ class Simulation(BoxComponent):
             # draw car trajectories
             if len(car.ref)!= None and show_trajs:
                 ref = car.ref[car.idx:]
-                show_traj(self.ax,self.background, ref) 
+                show_traj(self.ax,self.background, ref)
             f.writelines([str(car.x),' ', str(car.y),' ', str(car.yaw),' ',str(status), ' ',str(car.id), '\n'])
         f.close()
         # store parking spots
@@ -155,7 +155,7 @@ class Simulation(BoxComponent):
         self.fig = plt.figure()
         new = True
         while True:
-            frame_idx +=1 
+            frame_idx +=1
             #ped = pickle.load( open('pedestrain_file', "rb" ) )\
             if new:
                 self.ax = self.fig.add_axes([0,0,1,1]) # get rid of white border
@@ -169,6 +169,7 @@ class Simulation(BoxComponent):
             plt.draw()
             await trio.sleep(1)
             print('------------Figure updating-------------')
+            self.background.close()
 
     async def run(self):
         try:
