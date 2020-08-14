@@ -5,10 +5,12 @@
 
 from prepare.boxcomponent import BoxComponent
 import trio
-from variables.global_vars import *
+from variables.geometries import FAILURE_ACCEPT_BOX_1
+from variables.global_vars import SCALE_FACTOR_PLAN as SFP
 import numpy as np
 from ipdb import set_trace as st
 import pickle
+from shapely.geometry import Polygon, Point, LineString
 
 
 class Obstacles(BoxComponent):
@@ -26,14 +28,21 @@ class Obstacles(BoxComponent):
         # self.obs = {1: (170, 100, 0, 3), # example test data
         # 2: (180, 100, 0, 3),
         # 3: (190, 100, 0, 3)}
-
         # read static obstacle map from test data file
         with open('static_obstacle.dat', 'rb') as f:
             obs_map = pickle.load(f)
         obs = [(item[0][0], item[0][1], 0, item[1]) for item in obs_map]
         self.obs = dict(enumerate(obs))
-        self.obs.pop(0) # delete big obstacle for test
+        #self.obs.pop(0) # delete big obstacle for test
         #self.obs.pop(1) #  delete obstacle in red area
+        # delete all obstacles in unacceptable area
+        delkeys = []
+        for key,val in self.obs.items():
+            loc = Point([(val[0]*SFP,val[1]*SFP)]).buffer(val[3]*SFP)
+            if not loc.intersects(FAILURE_ACCEPT_BOX_1):
+                delkeys.append(key)
+        for key in delkeys:
+            self.obs.pop(key)
         self.num_obs = len(self.obs)
         self.max_serial_number = self.max_serial_number + self.num_obs
         print('Obstacle Map created')
