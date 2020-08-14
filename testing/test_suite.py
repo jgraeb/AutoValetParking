@@ -182,9 +182,9 @@ class TestSuite(BoxComponent):
         self.sup_2_ped, self.ped_2_sup = trio.open_memory_channel(25)
         # read in the testing data
         # sys.path.append('../static_obstacle_test_data')
-        with open('propositions.dat', 'rb') as f:
+        with open(sys.path[0]+'/../testing/static_obstacle_test_data/propositions.dat', 'rb') as f:
             self.propositions = pickle.load(f)
-        with open('reachgoal.dat', 'rb') as f:
+        with open(sys.path[0]+'/../testing/static_obstacle_test_data/reachgoal.dat', 'rb') as f:
             self.reachgoal = pickle.load(f)
         # find which spot to park at from reachgoal test parking_data
 

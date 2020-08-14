@@ -10,6 +10,7 @@ from variables.global_vars import SCALE_FACTOR_PLAN as SFP
 import numpy as np
 from ipdb import set_trace as st
 import pickle
+import sys
 from shapely.geometry import Polygon, Point, LineString
 
 
@@ -30,7 +31,7 @@ class Obstacles(BoxComponent):
         # 2: (180, 100, 0, 3),
         # 3: (190, 100, 0, 3)}
         # read static obstacle map from test data file
-        with open('static_obstacle.dat', 'rb') as f:
+        with open(sys.path[0]+'/../testing/static_obstacle_test_data/static_obstacle.dat', 'rb') as f:
             obs_map = pickle.load(f)
         obs = [(item[0][0], item[0][1], 0, item[1]) for item in obs_map]
         self.obs = dict(enumerate(obs))
