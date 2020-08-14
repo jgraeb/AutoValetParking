@@ -433,7 +433,7 @@ class Game(BoxComponent):
             if myconeobs.intersects(val):
                 clearpath = False
                 self.Logger.info('GAME - Blocked by an obstacle ID {0}'.format(car.id))
-                st()
+                #st()
         # check if a pedestrian is in the cone and I am not in the pedestrian's way
         mypedcone = self.get_vision_cone_pedestrian(car)
         for ped in self.peds:

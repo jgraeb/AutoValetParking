@@ -145,27 +145,57 @@ class Car(BoxComponent):
             if self.status != 'Replan':
                 self.status = 'Stop'
             print('STOPPING CAR {0}, velocity {1}'.format(self.id, self.v))
-            odelta, oa = None, None
+            # make up stopping traj
             buffer = self.v * 3.6 / 10 * 0.4 * 2 # formula for breaking distance plus 100 % safety margin
             cx = [self.x, self.x + 0.5 * self.direction*buffer*np.cos(self.yaw), self.x + self.direction*buffer*np.cos(self.yaw)]
             cy = [self.y, self.y + 0.5 * self.direction*buffer*np.sin(self.yaw), self.y + self.direction*buffer*np.sin(self.yaw)]
             cyaw = [self.yaw, self.yaw, self.yaw]
+            # designate goal
+            goal = [cx[-1], cy[-1]]
+            # set speed profile
+            sp = [self.v, 0, 0]
+            # define initial state - car current state
+            state = np.array([self.x, self.y,self.yaw])
+            initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+            self.state = initial_state
+            # initial yaw compensation
+            if self.state.yaw - cyaw[0] >= math.pi:
+                self.state.yaw -= math.pi * 2.0
+            elif self.state.yaw - cyaw[0] <= -math.pi:
+                self.state.yaw += math.pi * 2.0
+            time = 0.0
+            x = [self.state.x]
+            y = [self.state.y]
+            yaw = [self.state.yaw]
+            v = [self.state.v]
+            #vkmh = [state.v*3.6] # mod storing speed in km/h
+            t = [0.0]
+            d = [0.0]
+            a = [0.0]
+            target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
+            odelta, oa = None, None
+
+            cyaw = tracking.smooth_yaw(cyaw)
             ck = 0
             dl = 1.0
-            target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
-            sp = [self.v, 0, 0]
-            xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
-            x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
-            oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, True)
-            if odelta is not None:
-                di, ai = odelta[0], oa[0]
-            self.state = tracking.update_state(self.state, ai, di)
-            self.x = self.state.x
-            self.y = self.state.y
-            self.yaw = self.state.yaw
-            self.v = self.state.v
-            #self.status == 'Stop'
-            self.v = 0
+            while tracking.MAX_TIME >= time:
+                xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
+                # current state
+                x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
+                oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, True)
+                if odelta is not None:
+                    di, ai = odelta[0], oa[0]
+                self.state = tracking.update_state(self.state, ai, di)
+                self.x = self.state.x
+                self.y = self.state.y
+                self.yaw = self.state.yaw
+                self.v = self.state.v
+                time = time + tracking.DT
+                #self.status == 'Stop'
+                if tracking.check_goal(self.state, goal, target_ind, len(cx),0,self.last_segment): # modified goal speed
+                    self.v = 0
+                    break
+
         else:
             self.v = 0
 
