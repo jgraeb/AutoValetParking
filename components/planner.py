@@ -560,11 +560,11 @@ class Planner(BoxComponent):
         self.Logger = Logger
         self.Logger.info('PLANNER - started')
         sys.path.append('../motionplanning')
-        with open('planning_graph_lanes.pkl', 'rb') as f:
+        with open(sys.path[0]+'/../motionplanning/planning_graphs/planning_graph_lanes.pkl', 'rb') as f:
             self.original_lanes_planning_graph = pickle.load(f)
-        with open('planning_graph_free.pkl', 'rb') as f:
+        with open(sys.path[0]+'/../motionplanning/planning_graphs/planning_graph_free.pkl', 'rb') as f:
             self.original_free_planning_graph = pickle.load(f)
-        with open('planning_graph_reachability.pkl', 'rb') as f:
+        with open(sys.path[0]+'/../motionplanning/planning_graphs/planning_graph_reachability.pkl', 'rb') as f:
             self.planning_graph_reachability = pickle.load(f)
         self.planning_graph = self.original_lanes_planning_graph
         #self.planning_graph_park = self.planning_graph_reachability
