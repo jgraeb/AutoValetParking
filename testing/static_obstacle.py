@@ -24,7 +24,7 @@ class Obstacles(BoxComponent):
         self.obs = dict()
         self.num_obs = len(self.obs) # number of obstacles currently in the lot
         self.max_serial_number = 0
-        self.only_accept_obs = False
+        self.only_accept_obs = True
 
     def create_obstacle_map(self): # static obstacles initialized at the beginning of the simulation
         # self.obs = {1: (170, 100, 0, 3), # example test data
@@ -35,7 +35,7 @@ class Obstacles(BoxComponent):
             obs_map = pickle.load(f)
         obs = [(item[0][0], item[0][1], 0, item[1]) for item in obs_map]
         self.obs = dict(enumerate(obs))
-        #self.obs.pop(0) # delete big obstacle for test
+        self.obs.pop(0) # delete big obstacle for test
         #self.obs.pop(1) #  delete obstacle in red area
         # delete all obstacles in unacceptable area
         if self.only_accept_obs:

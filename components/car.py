@@ -426,7 +426,7 @@ class Car(BoxComponent):
 
     async def track_reference(self,Game, Time):
         self.Logger.info('{0} - Tracking path'.format(self.name))
-        #print(self.ref)
+        print(self.ref)
         self.update_delay(Time)
         try:
             self.current_segment = self.ref[:][0]
@@ -501,15 +501,26 @@ class Car(BoxComponent):
                 await self.stop_car()
                 return
             path = self.ref[:][i]
+            # check if it is a turning trajecory and then give smaller steps from here
+            # st()
+            #
             n = len(path)
-            for i in range(0,n-1):
+            for k in range(0,n-1):
                 self.current_segment = path
                 cx = path[:,0]*SCALE_FACTOR_PLAN
                 cy = path[:,1]*SCALE_FACTOR_PLAN
                 cyaw = np.deg2rad(path[:,2])*-1
                 state = np.array([self.x, self.y,self.yaw])
                 self.direction = tracking.check_direction(path)
-                sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,self.direction)
+                # check if next segment is in the same direction or not to determine speed
+                next_direction = tracking.check_direction(self.ref[:][i+1])
+                if self.direction !=next_direction:
+                    end_speed = 0.0
+                    driving_speed = TARGET_SPEED/2
+                else:
+                    end_speed = TARGET_SPEED
+                    driving_speed = TARGET_SPEED
+                sp = tracking.calc_speed_profile(cx, cy, cyaw, driving_speed,end_speed,self.direction)
                 initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
                 await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,Time)
                 await trio.sleep(0)

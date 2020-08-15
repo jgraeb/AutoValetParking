@@ -10,7 +10,7 @@ import numpy as np
 import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import create_bidirectional_channel, create_unidirectional_channel, get_current_time
-from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP, DROP_OFF_PIX, TESTING_MODE
+from variables.global_vars import SCALE_FACTOR_PLAN as SFP, PICK_UP, DROP_OFF_PIX, TESTING_MODE
 from variables.parking_data import parking_spots_original as parking_spots#,parking_spots_original
 import math
 from ipdb import set_trace as st
@@ -39,6 +39,7 @@ class Planner(BoxComponent):
         self.reserved_areas = dict()
         self.Logger = None
         self.static_obstacle_map = dict()
+        self.reversing_on = True
 
     async def get_car_position(self,car):
         self.Logger.info('PLANNER - Sending position request to Map system')
@@ -52,8 +53,8 @@ class Planner(BoxComponent):
     async def send_directive_to_car(self, car, end, Game, original, obstacle): # directive/response system
         pos = await self.get_car_position(car)
         start = np.zeros(4)
-        start[0] = pos[0]/SCALE_FACTOR_PLAN
-        start[1] = pos[1]/SCALE_FACTOR_PLAN
+        start[0] = pos[0]/SFP
+        start[1] = pos[1]/SFP
         start[2] = -np.rad2deg(pos[2])
         start[3] = 0
         if original:
@@ -91,7 +92,7 @@ class Planner(BoxComponent):
 
     def initialize_static_obstacle_map(self,Game):
         for obskey,val in self.static_obstacle_map.items():
-            val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]*SCALE_FACTOR_PLAN]
+            val = [val[0]*SFP,val[1]*SFP,val[2],val[3]*SFP]
             self.obstacles.update({obskey: (val)})
         Game.update_obstacles(self.obstacles)
         self.update_reachability_matrix(Game)
@@ -99,7 +100,7 @@ class Planner(BoxComponent):
     async def update_obstacle_map(self,Game,Obstacles,Simulation):
         self.obstacles.clear()
         for obskey,val in Obstacles.obs.items():
-            val = [val[0]*SCALE_FACTOR_PLAN,val[1]*SCALE_FACTOR_PLAN,val[2],val[3]]
+            val = [val[0]*SFP,val[1]*SFP,val[2],val[3]]
             self.obstacles.update({obskey: (val)})
             await self.check_obs_on_path(val, Game)
         Game.update_obstacles(self.obstacles)
@@ -147,7 +148,7 @@ class Planner(BoxComponent):
                         line = [(entry[0],entry[1]) for entry in ref]
                         path = LineString(line)
                         if obstacle.intersects(path):
-                            obstacle_plan = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]) # in grid pixels for planning
+                            obstacle_plan = Point([(obscar.x/SFP,obscar.y/SFP)]) # in grid pixels for planning
                             obs = {obscar.name : [obscar.x,obscar.y,obscar.yaw]} # in meters
                             if self.is_single_failure_in_acceptable_area(obs, gme):
                                 self.Logger.info('PLANNER - OBSTACLE ON CAR ID {0} PATH - NEED NEW PATH'.format(car.id))
@@ -164,7 +165,7 @@ class Planner(BoxComponent):
                                     await self.send_response_to_supervisor(resp) # to pick other spot
 
     async def check_obscar_on_path(self,obscar, gme): # check if the failure is on the path of a car in the garage using the Game
-        obstacle = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]).buffer(1.0) # future use car_box
+        obstacle = Point([(obscar.x/SFP,obscar.y/SFP)]).buffer(1.0) # future use car_box
         self.Logger.info('PLANNER - Checking if obstacle is on path')
         for carname in list(self.cars):
             if carname != obscar.name:
@@ -188,7 +189,7 @@ class Planner(BoxComponent):
                             line = [(entry[0],entry[1]) for entry in ref]
                             path = LineString(line)
                             if obstacle.intersects(path):
-                                obstacle_plan = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)]) # in grid pixels for planning
+                                obstacle_plan = Point([(obscar.x/SFP,obscar.y/SFP)]) # in grid pixels for planning
                                 obs = {obscar.name : [obscar.x,obscar.y,obscar.yaw]} # in meters
                                 if self.is_single_failure_in_acceptable_area(obs, gme):
                                     self.Logger.info('PLANNER - FAILURE ON CAR ID {0} PATH - NEED NEW PATH'.format(car.id))
@@ -219,6 +220,8 @@ class Planner(BoxComponent):
 
     def is_in_buffer(self,node_x,node_y,obs,): # find nodes in a buffer area around the obstacle to delete from grid
         # get car box around x,y
+        #print(obs)
+        #st()
         buffer_back = 6
         buffer_side = 5
         buffer_front = 10
@@ -227,6 +230,10 @@ class Planner(BoxComponent):
             x = obs[i][0]
             y = obs[i][1]
             yaw = obs[i][2]
+            if obs[i][3]!=0:
+                buffer_back = obs[i][3] + 6
+                buffer_side = obs[i][3] + 6
+                buffer_front = obs[i][3] + 6
             box = Polygon([(x-buffer_back, y+buffer_side),(x-buffer_back,y-buffer_side),(x+buffer_front,y-buffer_side),(x+buffer_front,y+buffer_side),(x-buffer_back, y+buffer_side)])
             rot_box = affinity.rotate(box, np.rad2deg(yaw), origin = (x,y))
             # add additional buffer of 1/2 gridsize to every node and check if it intersects the buffer region
@@ -243,19 +250,24 @@ class Planner(BoxComponent):
             obs_all = []
             obs_boxes_all = []
             for key,value in self.obstacles.items():
-                obstacle = {key : [value[0],value[1],value[2]]}
+                obstacle = {key : [value[0]/SFP,value[1]/SFP,value[2]]}
                 try:
-                    buff = value[3]
+                    buff = value[3]/SFP+ 25.0
                 except:
                     buff = 15.0
-                if self.is_single_failure_in_acceptable_area(obstacle, Game):
+                    value[3] = 0
+                if not self.reversing_on:
+                    if self.is_single_failure_in_acceptable_area(obstacle, Game):
                     #print('Failure is in acceptable area')
+                        obs.append(value)
+                        obs_boxes.append(Point(value[0]/SFP,value[1]/SFP).buffer(buff))
+                else:
                     obs.append(value)
-                    obs_boxes.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(buff))
+                    obs_boxes.append(Point(value[0]/SFP,value[1]/SFP).buffer(buff))
                 obs_all.append(value)
-                obs_boxes_all.append(Point(value[0]/SCALE_FACTOR_PLAN,value[1]/SCALE_FACTOR_PLAN).buffer(buff))
-            obs = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs]
-            obs_all = [(row[0]/SCALE_FACTOR_PLAN,row[1]/SCALE_FACTOR_PLAN, row[2]) for row in obs_all]
+                obs_boxes_all.append(Point(value[0]/SFP,value[1]/SFP).buffer(buff))
+            obs = [(row[0]/SFP,row[1]/SFP, row[2], row[3]) for row in obs]
+            obs_all = [(row[0]/SFP,row[1]/SFP, row[2], row[3]) for row in obs_all]
             #print(obs)
             #print(obs_all)
             # assume obs not in the acceptable area to use graph with lanes
@@ -358,15 +370,15 @@ class Planner(BoxComponent):
                     await self.send_reverse(car, Game)
                     # add reversing segment
                     # print('Car {0} - Reversing first'.format(car.id))
-                    # direc = [[car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, -np.rad2deg(car.yaw)]]
-                    # direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*5*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*5*np.sin(car.yaw), -np.rad2deg(car.yaw)])
-                    # direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+                    # direc = [[car.x/SFP, car.y/SFP, -np.rad2deg(car.yaw)]]
+                    # direc.append([car.x/SFP-car.direction*5*np.cos(car.yaw), car.y/SFP-car.direction*5*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+                    # direc.append([car.x/SFP-car.direction*10*np.cos(car.yaw), car.y/SFP-car.direction*10*np.sin(car.yaw), -np.rad2deg(car.yaw)])
                     # directive = [np.array(direc)]
                     # #st()
                     # Res_Area = Game.reserve(directive,car)
                     # self.reserved_areas.update({car.name: Res_Area})
                     # # compute path from end of reversing to destination
-                    # # start = [car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), car.yaw, 0]
+                    # # start = [car.x/SFP-car.direction*10*np.cos(car.yaw), car.y/SFP-car.direction*10*np.sin(car.yaw), car.yaw, 0]
                     # # end = self.find_destination(car)
                     # # self.get_current_planning_graph(Game)
                     # # path = self.get_path(start,end)
@@ -376,7 +388,7 @@ class Planner(BoxComponent):
                     # car.reverse = True
                     # await self.out_channels[car.name].send(directive)
                     # print('Reserve Replanning Area for Car {0}!!!'.format(car.id))
-                    # obs = Point([(obscar.x/SCALE_FACTOR_PLAN,obscar.y/SCALE_FACTOR_PLAN)])
+                    # obs = Point([(obscar.x/SFP,obscar.y/SFP)])
                     # try:
                     #     Game.reserve_replanning(car, directive, obs)
                     # except:
@@ -397,13 +409,13 @@ class Planner(BoxComponent):
                             car.replan = True
                             blocked_car = resp[1]
                             self.Logger.info('PLANNER - Blocked Car {0} needs a new directive'.format(car.id))
-                            obs = Point([(blocked_car.x/SCALE_FACTOR_PLAN, blocked_car.y/SCALE_FACTOR_PLAN)])
+                            obs = Point([(blocked_car.x/SFP, blocked_car.y/SFP)])
                             # try to get path
                             pos = await self.get_car_position(car) # in meters
                             # convert position to grid pixels and flip angle
                             start = np.zeros(4)
-                            start[0] = pos[0]/SCALE_FACTOR_PLAN
-                            start[1] = pos[1]/SCALE_FACTOR_PLAN
+                            start[0] = pos[0]/SFP
+                            start[1] = pos[1]/SFP
                             start[2] = -np.rad2deg(pos[2])
                             start[3] = 0
                             self.get_current_planning_graph(Game)
@@ -514,9 +526,9 @@ class Planner(BoxComponent):
 
     async def send_reverse(self,car, Game):
         self.Logger.info('PLANNER - Car {0} - Reversing first'.format(car.id))
-        direc = [[car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, -np.rad2deg(car.yaw)]]
-        direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*5*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*5*np.sin(car.yaw), -np.rad2deg(car.yaw)])
-        direc.append([car.x/SCALE_FACTOR_PLAN-car.direction*10*np.cos(car.yaw), car.y/SCALE_FACTOR_PLAN-car.direction*10*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+        direc = [[car.x/SFP, car.y/SFP, -np.rad2deg(car.yaw)]]
+        direc.append([car.x/SFP-car.direction*5*np.cos(car.yaw), car.y/SFP-car.direction*5*np.sin(car.yaw), -np.rad2deg(car.yaw)])
+        direc.append([car.x/SFP-car.direction*10*np.cos(car.yaw), car.y/SFP-car.direction*10*np.sin(car.yaw), -np.rad2deg(car.yaw)])
         directive = [np.array(direc)]
         Res_Area = Game.reserve(directive,car)
         self.reserved_areas.update({car.name: Res_Area})
@@ -542,7 +554,7 @@ class Planner(BoxComponent):
         return is_acceptable
 
     def check_reachable_from_car(self,spot,car):
-        start = (car.x/SCALE_FACTOR_PLAN, car.y/SCALE_FACTOR_PLAN, np.rad2deg(car.yaw)*(-1),0) # start position on the grid
+        start = (car.x/SFP, car.y/SFP, np.rad2deg(car.yaw)*(-1),0) # start position on the grid
         end = self.find_spot_coordinates(spot)
         traj, _ = self.get_path(start,end)
         if traj:
