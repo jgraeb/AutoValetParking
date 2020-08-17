@@ -35,7 +35,7 @@ class TestSuite(BoxComponent):
         self.Logger = None
         self.garage_open = True
 
-    async def generate_car(self, start_time, park_time):
+    async def generate_car(self, start_time, park_time, parking_spot_number):
         print('TEST SUITE - Generating car')
         arrive_time = get_current_time(start_time)
         depart_time = arrive_time + park_time
@@ -48,7 +48,7 @@ class TestSuite(BoxComponent):
         # update Game
         await self.out_channels['Game'].send(car)
         print("Car with Name {0} and ID {1} arrives at {2:.3f}".format(car.name,car.id, car.arrive_time))
-        await self.out_channels['Planner'].send([car, ('Park', self.spot_no)])
+        await self.out_channels['Planner'].send([car, ('Park', parking_spot_number)])
         self.cars.append(car)
 
     async def send_car_to_spot(self,car,spot):
@@ -187,8 +187,8 @@ class TestSuite(BoxComponent):
         with open(sys.path[0]+'/../testing/static_obstacle_test_data/reachgoal.dat', 'rb') as f:
             self.reachgoal = pickle.load(f)
         # find which spot to park at from reachgoal test parking_data
-
-        await self.generate_car(now, park_time)
+        parking_spot_number = random.sample(self.parking_spots.keys(),1)[0]
+        await self.generate_car(now, park_time, parking_spot_number)
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.receive_response,Planner)
             nursery.start_soon(self.update_system_state)
