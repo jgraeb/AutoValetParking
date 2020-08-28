@@ -5,12 +5,16 @@
 
 from prepare.boxcomponent import BoxComponent
 import trio
+import rospy
 import numpy as np
-from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED
+from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED, SCALE_FACTOR_PLAN, accSteerCtrl, velCtrl, turtlebotCtrl, accRotVelCtrl
 #from prepare.communication import  
 import motiontracking.mpc_tracking as tracking
 import math
 from components.game import Game
+from gazebo.src.RobotCtrl import RobotCtrl
+from gazebo.src.Publisher import Publisher
+from prepare.communication import get_current_time
 import random
 from ipdb import set_trace as st
 import sys
@@ -32,8 +36,11 @@ class State:
         self.v = v
 
 class Car(BoxComponent):
-    def __init__(self, arrive_time, depart_time):
+    def __init__(self, arrive_time, depart_time, car_nbr):
         super().__init__()
+        self.robot_ctrl = RobotCtrl()
+        self.publisher = Publisher(START_X, START_Y, START_YAW)
+        self.car_nbr = car_nbr
         self.name = 'Car {}'.format(id(self))
         self.arrive_time = arrive_time
         self.depart_time = depart_time
@@ -123,20 +130,21 @@ class Car(BoxComponent):
                     await trio.sleep(0)
                     #await self.send_response(send_response_channel)
 
-    async def iterative_linear_mpc_control(self, xref, x0, dref, oa, od, breaking):
+    def iterative_linear_mpc_control(self, xref, x0, dref, oa, od, h ,breaking):
         if oa is None or od is None:
             oa = [0.0] * tracking.T
             od = [0.0] * tracking.T
         for _ in range(tracking.MAX_ITER):
-            xbar = tracking.predict_motion(x0, oa, od, xref)
+            xbar = tracking.predict_motion(x0, oa, od, xref, h)
             poa, pod = oa[:], od[:]
-            oa, od, _, _, _, _ = tracking.linear_mpc_control(xref, xbar, x0, dref, breaking)
+            oa, od, _, _, _, _ = tracking.linear_mpc_control(xref, xbar, x0, dref, h, breaking)
             du = sum(abs(oa - poa)) + sum(abs(od - pod))  # calc u change value
             if du <= tracking.DU_TH:
                 break
         return oa, od
 
     async def stop_car(self): # bringing car to a full stop asap
+        #original version
         if not self.status == 'Stop' and not self.status=='Blocked' and not self.status=='Conflict':
         # bring car to a full stop
             if self.v == 0: # if car is already stopped
@@ -144,31 +152,131 @@ class Car(BoxComponent):
             if self.status != 'Replan':
                 self.status = 'Stop'
             print('STOPPING CAR {0}, velocity {1}'.format(self.id, self.v))
-            odelta, oa = None, None
+            #st()
+            # make up stopping traj
             buffer = self.v * 3.6 / 10 * 0.4 * 2 # formula for breaking distance plus 100 % safety margin
             cx = [self.x, self.x + 0.5 * self.direction*buffer*np.cos(self.yaw), self.x + self.direction*buffer*np.cos(self.yaw)]
             cy = [self.y, self.y + 0.5 * self.direction*buffer*np.sin(self.yaw), self.y + self.direction*buffer*np.sin(self.yaw)]
             cyaw = [self.yaw, self.yaw, self.yaw]
+            # designate goal
+            goal = [cx[-1], cy[-1]]
+            # set speed profile
+            sp = [self.v, 0, 0]
+            # define initial state - car current state
+            state = np.array([self.x, self.y,self.yaw])
+            initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+            self.state = initial_state
+            # initial yaw compensation
+            if self.state.yaw - cyaw[0] >= math.pi:
+                self.state.yaw -= math.pi * 2.0
+            elif self.state.yaw - cyaw[0] <= -math.pi:
+                self.state.yaw += math.pi * 2.0
+            time = 0.0
+            x = [self.state.x]
+            y = [self.state.y]
+            yaw = [self.state.yaw]
+            v = [self.state.v]
+            #vkmh = [state.v*3.6] # mod storing speed in km/h
+            t = [0.0]
+            d = [0.0]
+            a = [0.0]
+            target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
+            odelta, oa = None, None
+
+            cyaw = tracking.smooth_yaw(cyaw)
             ck = 0
             dl = 1.0
-            target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
-            sp = [self.v, 0, 0]
-            xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
-            x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
-            oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, True)
-            if odelta is not None:
-                di, ai = odelta[0], oa[0]
-            self.state = tracking.update_state(self.state, ai, di)
-            self.x = self.state.x
-            self.y = self.state.y
-            self.yaw = self.state.yaw
-            self.v = self.state.v
-            #self.status == 'Stop'
-            self.v = 0
+            while tracking.MAX_TIME >= time:
+                xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
+                # current state
+                x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
+                oa, odelta = self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, True)
+                if odelta is not None:
+                    di, ai = odelta[0], oa[0]
+                self.state = tracking.update_model_state(self.state, ai, di)
+                self.x = self.state.x
+                self.y = self.state.y
+                self.yaw = self.state.yaw
+                self.v = self.state.v
+                time = time + tracking.DT
+                #self.status == 'Stop'
+                if tracking.check_goal(self.state, goal, target_ind, len(cx),0,self.last_segment): # modified goal speed
+                    self.v = 0
+                    break
+
         else:
             self.v = 0
 
-    async def back_2_spot(self,Time,send_response_channel,Game):
+        # version adapted for turtlebots AccSteerCtrl, not tested
+       # if not self.status == 'Stop' and not self.status=='Blocked' and not self.status=='Conflict':
+       # # bring car to a full stop
+       #     if self.v == 0: # if car is already stopped
+       #         return
+       #     if self.status != 'Replan':
+       #         self.status = 'Stop'
+       #     print('STOPPING CAR {0}, velocity {1}'.format(self.id, self.v))
+       #     # make up stopping traj
+       #     buffer = self.v * 3.6 / 10 * 0.4 * 2 # formula for breaking distance plus 100 % safety margin
+       #     cx = [self.x, self.x + 0.5 * self.direction*buffer*np.cos(self.yaw), self.x + self.direction*buffer*np.cos(self.yaw)]
+       #     cy = [self.y, self.y + 0.5 * self.direction*buffer*np.sin(self.yaw), self.y + self.direction*buffer*np.sin(self.yaw)]
+       #     cyaw = [self.yaw, self.yaw, self.yaw]
+       #     # designate goal
+       #     goal = [cx[-1], cy[-1]]
+       #     # set speed profile
+       #     sp = [self.v, 0, 0]
+       #     # define initial state - car current state
+       #     state = np.array([self.x, self.y,self.yaw])
+       #     initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+       #     self.state = initial_state
+       #     # initial yaw compensation
+       #     if self.state.yaw - cyaw[0] >= math.pi:
+       #         self.state.yaw -= math.pi * 2.0
+       #     elif self.state.yaw - cyaw[0] <= -math.pi:
+       #         self.state.yaw += math.pi * 2.0
+       #     time = 0.0
+       #     x = [self.state.x]
+       #     y = [self.state.y]
+       #     yaw = [self.state.yaw]
+       #     v = [self.state.v]
+       #     #vkmh = [state.v*3.6] # mod storing speed in km/h
+       #     t = [0.0]
+       #     d = [0.0]
+       #     a = [0.0]
+       #     target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
+       #     odelta, oa = None, None
+#
+       #     cyaw = tracking.smooth_yaw(cyaw)
+       #     ck = 0
+       #     dl = 1.0
+       #     start_time = trio.current_time()
+       #     iterations = 0
+       #     while tracking.MAX_TIME >= time:
+       #         iterations += 1 
+       #         self.x, self.y, self.yaw = self.robot_ctrl.get_pos(self.car_nbr)
+       #         #self.yaw = -self.yaw
+       #         self.v, _ = self.robot_ctrl.get_vel(self.car_nbr)
+       #         self.state = State(x=self.x, y=self.y, yaw=self.yaw, v=self.v)
+       #         xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
+       #         if tracking.check_goal(self.state, goal, target_ind, len(cx),0,self.last_segment): # modified goal speed
+       #             self.robot_ctrl.set_vel(self.car_nbr, 0, 0)
+       #             self.v = 0
+       #             break
+       #         # current state
+       #         x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state 
+       #         oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, tracking.DT, True)
+       #         if odelta is not None:
+       #             di, ai = odelta[0], oa[0]
+       #             self.robot_ctrl.set_acc_n_steer(self.car_nbr, ai, di)
+       #         time = time + tracking.DT
+       #         #self.status == 'Stop'
+       #         if(trio.current_time() < start_time + iterations*tracking.DT):
+       #             await trio.sleep_until(start_time + iterations*tracking.DT)
+       # else:
+       #     self.robot_ctrl.set_vel(self.car_nbr, 0, 0)
+       #     self.v = 0
+
+
+    async def back_2_spot(self,Time,send_response_channel,Game): #not adapted for turtlebots
         #st()
         self.status = 'Replan'
         self.replan = True
@@ -188,7 +296,7 @@ class Car(BoxComponent):
         if self.delay > DELAY_THRESH and not self.area_requested:
             await self.request_reserved_area(send_response_channel)
         ck = 0 
-        dl = 1.0  # course tick
+        dl = 1.0  # course tick             
         # check if car shoud be removed
         if self.status == 'Removed':
             print('{0} Removed'.format(self.name))
@@ -247,7 +355,13 @@ class Car(BoxComponent):
         cyaw = tracking.smooth_yaw(cyaw)
         #self.waiting = False
         blocked = False
+        start_time = trio.current_time()
+        iterations = 0
+        ai = 0
+        di = 0
+        time_last = 0
         while tracking.MAX_TIME >= time:
+            iterations += 1 
             if self.status == 'Removed':
                 self.Logger.info('{0} - Removed'.format(self.name))
                 self.v = 0
@@ -265,6 +379,7 @@ class Car(BoxComponent):
                     break
             while not self.path_clear(Game):# or blocked:
                 self.hold = False
+                print("path not clear")
                 await self.stop_car()
                 if self.status == 'Removed':
                     self.Logger.info('{0} - Removed'.format(self.name))
@@ -341,20 +456,68 @@ class Car(BoxComponent):
             #print('Car {} back to driving'.format(self.id))
             self.status = 'Driving'
             self.waiting = False
+
+            #used for calculating the one step prediction error
+            #model_state = State(x=self.x, y=self.y, yaw=self.yaw, v=self.v)                    
+            #predicted_state = tracking.update_model_state(model_state, ai, di, tracking.DT)
+            
+            self.x, self.y, self.yaw = self.robot_ctrl.get_pos(self.car_nbr)
+            self.v, _ = self.robot_ctrl.get_vel(self.car_nbr)
+            self.state = State(x=self.x, y=self.y, yaw=self.yaw, v=self.v)
+
+            #For using the predicted states instead of the measured states.   
+            #self.state = tracking.update_model_state(self.state, ai, di, tracking.DT)
+            #self.x = self.state.x
+            #self.y = self.state.y
+            #self.yaw = self.state.yaw
+            #self.v = self.state.v
+
+            #self.publisher.publish_one_step_pred_error(self.x, self.y, self.v, self.yaw, predicted_state.x,
+            #                                            predicted_state.y, predicted_state.v, predicted_state.yaw)
+
             xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
+
+            if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed,self.last_segment): # modified goal speed
+                if self.last_segment:
+                    self.robot_ctrl.set_vel(self.car_nbr, 0, 0)
+                break
+            
             x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
-            oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, False)
+            
+            #For using the last sample time in the optimization
+            #time_now = trio.current_time()
+            #if time_last == 0:
+            #    h = tracking.DT
+            #else: 
+            #    h = time_now - time_last
+           
+            #For using DT as sample time
+            h = tracking.DT
+
+            oa, odelta = self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, h, False)
+            
+            #time_last = time_now
+            
+            #computing_time = trio.current_time()-time_now
+            #self.publisher.publish_float(computing_time)
+            
             if odelta is not None:
                 di, ai = odelta[0], oa[0]
-            self.state = tracking.update_state(self.state, ai, di)
+                if accSteerCtrl:
+                    self.robot_ctrl.set_acc_n_steer(self.car_nbr, ai, di)
+                elif velCtrl:
+                    self.robot_ctrl.set_vel_n_steer(self.car_nbr, ai, di)
+                elif turtlebotCtrl:
+                    self.robot_ctrl.set_vel(self.car_nbr, ai, di)
+                elif accRotVelCtrl:
+                    self.robot_ctrl.set_acc_n_rot_vel(self.car_nbr, ai, di)
+
             time = time + tracking.DT
-            self.x = self.state.x
-            self.y = self.state.y
-            self.yaw = self.state.yaw
-            self.v = self.state.v
-            await trio.sleep(0)
-            if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed,self.last_segment): # modified goal speed
-                break
+
+            if(trio.current_time() < start_time + iterations*tracking.DT):
+                await trio.sleep_until(start_time + iterations*tracking.DT)
+
+            
 
     def update_delay(self,Time):
         if self.requested:
@@ -428,9 +591,9 @@ class Car(BoxComponent):
         self.parked = False
         # including a failure in 20% of cars
         failidx = len(self.ref)
-        chance = random.randint(1,100) # changed to 0!!! 
-        if self.id ==1:
-            chance = 1
+        chance = 100 #random.randint(1,100) # changed to 0!!!   Runs without failures now.
+        #if self.id ==1:
+        #   chance = 1
         if not self.replan:
             if len(self.ref)-1>10 and chance <=30:
                 failidx = np.random.randint(low=len(self.ref)-5, high=len(self.ref)-1, size=1)
@@ -449,7 +612,7 @@ class Car(BoxComponent):
             print('{0} Stopping the Tracking, ID {1}'.format(self.name, self.id))
             await self.stop_car()
             return
-        for i in range(0,len(self.ref)-1):
+        for i in range(0,len(self.ref)):#-1
             self.idx = i
             if (i==failidx):
                 print('{0} Failing'.format(self.name))
@@ -468,55 +631,59 @@ class Car(BoxComponent):
                 return
             path = self.ref[:][i]
             n = len(path)
-            for i in range(0,n-1):
+            if i == len(self.ref)-1:
+                end_speed = 0
+            else:
+                end_speed = TARGET_SPEED
+            for k in range(0,n-1): # n-1
                 self.current_segment = path
                 cx = path[:,0]*SCALE_FACTOR_PLAN
                 cy = path[:,1]*SCALE_FACTOR_PLAN
                 cyaw = np.deg2rad(path[:,2])*-1
                 state = np.array([self.x, self.y,self.yaw])
                 self.direction = tracking.check_direction(path) 
-                sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,TARGET_SPEED,self.direction)
+                sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED,end_speed,self.direction)
                 initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,TARGET_SPEED,Game,send_response_channel,Time)
+                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
                 await trio.sleep(0)
             if self.status == 'Replan' or self.status=='Removed' or self.status =='Blocked':
                 return
-        if not self.status == 'Failure' and len(self.ref)!=0:
-            self.last_segment = True
-            self.idx = len(self.ref)-1
-            #state = np.array([self.x, self.y,self.yaw])
-            path = self.ref[:][-1]
-            n = len(path)
-            for i in range(0,n-1):
-                #print('i'+str(i))
-                path_seg = path[i:i+2]
-                cx = path_seg[:,0]*SCALE_FACTOR_PLAN
-                cy = path_seg[:,1]*SCALE_FACTOR_PLAN
-                cyaw = np.deg2rad(path[:,2])*-1
-                self.direction = tracking.check_direction(path)
-                state = np.array([self.x, self.y,self.yaw])
-                initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
-                end_speed = TARGET_SPEED/2
-                if i == len(path)-2:
-                    end_speed = 0.0
-                sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
-                await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
-                if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
-                    return
-            self.status = 'Completed'
-            self.is_at_pickup = self.check_at_pickup(Game)
-            if self.is_at_pickup:
-                self.retrieving = False
-            self.last_segment = False
-            if self.check_if_car_is_in_spot(Game):
-                #self.parked = True
-                self.in_spot = True
-                self.Logger.info('{0} is in a parking spot'.format(self.name))
-            self.parking = False
-            self.ref = []
-            #if self.reverse:
-            #    self.status = '' # change to expecting path
-            await self.send_response(send_response_channel)
+       # if not self.status == 'Failure' and len(self.ref)!=0:
+       #     self.last_segment = True
+       #     self.idx = len(self.ref)-1
+       #     #state = np.array([self.x, self.y,self.yaw])
+       #     path = self.ref[:][-1]
+       #     n = len(path)
+       #     for i in range(0,n-1):
+       #         #print('i'+str(i))
+       #         path_seg = path[i:i+2]
+       #         cx = path_seg[:,0]*SCALE_FACTOR_PLAN
+       #         cy = path_seg[:,1]*SCALE_FACTOR_PLAN
+       #         cyaw = np.deg2rad(path[:,2])*-1
+       #         self.direction = tracking.check_direction(path)
+       #         state = np.array([self.x, self.y,self.yaw])
+       #         initial_state = State(x=state[0], y=state[1], yaw=state[2], v=self.v)
+       #         end_speed = TARGET_SPEED/2
+       #         if i == len(path)-2:
+       #             end_speed = 0.0
+       #         sp = tracking.calc_speed_profile(cx, cy, cyaw, TARGET_SPEED/2,end_speed,self.direction)
+       #         await self.track_async(cx, cy, cyaw, ck, sp, dl, initial_state,end_speed,Game,send_response_channel,Time)
+       #         if self.status == 'Replan' or self.status=='Removed' or self.status=='Blocked':
+       #             return
+        self.status = 'Completed'
+        self.is_at_pickup = self.check_at_pickup(Game)
+        if self.is_at_pickup:
+            self.retrieving = False
+        self.last_segment = False
+        if self.check_if_car_is_in_spot(Game):
+            #self.parked = True
+            self.in_spot = True
+            self.Logger.info('{0} is in a parking spot'.format(self.name))
+        self.parking = False
+        self.ref = []
+        #if self.reverse:
+        #    self.status = '' # change to expecting path
+        await self.send_response(send_response_channel)
 
     async def send_response(self,send_response_channel):
         await trio.sleep(1)
@@ -598,6 +765,7 @@ class Car(BoxComponent):
     async def run(self,send_response_channel,Game, Time, Logger):
         self.Logger = Logger
         self.Logger.info('{0} (ID {1}) - started'.format(self.name,self.id))
+        #rospy.init_node('Robot_ctrl_{}'.format(self.car_nbr))
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.update_planner_command,send_response_channel,Game, Time)
             if self.cancel:

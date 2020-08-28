@@ -1,88 +1,73 @@
 # Parking lot artifacts, geometries used in AVP layers
-from variables.global_vars import SCALE_FACTOR_PLAN as SFP, SCALE_FACTOR_SIM as SFS, GROUND_PLANE_MPP_LRES
-from variables.parking_data import parking_spots
+from variables.global_vars import  SCALE_FACTOR_PLAN
+from variables.parking_data import parking_spots_gazebo_test as parking_spots
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
 
 ##
 # Supervisor Data
-## [grid_pix(res: 300*250)*SFP=meters]
-UPPER_SPOTS = Polygon([(30*SFP, 120*SFP), (155*SFP, 120*SFP), (155*SFP, 175*SFP), (30*SFP, 175*SFP), (30*SFP, 120*SFP)])
-LOWER_SPOTS = Polygon([(30*SFP, 190*SFP), (30*SFP, 240*SFP), (220*SFP, 240*SFP), (220*SFP, 190*SFP), (30*SFP, 190*SFP)])
-MIDDLE_BOX = Polygon([(5*SFP,130*SFP),(5*SFP,230*SFP),(30*SFP,230*SFP),(30*SFP,130*SFP),(5*SFP,130*SFP)])
+## [grid_pix(res: 250*250)*SFP=meters]
 
-UPPER_SPOTS_GAZEBO = Polygon([(39*GROUND_PLANE_MPP_LRES, 120*GROUND_PLANE_MPP_LRES),
-                            (106*GROUND_PLANE_MPP_LRES, 120*GROUND_PLANE_MPP_LRES),
-                            (106*GROUND_PLANE_MPP_LRES, 175*GROUND_PLANE_MPP_LRES),
-                            (39*GROUND_PLANE_MPP_LRES, 175*GROUND_PLANE_MPP_LRES),
-                            (39*GROUND_PLANE_MPP_LRES, 120*GROUND_PLANE_MPP_LRES)])
+UPPER_SPOTS = Polygon([(39*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN),
+                            (106*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN),
+                            (106*SCALE_FACTOR_PLAN, 175*SCALE_FACTOR_PLAN),
+                            (39*SCALE_FACTOR_PLAN, 175*SCALE_FACTOR_PLAN),
+                            (39*SCALE_FACTOR_PLAN, 120*SCALE_FACTOR_PLAN)])
 
-LOWER_SPOTS_GAZEBO  = Polygon([(39*GROUND_PLANE_MPP_LRES, 190*GROUND_PLANE_MPP_LRES),
-                            (39*GROUND_PLANE_MPP_LRES, 240*GROUND_PLANE_MPP_LRES),
-                            (171*GROUND_PLANE_MPP_LRES, 240*GROUND_PLANE_MPP_LRES),
-                            (171*GROUND_PLANE_MPP_LRES, 190*GROUND_PLANE_MPP_LRES),
-                            (39*GROUND_PLANE_MPP_LRES, 190*GROUND_PLANE_MPP_LRES)])
+LOWER_SPOTS  = Polygon([(39*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN),
+                            (39*SCALE_FACTOR_PLAN, 240*SCALE_FACTOR_PLAN),
+                            (171*SCALE_FACTOR_PLAN, 240*SCALE_FACTOR_PLAN),
+                            (171*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN),
+                            (39*SCALE_FACTOR_PLAN, 190*SCALE_FACTOR_PLAN)])
 
-MIDDLE_BOX_GAZEBO  = Polygon([(14*GROUND_PLANE_MPP_LRES,130*GROUND_PLANE_MPP_LRES),
-                            (14*GROUND_PLANE_MPP_LRES,230*GROUND_PLANE_MPP_LRES),
-                            (39*GROUND_PLANE_MPP_LRES,230*GROUND_PLANE_MPP_LRES),
-                            (39*GROUND_PLANE_MPP_LRES,130*GROUND_PLANE_MPP_LRES),
-                            (14*GROUND_PLANE_MPP_LRES,130*GROUND_PLANE_MPP_LRES)])
+MIDDLE_BOX  = Polygon([(14*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN),
+                            (14*SCALE_FACTOR_PLAN, 230*SCALE_FACTOR_PLAN),
+                            (39*SCALE_FACTOR_PLAN, 230*SCALE_FACTOR_PLAN),
+                            (39*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN),
+                            (14*SCALE_FACTOR_PLAN, 130*SCALE_FACTOR_PLAN)])
     
 ##
 # Planner Data
 ## 
-LANES_BOX = Polygon([(150,50),(150,230),(230,230),(230,50),(150,50)]) #[grid_pix(res: 300*250)]
-LANES_BOX_GAZEBO = Polygon([(101,50),(101,230),(181,230),(181,50),(101,50)])
+LANES_BOX = Polygon([(101,50),(101,230),(181,230),(181,50),(101,50)]) #[grid_pix(res: 250*250)]
         
 ##
 # Camera Data
 ##
-DROPOFF_BOX = Polygon([(40, 18), (40, 15), (47, 18), (47, 15), (40, 18)])
-PICKUP_BOX = Point(260*SFP, 60*SFP).buffer(1.0)
-PARK_BOXES = [Point(parking_spots[i][0]*SFP,parking_spots[i][1]*SFP).buffer(1.0) for i in list(parking_spots.keys())]
-PARK_BOXES_AREA = [Point(parking_spots[i][0]*SFP,parking_spots[i][1]*SFP).buffer(3.0) for i in list(parking_spots.keys())]
-FAILURE_ACCEPT_BOX_1 = Polygon([(155*SFP, 71*SFP), (156*SFP, 133*SFP), (174*SFP, 133*SFP), (174*SFP, 158*SFP), (156*SFP, 158*SFP),
-                                (156*SFP, 202*SFP), (185*SFP, 203*SFP), (185*SFP, 227*SFP), (223*SFP, 227*SFP), (223*SFP, 71*SFP),
-                                (155*SFP, 71*SFP)])
-LANE_1_BOX = Polygon([(155*SFP, 50*SFP), (190*SFP, 50*SFP), (190*SFP, 160*SFP), (155*SFP, 160*SFP), (155*SFP, 50*SFP)])
-LANE_2_BOX = Polygon([(190*SFP, 50*SFP), (190*SFP, 227*SFP), (223*SFP, 227*SFP), (223*SFP, 50*SFP), (190*SFP, 50*SFP)])
+DROPOFF_BOX = Polygon([(83*SCALE_FACTOR_PLAN, 60*SCALE_FACTOR_PLAN),
+                            (83*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN),
+                            (106*SCALE_FACTOR_PLAN, 60*SCALE_FACTOR_PLAN),
+                            (106*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN),
+                            (83*SCALE_FACTOR_PLAN, 60*SCALE_FACTOR_PLAN)])
 
+PICKUP_BOX = Point(194*SCALE_FACTOR_PLAN, 60*SCALE_FACTOR_PLAN).buffer(1.0)
 
-DROPOFF_BOX_GAZEBO = Polygon([(83*GROUND_PLANE_MPP_LRES, 60*GROUND_PLANE_MPP_LRES),
-                            (83*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES),
-                            (106*GROUND_PLANE_MPP_LRES, 60*GROUND_PLANE_MPP_LRES),
-                            (106*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES),
-                            (83*GROUND_PLANE_MPP_LRES, 60*GROUND_PLANE_MPP_LRES)])
+PARK_BOXES = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,
+                    parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(1.0) for i in list(parking_spots.keys())]
+PARK_BOXES_AREA = [Point(parking_spots[i][0]*SCALE_FACTOR_PLAN,
+                        parking_spots[i][1]*SCALE_FACTOR_PLAN).buffer(3.0) for i in list(parking_spots.keys())]
 
-PICKUP_BOX_GAZEBO = Point(194*GROUND_PLANE_MPP_LRES, 60*GROUND_PLANE_MPP_LRES).buffer(1.0)
+FAILURE_ACCEPT_BOX_1 = Polygon([(106*SCALE_FACTOR_PLAN, 71*SCALE_FACTOR_PLAN),
+                                    (107*SCALE_FACTOR_PLAN, 133*SCALE_FACTOR_PLAN),
+                                    (125*SCALE_FACTOR_PLAN, 133*SCALE_FACTOR_PLAN),
+                                    (125*SCALE_FACTOR_PLAN, 158*SCALE_FACTOR_PLAN),
+                                    (107*SCALE_FACTOR_PLAN, 158*SCALE_FACTOR_PLAN),
+                                    (107*SCALE_FACTOR_PLAN, 202*SCALE_FACTOR_PLAN),
+                                    (136*SCALE_FACTOR_PLAN, 203*SCALE_FACTOR_PLAN),
+                                    (136*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN),
+                                    (174*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN),
+                                    (174*SCALE_FACTOR_PLAN, 71*SCALE_FACTOR_PLAN),
+                                    (106*SCALE_FACTOR_PLAN, 71*SCALE_FACTOR_PLAN)])
 
-PARK_BOXES_GAZEBO = [Point(parking_spots[i][0]*GROUND_PLANE_MPP_LRES,
-                    parking_spots[i][1]*GROUND_PLANE_MPP_LRES).buffer(1.0) for i in list(parking_spots.keys())]
-PARK_BOXES_AREA_GAZEBO = [Point(parking_spots[i][0]*GROUND_PLANE_MPP_LRES,
-                        parking_spots[i][1]*GROUND_PLANE_MPP_LRES).buffer(3.0) for i in list(parking_spots.keys())]
+LANE_1_BOX = Polygon([(106*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN),
+                            (141*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN),
+                            (141*SCALE_FACTOR_PLAN, 160*SCALE_FACTOR_PLAN),
+                            (106*SCALE_FACTOR_PLAN, 160*SCALE_FACTOR_PLAN),
+                            (106*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN)])
 
-FAILURE_ACCEPT_BOX_1_GAZEBO = Polygon([(106*SFP, 71*SFP),
-                                    (107*GROUND_PLANE_MPP_LRES, 133*GROUND_PLANE_MPP_LRES),
-                                    (125*GROUND_PLANE_MPP_LRES, 133*GROUND_PLANE_MPP_LRES),
-                                    (125*GROUND_PLANE_MPP_LRES, 158*GROUND_PLANE_MPP_LRES),
-                                    (107*GROUND_PLANE_MPP_LRES, 158*GROUND_PLANE_MPP_LRES),
-                                    (107*GROUND_PLANE_MPP_LRES, 202*GROUND_PLANE_MPP_LRES),
-                                    (136*GROUND_PLANE_MPP_LRES, 203*GROUND_PLANE_MPP_LRES),
-                                    (136*GROUND_PLANE_MPP_LRES, 227*GROUND_PLANE_MPP_LRES),
-                                    (174*GROUND_PLANE_MPP_LRES, 227*GROUND_PLANE_MPP_LRES),
-                                    (174*GROUND_PLANE_MPP_LRES, 71*GROUND_PLANE_MPP_LRES),
-                                    (106*GROUND_PLANE_MPP_LRES, 71*GROUND_PLANE_MPP_LRES)])
-
-LANE_1_BOX_GAZEBO = Polygon([(106*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES),
-                            (141*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES),
-                            (141*GROUND_PLANE_MPP_LRES, 160*GROUND_PLANE_MPP_LRES),
-                            (106*GROUND_PLANE_MPP_LRES, 160*GROUND_PLANE_MPP_LRES),
-                            (106*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES)])
-
-LANE_2_BOX_GAZEBO = Polygon([(141*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES),
-                            (141*GROUND_PLANE_MPP_LRES, 227*GROUND_PLANE_MPP_LRES),
-                            (174*GROUND_PLANE_MPP_LRES, 227*GROUND_PLANE_MPP_LRES),
-                            (174*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES),
-                            (141*GROUND_PLANE_MPP_LRES, 50*GROUND_PLANE_MPP_LRES)])
+LANE_2_BOX = Polygon([(141*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN),
+                            (141*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN),
+                            (174*SCALE_FACTOR_PLAN, 227*SCALE_FACTOR_PLAN),
+                            (174*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN),
+                            (141*SCALE_FACTOR_PLAN, 50*SCALE_FACTOR_PLAN)])

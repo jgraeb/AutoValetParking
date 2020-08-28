@@ -11,13 +11,14 @@ import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import create_bidirectional_channel, create_unidirectional_channel, get_current_time
 from variables.global_vars import SCALE_FACTOR_PLAN, PICK_UP, DROP_OFF_PIX
-from variables.parking_data import parking_spots_original as parking_spots#,parking_spots_original
+from variables.parking_data import parking_spots_gazebo_test as parking_spots#,parking_spots_original
 import math
 from ipdb import set_trace as st
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
 from shapely import affinity
+
 
 class Planner(BoxComponent):
     def __init__(self, nursery):
@@ -38,6 +39,7 @@ class Planner(BoxComponent):
         self.reserved_areas = dict()
         self.Logger = None
         self.static_obstacle_map = dict()
+        self.first = True
 
     async def get_car_position(self,car):
         self.Logger.info('PLANNER - Sending position request to Map system')
@@ -59,7 +61,22 @@ class Planner(BoxComponent):
             self.planning_graph = self.original_lanes_planning_graph
         else:
             self.get_current_planning_graph(Game)
-            traj, weight = self.get_path(start,end) 
+            traj, weight = self.get_path(start,end)
+            #traj = traj[0:5]
+            #traj = ([np.array([[120, 60, 0],
+                            #[130, 60,  0]])])
+
+            #traj = ([np.array([[100,  60, 0], [110, 60, -45], [120, 70, -90], [120, 80, -90]]),
+            #                np.array([[120,  80, -90], [120, 90, -90.]]),
+            #                np.array([[120,  90, -90], [120, 100, -90.]]),
+            #                np.array([[120, 100, -90], [120, 110, -90.]]),
+            #                np.array([[120, 110, -90], [120, 120, -90.]]),
+            #                np.array([[120, 120, -90], [120, 130, -90.]]),
+            #                np.array([[120, 130, -90], [120, 140, -135.], [110, 150, 180], [100, 150, 180]]),
+            #                np.array([[100, 150, 180], [86, 150, 119.7448813],[74, 129, 119.7448813]])])
+            #if(self.first):
+            #    print(traj)
+            #    self.first = False
         self.Logger.info('PLANNER - {0} driving from {1} to {2}, Path weight: {3}'.format(car.name,start,end,weight))
         if traj:
             if car.replan and not car.new_spot:

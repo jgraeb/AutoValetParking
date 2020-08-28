@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from animation.helper import draw_car, draw_pedestrian, show_traj, label_spots, draw_obs
 from animation.component import parking_lot
 from variables.global_vars import SCALE_FACTOR_SIM, SCALE_FACTOR_PLAN
-from variables.parking_data import parking_spots
+from variables.parking_data import parking_spots_gazebo_test as parking_spots
 #from motionplanning.parking_data import parking_spots
 from ipdb import set_trace as st
 import time
@@ -168,7 +168,7 @@ class Simulation(BoxComponent):
             plt.pause(0.001)
             plt.draw()
             await trio.sleep(1)
-            print('------------Figure updating-------------')
+            #print('------------Figure updating-------------')
 
     async def run(self):
         try:

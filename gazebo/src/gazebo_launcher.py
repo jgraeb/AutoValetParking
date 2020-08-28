@@ -60,19 +60,19 @@ while not rospy.is_shutdown():
 
         for i in range(0, nbr_of_robots*3, 3):
             launch_folder = catkin_ws_folder+'/src/AutoValetParking/gazebo/launch/robot.launch'
-            roslaunch_args = ['x:={}'.format(robots[i]), 'y:={}'.format(robots[i+1]), 'yaw:={}'.format(robots[i+2]), 'robot_nbr:={}'.format(int(i/3))]
+            roslaunch_args = ['x:={}'.format(robots[i]), 'y:=-{}'.format(robots[i+1]), 'yaw:={}'.format(robots[i+2]), 'robot_nbr:={}'.format(int(i/3))]
             launchers.append(roslaunch.parent.ROSLaunchParent(uuid, [(launch_folder, roslaunch_args)]))
             launchers[-1].start()
 
         for i in range(0, nbr_of_pedestrians*3, 3):
             launch_folder = catkin_ws_folder+'/src/AutoValetParking/gazebo/launch/pedestrian.launch'
-            roslaunch_args = ['x:={}'.format(pedestrians[i]), 'y:={}'.format(pedestrians[i+1]), 'yaw:={}'.format(pedestrians[i+2]), 'pedestrian_nbr:={}'.format(int(i/3))]
+            roslaunch_args = ['x:={}'.format(pedestrians[i]), 'y:=-{}'.format(pedestrians[i+1]), 'yaw:={}'.format(pedestrians[i+2]), 'pedestrian_nbr:={}'.format(int(i/3))]
             launchers.append(roslaunch.parent.ROSLaunchParent(uuid, [(launch_folder, roslaunch_args)]))
             launchers[-1].start()
 
         for i in range(0, nbr_of_obstacles*3, 3):
             launch_folder = catkin_ws_folder+'/src/AutoValetParking/gazebo/launch/obstacle.launch'
-            roslaunch_args = ['x:={}'.format(obstacles[i]), 'y:={}'.format(obstacles[i+1]), 'yaw:={}'.format(obstacles[i+2]), 'obstacle_nbr:={}'.format(int(i/3))]
+            roslaunch_args = ['x:={}'.format(obstacles[i]), 'y:=-{}'.format(obstacles[i+1]), 'yaw:={}'.format(obstacles[i+2]), 'obstacle_nbr:={}'.format(int(i/3))]
             launchers.append(roslaunch.parent.ROSLaunchParent(uuid, [(launch_folder, roslaunch_args)]))
             launchers[-1].start()       
 

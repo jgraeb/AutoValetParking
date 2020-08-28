@@ -3,13 +3,14 @@
 # California Institute of Technology
 # June, 2020
 
+import math
 import rospy
 import sys
 from std_msgs.msg import UInt16
 from std_msgs.msg import Float32MultiArray
 
 sys.path.append('../../') # enable importing modules from an upper directory:
-from variables.global_vars import nbr_of_robots
+from variables.global_vars import nbr_of_robots, back_to_sim_front_wheel_length, MAX_STEER, MAX_DSTEER, MAX_SPEED, MIN_SPEED, MAX_ACCEL, MAX_STEER
 
 class RobotCtrl:
     """This class is used for setting velocities and reading the states of the robots in the gazebo simulation.
@@ -20,46 +21,84 @@ class RobotCtrl:
         "Initializes the ros node, sets up subscribed and published topics and creates variables for storing the data."     
         
         self.pub_vel = rospy.Publisher('robot_set_vel', Float32MultiArray, queue_size=1)
+        self.pub_acc_steer = rospy.Publisher('robot_set_acc_steer', Float32MultiArray, queue_size=1)
+        self.pub_acc_rot_vel = rospy.Publisher('robot_set_acc_rot_vel', Float32MultiArray, queue_size=1)
         self.pub_state_request = rospy.Publisher('robot_state_request', UInt16, queue_size=1)
         rospy.Subscriber('robot_state', Float32MultiArray)
 
         self.vel_commands = [[0, 0] for i in range(nbr_of_robots)]
+        self.acc_steer_commands = [[0, 0] for i in range(nbr_of_robots)]
+        self.acc_rot_vel_commands = [[0, 0] for i in range(nbr_of_robots)]
         self.robot_states = [[0, 0, 0, 0, 0] for i in range(nbr_of_robots)] #[pos_x, pos_y, orientation, lin_vel, rot_vel]
-        self.vel_topic = Float32MultiArray()
-
-
-    def set_lin_vel(self, robot_nbr, lin_vel):
-        "Sets a new linear velocity for a given robot number. [m/s]"
-        if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
-            raise Exception("Invalid robot number")
-        self.vel_commands[robot_nbr][0] = lin_vel
-        self.__publish_vel(robot_nbr)
-
-
-    def set_rot_vel(self, robot_nbr, rot_vel):
-        "Sets a new rotational velocity for a given robot number. [rad/s]"
-        if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
-            raise Exception("Invalid robot number")
-        self.vel_commands[robot_nbr][1] = rot_vel
-        self.__publish_vel(robot_nbr)  
+        self.topic = Float32MultiArray()
 
 
     def set_vel(self, robot_nbr, lin_vel, rot_vel):
         "Sets a new linear and rotational velocity for a given robot number. [m/s], [rad/s]"
         if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
             raise Exception("Invalid robot number")
-        self.vel_commands[robot_nbr] = [lin_vel, rot_vel]
+        if abs(rot_vel) > MAX_DSTEER:
+                rot_vel = math.copysign(MAX_DSTEER, rot_vel)
+        if lin_vel > MAX_SPEED:
+            lin_vel = MAX_SPEED
+        elif lin_vel < MIN_SPEED:
+            lin_vel = MIN_SPEED
+        self.vel_commands[robot_nbr] = [lin_vel, -rot_vel]
         self.__publish_vel(robot_nbr)
+
+    def set_vel_n_steer(self, robot_nbr, lin_vel, steer_ang):
+        "Sets a velocity and steering angle for a given robot number. [m/s], [rad]"
+        if abs(steer_ang) > MAX_STEER:
+                steer_ang = math.copysign(MAX_STEER, steer_ang)
+        rot_vel = lin_vel/back_to_sim_front_wheel_length*math.tan(steer_ang)
+        self.set_vel(robot_nbr, lin_vel, rot_vel)
+
+    def set_acc_n_steer(self, robot_nbr, acc, steer_ang):
+        "Sets a new acceleration and steering angle for a given robot number. [m/s²], [rad]"
+        if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
+            raise Exception("Invalid robot number")
+        if abs(steer_ang) > MAX_STEER:
+            steer_ang = math.copysign(MAX_STEER, steer_ang)
+        if abs(acc) > MAX_ACCEL:
+            acc = math.copysign(MAX_ACCEL, acc)
+        self.acc_steer_commands[robot_nbr] = [acc, -steer_ang]
+        self.__publish_acc_steer(robot_nbr)
+
+    def set_acc_n_rot_vel(self, robot_nbr, acc, rot_vel):
+        "Sets a new acceleration and rotational velocity for a given robot number. [m/s²], [rad/s]"
+        if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
+            raise Exception("Invalid robot number")
+        if abs(rot_vel) > MAX_DSTEER:
+                rot_vel = math.copysign(MAX_DSTEER, rot_vel)
+        if abs(acc) > MAX_ACCEL:
+            acc = math.copysign(MAX_ACCEL, acc)
+        self.acc_rot_vel_commands[robot_nbr] = [acc, -rot_vel]
+        self.__publish_acc_rot_vel(robot_nbr)
 
 
     def __publish_vel(self, robot_nbr):
         "Publishes a new velocity for a given robot number. [m/s], [rad/s]"
         if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
             raise Exception("Invalid robot number")
-        self.vel_topic.data = [float(robot_nbr), float(self.vel_commands[robot_nbr][0]), float(self.vel_commands[robot_nbr][1])]
-        self.pub_vel.publish(self.vel_topic)
+        self.topic.data = [float(robot_nbr), float(self.vel_commands[robot_nbr][0]), float(self.vel_commands[robot_nbr][1])]
+        self.pub_vel.publish(self.topic)
 
+    def __publish_acc_steer(self, robot_nbr):
+        "Publishes a new acceleration and steering angle for a given robot number. [m/s²], [rad]"
+        if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
+            raise Exception("Invalid robot number")
+        self.topic.data = [float(robot_nbr), float(self.acc_steer_commands[robot_nbr][0]), float(self.acc_steer_commands[robot_nbr][1])]
+        self.pub_acc_steer.publish(self.topic)
     
+
+    def __publish_acc_rot_vel(self, robot_nbr):
+        "Publishes a new acceleration and rotational velocity for a given robot number. [m/s²], [rad/s]"
+        if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
+            raise Exception("Invalid robot number")
+        self.topic.data = [float(robot_nbr), float(self.acc_rot_vel_commands[robot_nbr][0]), float(self.acc_rot_vel_commands[robot_nbr][1])]
+        self.pub_acc_rot_vel.publish(self.topic)
+
+
     def __update_state(self, robot_nbr):
         if robot_nbr < 0 or robot_nbr >= nbr_of_robots:
             raise Exception("Invalid robot number")

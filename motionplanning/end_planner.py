@@ -247,27 +247,27 @@ def distance(a, b):
 if __name__ == '__main__':
     remap = False
     if remap:
-        end_states = find_end_states_from_image('AVP_planning_300p_end_states')
+        end_states = find_end_states_from_image('AVP_planning_250p_end_states')
         print(end_states)
         assume = TwoPointTurnAssumption(scan_radius=40,max_angle_diff=60,min_dist=15)
         guarantee = TwoPointTurnGuarantee(uncertainty=2)
-        bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
+        bitmap = img_to_csv_bitmap('AVP_planning_250p') # compute bitmap
         contract = EndStateContract(assume, guarantee, bitmap)
         with open('planning_graph.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
         end_planner = EndPlanner(planning_graph=planning_graph,end_states=end_states,contract=contract)
         planning_graph = end_planner.get_planning_graph()
-        with open('planning_graph_lanes.pkl', 'wb') as f:
+        with open('planning_graph_free.pkl', 'wb') as f:
             pickle.dump(planning_graph, f)
     else:
-        with open('planning_graph_lanes.pkl', 'rb') as f:
+        with open('planning_graph_free.pkl', 'rb') as f:
             planning_graph = pickle.load(f)
         edge_info = planning_graph['edge_info']
         simple_graph = planning_graph['graph']
         ps = []
         ps.append((120, 60, 0, 0))
         plt.plot(ps[0][0], ps[0][1], 'c.')
-        img = plt.imread('imglib/AVP_planning_300p.png')
+        img = plt.imread('imglib/AVP_planning_250p.png')
         fig = plt.figure(1)
         plt.imshow(img)
         plt.axis('equal')
@@ -297,7 +297,7 @@ if __name__ == '__main__':
                         start = ps[-2]
                         end = ps[-1]
                         traj, weight = astar_trajectory(simple_graph, start, end)
-                        #print(traj)
+                        print(traj)
                         print(weight)
                         # while not complete_path_is_safe(traj):
                         #     safe_subpath, safe_start = longest_safe_subpath(traj)

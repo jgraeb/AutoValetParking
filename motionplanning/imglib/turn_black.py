@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from ipdb import set_trace as st
-filename = 'AVP_planning_300p'
+filename = 'AVP_planning_250p'
 def blacken_nonwhite_pixels(filename):
     img = cv2.imread('{}.png'.format(filename))
     m = img.shape[0]

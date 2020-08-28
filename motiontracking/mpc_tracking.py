@@ -14,12 +14,14 @@ import cvxpy
 import math
 import numpy as np
 import sys
+import trio
 sys.path.append("../PathPlanning/CubicSpline/")
 sys.path.append("..")
 #sys.path.append("..")
 #import grid_planner
 #from data import parking_spots, exampletraj
 from variables.global_vars import *
+
 
 exampletraj = np.array([[120*0.30,  60*0.30,   0,   0],
  [130*0.30,  60*0.30,   0,   0],
@@ -56,42 +58,37 @@ TOL = 0.5
 BACK_TARGET_SPEED = -10.0 / 3.6  # [m/s] target speed
 GOAL_SPEED = 0.0
 
-NX = 4  # x = x, y, v, yaw
-NU = 2  # a = [accel, steer]
-T = 3  # horizon length
+NX = 4  # x = x, y, v, yaw                                                  
+NU = 2  # a = [accel/vel/vel, steer/steer/ang_vel                           
+T = 3  # horizon length                                                     
+
 
 # mpc parameters
-R = np.diag([0.01, 0.01])  # input cost matrix
-Rd = np.diag([0.01, 0.01])  # input difference cost matrix
-Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
-Qf = Q  # state final matrix
-GOAL_DIS = 2.5  # goal distance
-STOP_SPEED = 1.0 / 3.6  # stop speed
-MAX_TIME = 200.0  # max simulation time
+R = np.diag([0.1, 0.1])  # input cost matrix                              
+Rd = np.diag([1, 1])  # input difference cost matrix                  
+Q = np.diag([1.0, 1.0, 1, 1])  # state cost matrix                      
+Qf = Q  # state final matrix                                              
+GOAL_DIS = 0.13  # goal distance                                          
+STOP_SPEED = 0.05  # stop speed                                           
+MAX_TIME = 200.0  # max simulation time                                   
 
 # iterative paramter
-MAX_ITER = 3  # Max iteration
-DU_TH = 0.1  # iteration finish param
+MAX_ITER = 3  # Max iteration                                             
+DU_TH = 0.1  # iteration finish param                                     
 
 TARGET_SPEED = 7.0 / 3.6  # [m/s] target speed
-N_IND_SEARCH = 10  # Search index number
+N_IND_SEARCH = 10  # Search index number                                   
 
-DT = 0.2  # [s] time tick
+DT = 0.2  # [s] time tick                                                   
 
 # Vehicle parameters
-LENGTH = 4.5  # [m]
-WIDTH = 2.0  # [m]
-BACKTOWHEEL = 1.0  # [m]
-WHEEL_LEN = 0.3  # [m]
-WHEEL_WIDTH = 0.2  # [m]
-TREAD = 0.7  # [m]
-WB = 2.5  # [m]
-
-MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
-MAX_DSTEER = np.deg2rad(20.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
-MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
-MAX_ACCEL = 1.0  # maximum accel [m/ss]
+LENGTH = 0.25#4.5  # [m]
+WIDTH = 0.125  # [m]
+BACKTOWHEEL = 0.03  # [m]
+WHEEL_LEN = 0.03  # [m]
+WHEEL_WIDTH = 0.03  # [m]
+TREAD = 0.035  # [m]
+WB = back_to_sim_front_wheel_length  # [m]                                
 
 show_animation = True
 
@@ -109,6 +106,7 @@ class State:
         self.predelta = None
 
 
+
 def pi_2_pi(angle):
     while(angle > math.pi):
         angle = angle - 2.0 * math.pi
@@ -119,27 +117,76 @@ def pi_2_pi(angle):
     return angle
 
 
-def get_linear_model_matrix(v, phi, delta):
+def get_linear_model_matrix(v, phi, delta, h):
 
     A = np.zeros((NX, NX))
-    A[0, 0] = 1.0
-    A[1, 1] = 1.0
-    A[2, 2] = 1.0
-    A[3, 3] = 1.0
-    A[0, 2] = DT * math.cos(phi)
-    A[0, 3] = - DT * v * math.sin(phi)
-    A[1, 2] = DT * math.sin(phi)
-    A[1, 3] = DT * v * math.cos(phi)
-    A[3, 2] = DT * math.tan(delta) / WB
-
     B = np.zeros((NX, NU))
-    B[2, 0] = DT
-    B[3, 1] = DT * v / (WB * math.cos(delta) ** 2)
-
     C = np.zeros(NX)
-    C[0] = DT * v * math.sin(phi) * phi
-    C[1] = - DT * v * math.cos(phi) * phi
-    C[3] = - DT * v * delta / (WB * math.cos(delta) ** 2)
+
+    if accSteerCtrl:
+        A[0, 0] = 1.0
+        A[1, 1] = 1.0
+        A[2, 2] = 1.0
+        A[3, 3] = 1.0
+        A[0, 2] = h * math.cos(phi)
+        A[0, 3] = - h * v * math.sin(phi)
+        A[1, 2] = h * math.sin(phi)
+        A[1, 3] = h * v * math.cos(phi)
+        A[3, 2] = h * math.tan(delta) / WB
+
+        B[2, 0] = h
+        B[3, 1] = h * v / (WB * math.cos(delta) ** 2)
+    
+        C[0] = h * v * math.sin(phi) * phi
+        C[1] = - h * v * math.cos(phi) * phi
+        C[3] = - h * v * delta / (WB * math.cos(delta) ** 2)
+
+    elif velCtrl:
+        A[0, 0] = 1.0
+        A[0, 3] = -v*math.sin(phi)*h
+        A[1, 1] = 1.0
+        A[1, 3] = v*math.cos(phi)*h
+        A[3, 3] = 1.0
+    
+        B[0, 0] = math.cos(phi)*h-v*math.sin(phi)*math.tan(delta)*h**2/(2*WB)
+        B[0, 1] = -v**2*math.sin(phi)*h**2/(2*WB*math.cos(delta)**2)
+        B[1, 0] = math.sin(phi)*h+v*math.cos(phi)*math.tan(delta)*h**2/(2*WB)
+        B[1, 1] = v**2*math.cos(phi)*h**2/(2*WB*math.cos(delta)**2)
+        B[2, 0] = 1
+        B[3, 0] = math.tan(delta)*h/WB
+        B[3, 1] = v*h/(WB*math.cos(delta)**2)
+
+    elif turtlebotCtrl:
+        A[0, 0] = 1.0
+        A[0, 3] = -v*math.sin(phi)*h
+        A[1, 1] = 1.0
+        A[1, 3] = v*math.cos(phi)*h
+        A[3, 3] = 1.0
+
+        B[0, 0] = math.cos(phi)*h
+        B[0, 1] = -v/2*math.sin(phi)*h**2
+        B[1, 0] = math.sin(phi)*h
+        B[1, 1] = v/2*math.cos(phi)*h**2
+        B[2, 0] = 1
+        B[3, 1] = h
+
+    elif accRotVelCtrl:
+        A[0, 0] = 1.0
+        A[1, 1] = 1.0
+        A[2, 2] = 1.0
+        A[3, 3] = 1.0
+        A[0, 2] = h * math.cos(phi)
+        A[0, 3] = - h * v * math.sin(phi)
+        A[1, 2] = h * math.sin(phi)
+        A[1, 3] = h * v * math.cos(phi)
+
+        B[0, 0] = 1/2*math.cos(phi)*h**2
+        B[0, 1] = -v/2*math.sin(phi)*h**2
+        B[1, 0] = 1/2*math.sin(phi)*h**2
+        B[1, 1] = v/2*math.cos(phi)*h**2
+        B[2, 0] = h
+        B[3, 1] = h
+
 
     return A, B, C
 
@@ -200,18 +247,53 @@ def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):  # pragma: n
     plt.plot(x, y, "*")
 
 
-def update_state(state, a, delta):
+def update_model_state(state, u0, u1, h): 
 
     # input check
-    if delta >= MAX_STEER:
-        delta = MAX_STEER
-    elif delta <= -MAX_STEER:
-        delta = -MAX_STEER
+    if accSteerCtrl or velCtrl:
+        if u1 >= MAX_STEER:
+            u1 = MAX_STEER
+        elif u1 <= -MAX_STEER:
+            u1 = -MAX_STEER
+    elif turtlebotCtrl or accRotVelCtrl:
+        if u1 >= MAX_DSTEER:
+            u1 = MAX_DSTEER
+        elif u1 <= -MAX_DSTEER:
+            u1 = -MAX_DSTEER
 
-    state.x = state.x + state.v * math.cos(state.yaw) * DT
-    state.y = state.y + state.v * math.sin(state.yaw) * DT
-    state.yaw = state.yaw + state.v / WB * math.tan(delta) * DT
-    state.v = state.v + a * DT
+    #Original method with adaptations to fit velCtrl and turtlebotCtrl, 
+    #state.x = state.x + state.v * math.cos(state.yaw) * h
+    #state.y = state.y + state.v * math.sin(state.yaw) * h
+    #
+    #if accSteerCtrl:
+    #    state.v = state.v + u0 * h
+    #    state.yaw = state.yaw + state.v / WB * math.tan(u1) * h
+    #elif velCtrl:
+    #    state.v = u0
+    #    state.yaw = state.yaw + state.v / WB * math.tan(u1) * h
+    #elif turtlebotCtrl:
+    #    state.v = u0
+    #    state.yaw = state.yaw + u1 * h
+
+
+    #Using the system matrixes
+    A, B, C = get_linear_model_matrix(state.v, state.yaw, u1, h)
+
+    A = np.array(A)
+    B = np.array(B)
+    C = np.array(C)
+
+    z = np.array([state.x, state.y, state.v, state.yaw])
+
+    u = np.array([u0, u1])
+
+    z =  np.matmul(A, z) + np.matmul(B, u) + C
+
+    state.x = z[0]
+    state.y = z[1]
+    state.v= z[2]
+    state.yaw = z[3]
+    
 
     if state. v > MAX_SPEED:
         state.v = MAX_SPEED
@@ -248,14 +330,14 @@ def calc_nearest_index(state, cx, cy, cyaw, pind):
     return ind, mind
 
 
-def predict_motion(x0, oa, od, xref):
+def predict_motion(x0, oa, od, xref, h):
     xbar = xref * 0.0
     for i, _ in enumerate(x0):
         xbar[i, 0] = x0[i]
 
     state = State(x=x0[0], y=x0[1], yaw=x0[3], v=x0[2])
     for (ai, di, i) in zip(oa, od, range(1, T + 1)):
-        state = update_state(state, ai, di)
+        state = update_model_state(state, ai, di, h)
         xbar[0, i] = state.x
         xbar[1, i] = state.y
         xbar[2, i] = state.v
@@ -286,7 +368,7 @@ def iterative_linear_mpc_control(xref, x0, dref, oa, od):
     return oa, od, ox, oy, oyaw, ov
 
 
-def linear_mpc_control(xref, xbar, x0, dref, breaking=None):
+def linear_mpc_control(xref, xbar, x0, dref, h, breaking=None):
     """
     linear mpc control
 
@@ -309,8 +391,10 @@ def linear_mpc_control(xref, xbar, x0, dref, breaking=None):
             cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
 
         A, B, C = get_linear_model_matrix(
-            xbar[2, t], xbar[3, t], dref[0, t])
-        constraints += [x[:, t + 1] == A * x[:, t] + B * u[:, t] + C]
+            xbar[2, t], xbar[3, t], dref[0, t], h)
+
+
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
         if t < (T - 1):
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)
@@ -322,13 +406,29 @@ def linear_mpc_control(xref, xbar, x0, dref, breaking=None):
     constraints += [x[:, 0] == x0]
     constraints += [x[2, :] <= MAX_SPEED]
     constraints += [x[2, :] >= MIN_SPEED]
-    MAX_ACCEL = 1.0 #m/ss
-    if breaking:
-        MAX_ACCEL = 7.0 #m/ss emergency braking
-    constraints += [cvxpy.abs(u[0, :]) <= MAX_ACCEL]
-    MAX_ACCEL = 1.0 #m/ss
-    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
-
+    if accSteerCtrl:
+        MAX_ACCEL = 0.1 #m/ss                                              
+        if breaking:
+            MAX_ACCEL = 0.35 #m/ss emergency braking                        
+        constraints += [cvxpy.abs(u[0, :]) <= MAX_ACCEL]
+        MAX_ACCEL = 0.1 #m/ss                                              
+        constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    elif velCtrl:
+        constraints += [u[0, :] >= MIN_SPEED]                    
+        constraints += [u[0, :] <= MAX_SPEED]                    
+        constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    elif turtlebotCtrl:
+        constraints += [u[0, :] >= MIN_SPEED]                    
+        constraints += [u[0, :] <= MAX_SPEED]
+        constraints += [cvxpy.abs(u[1, :]) <= MAX_DSTEER]
+    elif accRotVelCtrl:
+        MAX_ACCEL = 0.1 #m/ss                                              
+        if breaking:
+            MAX_ACCEL = 0.35 #m/ss emergency braking                        
+        constraints += [cvxpy.abs(u[0, :]) <= MAX_ACCEL]
+        MAX_ACCEL = 0.1 #m/ss                                              
+        constraints += [cvxpy.abs(u[1, :]) <= MAX_DSTEER]
+        
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
     prob.solve(solver=cvxpy.ECOS, verbose=False)
 
@@ -347,7 +447,7 @@ def linear_mpc_control(xref, xbar, x0, dref, breaking=None):
     return oa, odelta, ox, oy, oyaw, ov
 
 
-def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
+def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind): 
     xref = np.zeros((NX, T + 1))
     dref = np.zeros((1, T + 1))
     ncourse = len(cx)
@@ -386,7 +486,6 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
 
 
 def check_goal(state, goal, tind, nind,goalspeed, last_segment):
-
     # check goal
     dx = state.x - goal[0]
     dy = state.y - goal[1]
@@ -396,7 +495,7 @@ def check_goal(state, goal, tind, nind,goalspeed, last_segment):
         isgoal = (d <= GOAL_DIS)
     else: 
         isgoal = (d <= GOAL_DIS)
-    if abs(tind - nind) >= 5:
+    if abs(tind - nind) >= 5:             
         isgoal = False
     # modified
     delgoalspeed = abs(goalspeed)*1.5
@@ -464,7 +563,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed):
         if odelta is not None:
             di, ai = odelta[0], oa[0]
 
-        state = update_state(state, ai, di)
+        state = update_model_state(state, ai, di)
         time = time + DT
 
         x.append(state.x)
@@ -567,9 +666,9 @@ def Trafo(X):
     X[:,1] = X[:,1]*2.5
     return X
 
-def check_direction(path):
-    cx = path[:,0]*SCALE_FACTOR_PLAN
-    cy = path[:,1]*SCALE_FACTOR_PLAN
+def check_direction(path): 
+    cx = path[:,0]*SCALE_FACTOR_PLAN       
+    cy = path[:,1]*SCALE_FACTOR_PLAN       
     cyaw = np.deg2rad(path[:,2])
     dx = cx[1] - cx[0]
     dy = cy[1] - cy[0]
@@ -913,7 +1012,7 @@ async def track_async(cx, cy, cyaw, ck, sp, dl, initial_state,goalspeed):
         if odelta is not None:
             di, ai = odelta[0], oa[0]
 
-        state = update_state(state, ai, di)
+        state = update_model_state(state, ai, di)
         time = time + DT
 
         x.append(state.x)
@@ -1186,7 +1285,7 @@ def stop_car(path,startv): # bringing car to a full stop asap
     # oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta)
     # if odelta is not None:
     #     di, ai = odelta[0], oa[0]
-    # self.state = tracking.update_state(self.state, ai, di)
+    # self.state = tracking.update_model_state(self.state, ai, di)
     # st()
     # self.x = self.state.x
     # self.y = self.state.y

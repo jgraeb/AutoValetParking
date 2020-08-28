@@ -18,11 +18,13 @@ class Customer(BoxComponent):
         self.average_arrival_rate = average_arrival_rate
         self.average_park_time = average_park_time
         self.cars = []
+        self.car_nbr = 0
 
     def generate_car(self,start_time):
         arrive_time = get_current_time(start_time)
         depart_time = arrive_time + np.random.exponential(self.average_park_time)
-        car = Car(arrive_time=arrive_time, depart_time=depart_time)
+        car = Car(arrive_time=arrive_time, depart_time=depart_time, car_nbr=self.car_nbr)
+        self.car_nbr += 1
         return car
         
     async def run(self,end_time,start_time, gme):

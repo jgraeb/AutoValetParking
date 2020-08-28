@@ -285,10 +285,10 @@ if __name__ == '__main__':
     remap = False
     PathFile = open('nominal_trajectory.txt', 'w')
     if remap:
-        planning_graph = image_to_car_graph(img_name='AVP_planning_300p',
+        planning_graph = image_to_car_graph(img_name='AVP_planning_250p',
                 planning_graph_save_name='planning_graph',
                 anchor=[0,0], grid_size=10, uncertainty=7)
-        img = plt.imread('imglib/AVP_planning_300p.png')
+        img = plt.imread('imglib/AVP_planning_250p.png')
         plt.imshow(img)
         if len(planning_graph._nodes) <= 1000: # if not too many
             for node in planning_graph._nodes:
@@ -319,7 +319,7 @@ if __name__ == '__main__':
             plt.plot(traj[:,0], traj[:,1])
         PathFile.close()
 
-        img = plt.imread('imglib/AVP_planning_300p.png')
+        img = plt.imread('imglib/AVP_planning_250p.png')
         plt.imshow(img)
         plt.axis('equal')
         plt.show()

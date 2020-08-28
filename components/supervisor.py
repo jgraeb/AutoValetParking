@@ -10,7 +10,7 @@ import random
 from variables.global_vars import MAX_NO_PARKING_SPOTS, TOW_TIME, DELAY_THRESH, start_walk_lane, end_walk_lane, start_walk_lane_2, end_walk_lane_2, SCALE_FACTOR_PLAN as SFP
 from environment.pedestrian import Pedestrian
 from components.planner import Planner
-from variables.parking_data import parking_spots_original as parking_spots #bad_parking_spot as parking_spots
+from variables.parking_data import parking_spots_gazebo_test as parking_spots #bad_parking_spot as parking_spots
 from ipdb import set_trace as st
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
@@ -261,8 +261,8 @@ class Supervisor(BoxComponent):
         async for car in self.in_channels['Customer']:
             accept_condition = False
             self.Logger.info('SUPERVISOR - '+str(self.spot_no)+' parking Spots vacant')
-            #print(self.parking_spots)
-            await self.start_random_ped()
+            print(self.parking_spots)
+            #await self.start_random_ped()
             spot = self.pick_spot(car,Planner, Simulation)
             if spot is not None:
                 accept_condition = True
@@ -278,9 +278,9 @@ class Supervisor(BoxComponent):
                 self.cars.update({car.name: 'Assigned'})
                 self.priority.update({car.name: '0'})
                 await self.send_directive_to_planner(car,('Park',spot))
-                ped = Pedestrian(pedestrian_type=random.choice(['1','2','3','4','5','6']))
-                self.nursery.start_soon(ped.run,start_walk_lane,end_walk_lane)
-                await self.out_channels['GameEnterPeds'].send(ped)
+                #ped = Pedestrian(pedestrian_type=random.choice(['1','2','3','4','5','6']))
+                #self.nursery.start_soon(ped.run,start_walk_lane,end_walk_lane)
+                #await self.out_channels['GameEnterPeds'].send(ped)
             else:
                 await self.out_channels['Customer'].send(False)
                 self.Logger.info('SUPERVISOR - Garage fully occupied - A car has been rejected!')

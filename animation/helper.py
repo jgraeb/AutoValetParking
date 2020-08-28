@@ -16,7 +16,7 @@ from animation.component import parking_lot
 from variables import global_vars
 from ipdb  import set_trace as st
 from variables.global_vars import SCALE_FACTOR_SIM, SCALE_FACTOR_PLAN
-from variables.parking_data import parking_spots_original as parking_spots
+from variables.parking_data import parking_spots_gazebo_test as parking_spots
 
 
 dir_path = os.path.dirname(os.path.realpath("__file__"))

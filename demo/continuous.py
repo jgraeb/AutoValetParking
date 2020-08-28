@@ -5,10 +5,11 @@
 
 import trio
 import sys
+import rospy
 sys.path.append('..') # enable importing modules from an upper directory:
 # import 
 from prepare.communication import set_up_channels
-from variables.global_vars import average_arrival_rate, average_park_time, OPEN_TIME
+from variables.global_vars import average_arrival_rate, average_park_time, OPEN_TIME, START_X, START_Y, START_YAW
 # import components
 from prepare.boxcomponent import Time
 from components.game import Game
@@ -21,6 +22,7 @@ from components.supervisor import Supervisor
 from environment.customer import Customer
 from components.tow_truck import TowTruck
 from testing.static_obstacle import Obstacles
+from gazebo.src.GazeboCtrl import GazeboCtrl
 
 import logging
 import logging.config
@@ -35,6 +37,14 @@ async def main():
     END_TIME = START_TIME + OPEN_TIME
     time_sys = Time(START_TIME, END_TIME)
     all_components = []
+
+    rospy.init_node('demo')
+    gazebo_ctrl = GazeboCtrl()
+    robots = [START_X, START_Y, START_YAW]
+    pedestrians = []
+    obstacle_pos = []
+    gazebo_ctrl.launch_gazebo(robots, pedestrians, obstacle_pos)
+
     print('--- Starting Parking Garage at time: '+str(START_TIME))
     async with trio.open_nursery() as nursery:
         obstacles = Obstacles()

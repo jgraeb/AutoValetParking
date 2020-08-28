@@ -15,7 +15,7 @@ sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
 from shapely import affinity
 from shapely.ops import nearest_points, split
-from variables.parking_data import parking_spots_original as parking_spots
+from variables.parking_data import parking_spots_gazebo_test as parking_spots
 from ipdb import set_trace as st
 from collections import OrderedDict
 
@@ -97,7 +97,7 @@ class Game(BoxComponent):
             newlinestring = make_line(ref) 
             area = newlinestring.buffer(3.5)
             point = None
-            traj = newlinestring
+            Fchecknewlinestring
             #if car in self.reserved_areas:
             #    self.reserved_areas.pop(car)
             self.reserved_areas_requested.update({car: area})
@@ -293,19 +293,19 @@ class Game(BoxComponent):
         #     length = 3
         if car.last_segment and not car.retrieving:
             openangle = 45
-            length = 4 + buffer # m
+            length = 0.2 + buffer # m, 4
         elif car.unparking:
             openangle = 60
-            length = 4 + buffer # m # changes here to try
+            length = 0.2 + buffer # m, 4# changes here to try
         elif car.close:# or car.replan:
             openangle = 30
-            length = 5.0 + buffer # m
+            length = 0.25 + buffer # m, 5
         elif car.reserved and car.reverse:
             openangle = 30
-            length = 4.0 + buffer # m
+            length = 0.2 + buffer # m, 4
         else:
             openangle = 30
-            length = 6 + buffer # m
+            length = 0.3 + buffer # m, 6
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking and not car.last_segment:
@@ -315,7 +315,7 @@ class Game(BoxComponent):
     def get_vision_cone_blocked(self,car):
         buffer = abs(car.v)/10*0.4
         openangle = 45
-        length = 8 + buffer # m # was 6
+        length = 0.4 + buffer # m # was 6, 8
         cone = Polygon([(car.x,car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,np.sin(np.deg2rad(openangle/2))*length+car.y),(car.x+np.cos(np.deg2rad(openangle/2))*length,-np.sin(np.deg2rad(openangle/2))*length+car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking:
@@ -324,9 +324,9 @@ class Game(BoxComponent):
 
     def get_vision_cone_pedestrian(self,car):
         if car.direction == -1:
-            length = 3 # m
+            length = 0.157 # m
         else:
-            length = 6 # m
+            length = 0.35 #6 # m
         cone = Polygon([(car.x,car.y),(car.x,car.y+1),(car.x+length,car.y+1),(car.x+length,car.y-1),(car.x,car.y-1),(car.x,car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking:
@@ -334,7 +334,7 @@ class Game(BoxComponent):
         return rotated_cone
 
     def get_forward_vision_cone(self,car):
-        length = 6 # m
+        length = 0.3 #6 # m
         cone = Polygon([(car.x,car.y),(car.x,car.y+1),(car.x+length,car.y+1),(car.x+length,car.y-1),(car.x,car.y-1),(car.x,car.y)])
         rotated_cone = affinity.rotate(cone, np.rad2deg(car.yaw), origin = (car.x,car.y))
         if car.direction == -1 or car.unparking:
@@ -403,25 +403,30 @@ class Game(BoxComponent):
                                 if mysmallcone.intersects(val):
                                     self.Logger.info('GAME - {0} blocked by a failed car, ID {1}'.format(car.name, car.id))
                                     clearpath = False
+                                    print('line 405')
                             elif cars.parked:
                                 self.Logger.info('GAME - Blocked by a parked car - Go on ID {0}'.format(car.id))
                                 #clearpath = True
                             else:
                                 conflict_cars.append(cars)
                                 clearpath = False
+                                print('line 412')
         # check if an obstacle is in the way
         for key,val in self.obstacles.items():
-            if mycone.intersects(val):
+            if mycone.intersects(val):         
                 clearpath = False
         # check if a pedestrian is in the cone and I am not in the pedestrian's way
         mypedcone = self.get_vision_cone_pedestrian(car)
         for ped in self.peds:
             x_m = ped.state[0]/SCALE_FACTOR_SIM
             y_m = ped.state[1]/SCALE_FACTOR_SIM
-            ped_point = Polygon([(x_m+2,y_m+1),(x_m+2,y_m-1),(x_m-1,y_m-1), (x_m-1,y_m+1),(x_m+2,y_m+1)])
+            ped_point = Polygon([(x_m+0.1,y_m+0.05),(x_m+0.1,y_m-0.05),(x_m-0.05,y_m-0.05), (x_m-0.05,y_m+0.05),(x_m+0.1,y_m+0.05)])
+            #ped_point = Polygon([(x_m+2,y_m+1),(x_m+2,y_m-1),(x_m-1,y_m-1), (x_m-1,y_m+1),(x_m+2,y_m+1)])
             if ped_point.intersects(mypedcone) and not car.last_segment and not mybox.intersects(ped_point):
                 clearpath = False
+                print('pedestrian')
                 self.Logger.info('GAME - {0} stops because a pedestrian is in the path, ID {1}'.format(car.name, car.id))
+                st()
         # check if they have a conflict with me
         for cars in conflict_cars:
             cone = self.get_vision_cone(cars)
@@ -444,12 +449,16 @@ class Game(BoxComponent):
                         if not myarea.intersects(mybox):
                             stop_reserved = True
                             clearpath = False
+                            print('line 453')
                             self.Logger.info('GAME - {0} stopped because of reserved area for Car {1} ahead'.format(car.id,key.id))
                     else:
                         stop_reserved = True
                         clearpath = False
+                        print('line 458')
                         self.Logger.info('GAME - {0} stopped because of reserved area for Car {1} ahead'.format(car.id,key.id))
                     self.Logger.info('GAME - Stopping for reserved area ID {0}'.format(car.id))
+        if not clearpath:
+            st()
         return clearpath, conflict_cars, failed_car, conflict, blocked, stop_reserved, blocked_by
 
     def clear_before_unparking(self,car):

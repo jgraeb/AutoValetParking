@@ -5,6 +5,7 @@
 
 import rospy
 import sys
+import math
 from std_msgs.msg import UInt16
 from std_msgs.msg import String
 from std_msgs.msg import Float32MultiArray
@@ -14,7 +15,7 @@ from geometry_msgs.msg import Twist
 from gazebo_msgs.msg import ModelStates
 
 sys.path.append('../../') # enable importing modules from an upper directory:
-from variables.global_vars import nbr_of_robots
+from variables.global_vars import nbr_of_robots, back_to_sim_front_wheel_length, MAX_SPEED, MIN_SPEED, MAX_DSTEER
 
 pub_rate = 100 #[Hz]
 
@@ -23,15 +24,52 @@ def set_velocity(vel_topic):
     """This function takes a ros topic containing a Float32MultiArray with robot nbr as the first element,
     linear velocity as the second argument and rotational velocity as the last. 
     The function sets this data into 2 twist objects, defined globaly in a list."""
+    #print("vel:")
+    #print(vel_topic.data[1])
     twists[int(vel_topic.data[0])].linear.x = vel_topic.data[1]
     twists[int(vel_topic.data[0])].angular.z = vel_topic.data[2]
+    vel_mode[int(vel_topic.data[0])] = True
+    acc_steer_mode[int(vel_topic.data[0])] = False
+    acc_rot_vel_mode[int(vel_topic.data[0])] = False
+
+def set_acc_steer(acc_steer_topic):
+    delta_vs[int(acc_steer_topic.data[0])] = acc_steer_topic.data[1]/pub_rate
+    steer_angs[int(acc_steer_topic.data[0])] = acc_steer_topic.data[2]
+    vel_mode[int(acc_steer_topic.data[0])] = False
+    acc_rot_vel_mode[int(acc_steer_topic.data[0])] = False
+    acc_steer_mode[int(acc_steer_topic.data[0])] = True
+
+def set_acc_rot_vel(acc_rot_vel_topic):
+    delta_vs[int(acc_rot_vel_topic.data[0])] = acc_rot_vel_topic.data[1]/pub_rate
+    twists[int(acc_rot_vel_topic.data[0])].angular.z = acc_rot_vel_topic.data[2]
+    vel_mode[int(acc_rot_vel_topic.data[0])] = False
+    acc_steer_mode[int(acc_rot_vel_topic.data[0])] = False
+    acc_rot_vel_mode[int(acc_rot_vel_topic.data[0])] = True
 
 
 def publish_velocities(twists, pub):
     """This functions takes a tuple of publishers, pub, and a tuple of Twists, twist,
     and publishes each twist with the corresponding publisher. """
     for i, _ in enumerate(pub):
-        pub[i].publish(twists[i])
+        if vel_mode[i]:
+            pub[i].publish(twists[i])
+        elif acc_steer_mode[i]:
+            twists[i].linear.x += delta_vs[i]
+            if twists[i].linear.x > MAX_SPEED:
+                twists[i].linear.x = MAX_SPEED
+            elif twists[i].linear.x < MIN_SPEED:
+                twists[i].linear.x = MIN_SPEED
+            twists[i].angular.z = twists[i].linear.x/back_to_sim_front_wheel_length*math.tan(steer_angs[i])
+            if abs(twists[i].angular.z) > MAX_DSTEER:
+                twists[i].angular.z = math.copysign(MAX_DSTEER, twists[i].angular.z)
+            pub[i].publish(twists[i])
+        elif acc_rot_vel_mode:
+            twists[i].linear.x += delta_vs[i]
+            if twists[i].linear.x > MAX_SPEED:
+                twists[i].linear.x = MAX_SPEED
+            elif twists[i].linear.x < MIN_SPEED:
+                twists[i].linear.x = MIN_SPEED
+            pub[i].publish(twists[i])
 
 
 def publish_robot_state(robot_nbr):
@@ -43,14 +81,14 @@ def publish_robot_state(robot_nbr):
     state_topic = Float32MultiArray()
     
     x_pos = robot_states[nbr].pose.pose.position.x
-    y_pos = robot_states[nbr].pose.pose.position.y
+    y_pos = -robot_states[nbr].pose.pose.position.y
 
     quaternion_orient = Rotation.from_quat([robot_states[nbr].pose.pose.orientation.x,
                                             robot_states[nbr].pose.pose.orientation.y,
                                             robot_states[nbr].pose.pose.orientation.z,
                                             robot_states[nbr].pose.pose.orientation.w])
     euler_orient = quaternion_orient.as_euler('xyz')
-    yaw = euler_orient[2]
+    yaw = -euler_orient[2]
 
     x_vel = robot_states[nbr].twist.twist.linear.x
     rot_vel = robot_states[nbr].twist.twist.angular.z
@@ -67,7 +105,7 @@ def publish_model_state(model_name):
     name = model_name.data
     state_topic = Float32MultiArray()
     x_pos = model_states[name][0].position.x
-    y_pos = model_states[name][0].position.y
+    y_pos = -model_states[name][0].position.y
 
     quaternion_orient = Rotation.from_quat([model_states[name][0].orientation.x,
                                             model_states[name][0].orientation.y,
@@ -116,6 +154,12 @@ for i in range(nbr_of_robots):
     twists[i].angular.y = 0
     twists[i].angular.z = 0
 
+delta_vs = [0 for i in range(nbr_of_robots)]
+steer_angs = [0 for i in range(nbr_of_robots)]
+vel_mode = [False for i in range(nbr_of_robots)]
+acc_steer_mode = [False for i in range(nbr_of_robots)]
+acc_rot_vel_mode = [False for i in range(nbr_of_robots)]
+
 robot_states = [[0, 0, 0, 0, 0] for i in range(nbr_of_robots)] #[pos_x, pos_y, orientation, lin_vel, rot_vel]
 model_states = {} #{model_name: [pos_x, pos_y, orientation, vel_x, vel_y, rot_vel]}
 spec_model_names = ('walls', 'parking_lot_ground_plane')
@@ -126,6 +170,8 @@ for i in range(nbr_of_robots):
     rospy.Subscriber('Robot{}/odom'.format(i), Odometry, update_robot_states, i)
 
 rospy.Subscriber('robot_set_vel', Float32MultiArray, set_velocity)
+rospy.Subscriber('robot_set_acc_steer', Float32MultiArray, set_acc_steer)
+rospy.Subscriber('robot_set_acc_rot_vel', Float32MultiArray, set_acc_rot_vel)
 rospy.Subscriber('robot_state_request', UInt16, publish_robot_state)
 rospy.Subscriber('gazebo/model_states', ModelStates, update_model_states)
 rospy.Subscriber('model_state_request', String, publish_model_state)

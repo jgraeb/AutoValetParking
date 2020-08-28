@@ -191,7 +191,7 @@ if __name__ == '__main__':
     remap = True
     if remap:
         # create bitmap from parking lot image
-        bitmap = img_to_csv_bitmap('AVP_planning_300p_with_lanes') # compute bitmap
+        bitmap = img_to_csv_bitmap('AVP_planning_250p') # compute bitmap
         # define grid parameters
         grid_params = GridParams(grid_size = 10, grid_anchor = [0, 0])
         # load primitive set
@@ -208,7 +208,7 @@ if __name__ == '__main__':
         ps = []
         ps.append((120, 60, 0, 0))
         plt.plot(ps[0][0], ps[0][1], 'c.')
-        img = plt.imread('imglib/AVP_planning_300p.png')
+        img = plt.imread('imglib/AVP_planning_250p.png')
         fig = plt.figure(1)
         plt.imshow(img)
         plt.axis('equal')

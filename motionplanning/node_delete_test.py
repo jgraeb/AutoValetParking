@@ -47,7 +47,7 @@ for NODE in NODES_TO_DELETE:
 starting_at = [120, 60, 0, 0]
 ps.append(starting_at)
 plt.plot(ps[0][0], ps[0][1], 'c.')
-img = plt.imread('imglib/AVP_planning_300p.png')
+img = plt.imread('imglib/AVP_planning_250p.png')
 fig = plt.figure(1)
 plt.imshow(img)
 plt.axis('equal')
