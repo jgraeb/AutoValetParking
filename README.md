@@ -49,6 +49,28 @@ It was recommended to try another solver instead, this has not yet been done due
 5. Use the class Publisher together with **rqt_plot** to plot the prediction error. (See commented code in track_async in car.py) 
 
 
+### Late relizations
+1. Use the command **rosrun package_name python_file_name** to run a ros program without being in the correct directory.
+2. Instead of launching several nodes manually the information regarding what nodes should be launched can be set in a .launch file and then all those nodes can be excecuted without being in the correct directory using the command **roslaunch package_name launch_file_name**. The launch file can be made in the folowwing way:
+<launch>
+
+  <node pkg ="pkg_name_1"
+        type="py_file_name_1.py"
+        name="node_name_1"
+        output="screen">
+  </node>
+  
+  <node pkg ="pkg_name_2"
+        type="py_file_name_2.py"
+        name="node_name_2"
+        output="screen">
+  </node>
+
+        etc...
+</launch> 
+
+3. The turtlebots might not need to keep recieving commands to continue driving after all. The reason they didnt drive when tested could have been that the communication channel was not yet set up when the cmd_vel topic was published. This can be tested using **publisher_name.get_num_connections()**.
+
 
 
 
