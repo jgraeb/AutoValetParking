@@ -7,9 +7,9 @@ current_time = 0
 
 #Gazebo/ros parameters
 catkin_ws_folder = "/home/tom/SURF/catkin_ws_surf"
-nbr_of_robots = 1
-nbr_of_pedestrians = 0
-nbr_of_obstacles = 0
+nbr_of_robots = 2
+nbr_of_pedestrians = 2
+nbr_of_obstacles = 2
 GROUND_PLANE_LENGTH = 90/14 # [m]
 GROUND_PLANE_PIXELS_HRES = 2866
 GROUND_PLANE_PIXELS_LRES = 250

@@ -25,8 +25,8 @@ model_ctrl = ModelCtrl()
 gazebo_ctrl = GazeboCtrl()
 
 robots = [[START_X, START_Y, START_YAW], [2.25, 0.7, 3.14]] 
-pedestrians = []#[[2.5, 4.6, 1.57], [2.5, 4.77, 1.57]]
-obstacles = []#[[3.63, 2.89, 0], [3.63, 2.73, 0]]
+pedestrians = [[2.5, 4.6, 1.57], [2.5, 4.77, 1.57]]
+obstacles = [[3.63, 2.89, 0], [3.63, 2.73, 0]]
 gazebo_ctrl.launch_gazebo(robots, pedestrians, obstacles)
 
 terminate = False
