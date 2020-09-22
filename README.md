@@ -14,4 +14,4 @@ Packages: see **requirements.txt** <br />
 2. Run **demo/continuous.py** for a random demonstration or **demo/run_test.py** to use interactive test components in testing directory
 
 ## Demo
-![](example.gif)
+![](movies/replanning.gif)
