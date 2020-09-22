@@ -86,7 +86,6 @@ class Game(BoxComponent):
                     traj = res_path[0] # if reserved path is multilinestring
                 except:
                     traj = res_path
-
                 try:
                     point = Point([traj.coords[-1]])
                 except:
@@ -294,6 +293,20 @@ class Game(BoxComponent):
             st()
         return True
 
+    def get_vision_cone_tube(self,car):
+        # define radius of buffer zone
+        buffer = abs(car.v)*3.6/10*0.4*2 + 4
+        buffer_box = Point(car.x,car.y).buffer(buffer)
+        # find path segment in front of car
+        car_loc = Point(car.x,car.y)
+        path = car.ref[car.idx:]
+        newlinestring = make_line(path) # compute shapely line in meters
+        clear_path = newlinestring.intersection(buffer_box)
+        # make buffer around path
+        buffered_path = clear_path.buffer(1.5)
+        ###
+        return buffered_path
+
     def get_vision_cone(self,car):
         buffer = abs(car.v)*3.6/10*0.4*2
         # if car.replan and car.last_segment:# and not car.retrieving:
@@ -367,7 +380,8 @@ class Game(BoxComponent):
         clearpath = True
         conflict = False
         stop_reserved = False
-        mycone = self.get_vision_cone(car)
+        #mycone = self.get_vision_cone(car)
+        mycone = self.get_vision_cone_tube(car)
         self.car_boxes.clear()
         for cars in self.cars:
             box = Polygon([(cars.x-0.5,cars.y+1),(cars.x-0.5,cars.y-1),(cars.x+3,cars.y+1),(cars.x+3,cars.y-1)])
