@@ -8,8 +8,10 @@ import trio
 import sys
 import numpy as np
 sys.path.append('..') # enable importing modules from an upper directory
-import matplotlib.animation as animation
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 from animation.helper import draw_car, draw_pedestrian, show_traj, label_spots, draw_obs
 from animation.component import parking_lot
 from variables.global_vars import SCALE_FACTOR_SIM, SCALE_FACTOR_PLAN
