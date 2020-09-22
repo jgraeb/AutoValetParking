@@ -39,7 +39,7 @@ class Planner(BoxComponent):
         self.reserved_areas = dict()
         self.Logger = None
         self.static_obstacle_map = dict()
-        self.reversing_on = True
+        self.reversing_on = False
 
     async def get_car_position(self,car):
         self.Logger.info('PLANNER - Sending position request to Map system')
@@ -94,6 +94,7 @@ class Planner(BoxComponent):
         for obskey,val in self.static_obstacle_map.items():
             val = [val[0]*SFP,val[1]*SFP,val[2],val[3]*SFP]
             self.obstacles.update({obskey: (val)})
+        print(self.obstacles)
         Game.update_obstacles(self.obstacles)
         self.update_reachability_matrix(Game)
 
@@ -252,20 +253,22 @@ class Planner(BoxComponent):
             for key,value in self.obstacles.items():
                 obstacle = {key : [value[0]/SFP,value[1]/SFP,value[2]]}
                 try:
-                    buff = value[3]/SFP+ 25.0
+                    buff = value[3]/SFP+ 5.0
+                    val = (value[0], value[1], value[2], value[3])
                 except:
                     buff = 15.0
-                    value[3] = 0
+                    val = (value[0], value[1], value[2], 0)
+                    self.obstacles.update({key: val})
                 if not self.reversing_on:
                     if self.is_single_failure_in_acceptable_area(obstacle, Game):
                     #print('Failure is in acceptable area')
-                        obs.append(value)
-                        obs_boxes.append(Point(value[0]/SFP,value[1]/SFP).buffer(buff))
+                        obs.append(val)
+                        obs_boxes.append(Point(val[0]/SFP,val[1]/SFP).buffer(buff))
                 else:
-                    obs.append(value)
-                    obs_boxes.append(Point(value[0]/SFP,value[1]/SFP).buffer(buff))
-                obs_all.append(value)
-                obs_boxes_all.append(Point(value[0]/SFP,value[1]/SFP).buffer(buff))
+                    obs.append(val)
+                    obs_boxes.append(Point(val[0]/SFP,val[1]/SFP).buffer(buff))
+                obs_all.append(val)
+                obs_boxes_all.append(Point(val[0]/SFP,val[1]/SFP).buffer(buff))
             obs = [(row[0]/SFP,row[1]/SFP, row[2], row[3]) for row in obs]
             obs_all = [(row[0]/SFP,row[1]/SFP, row[2], row[3]) for row in obs_all]
             #print(obs)
