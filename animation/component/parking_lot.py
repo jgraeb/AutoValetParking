@@ -13,6 +13,3 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 parking_lot_fig = os.path.dirname(dir_path) + '/imglib/parking_lot.png'
 def get_background():
     return Image.open(parking_lot_fig)
-
-
-

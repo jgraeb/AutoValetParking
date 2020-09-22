@@ -10,7 +10,7 @@ import numpy as np
 import _pickle as pickle
 import motionplanning.end_planner as path_planner
 from prepare.communication import create_bidirectional_channel, create_unidirectional_channel, get_current_time
-from variables.global_vars import SCALE_FACTOR_PLAN as SFP, PICK_UP, DROP_OFF_PIX, TESTING_MODE
+from variables.global_vars import SCALE_FACTOR_PLAN as SFP, PICK_UP, DROP_OFF_PIX#, TESTING_MODE
 from variables.parking_data import parking_spots_original as parking_spots#,parking_spots_original
 import math
 from ipdb import set_trace as st
@@ -449,7 +449,7 @@ class Planner(BoxComponent):
         response = resp[0]
         car = resp[1]
         #print(resp)
-        if TESTING_MODE: # send to TestSuite instead
+        if self.TESTING_MODE: # send to TestSuite instead
             self.Logger.info('PLANNER - sending "{0} - {1}" response to TestSuite'.format(response,car.name))
             await self.out_channels['TestSuite'].send((car,response))
         else: # send to AVP supervisor
@@ -459,7 +459,7 @@ class Planner(BoxComponent):
 
 
     async def check_supervisor(self,send_response_channel,Game, Time): # directive/response system (receiving directives from supervisor)
-        if TESTING_MODE:
+        if self.TESTING_MODE:
             in_channel = self.in_channels['TestSuite']
         else:
             in_channel = self.in_channels['Supervisor']
@@ -471,7 +471,7 @@ class Planner(BoxComponent):
                 self.Logger.info('PLANNER - receiving directive from Supervisor to park {0} in Spot {1}'.format(car.name,todo[1]))
                 if self.cars.get(car.name,0)==0:
                     create_unidirectional_channel(self, car, max_buffer_size=np.inf)
-                    self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
+                    self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger, self.TESTING_MODE)
                 self.cars.update({car.name: 'Assigned'})
                 # create_unidirectional_channel(self, car, max_buffer_size=np.inf)
                 # self.nursery.start_soon(car.run,send_response_channel,Game, Time,self.Logger)
@@ -571,9 +571,10 @@ class Planner(BoxComponent):
         else:
             return False
 
-    async def run(self,Game, Time, Logger, Obstacles, Simulation): # run in trio nursery
+    async def run(self,Game, Time, Logger, Obstacles, Simulation, TESTING_MODE): # run in trio nursery
         self.Logger = Logger
         self.Logger.info('PLANNER - started')
+        self.TESTING_MODE = TESTING_MODE
         sys.path.append('../motionplanning')
         with open(sys.path[0]+'/../motionplanning/planning_graphs/planning_graph_lanes.pkl', 'rb') as f:
             self.original_lanes_planning_graph = pickle.load(f)
@@ -586,7 +587,7 @@ class Planner(BoxComponent):
         self.planning_graph_all = self.planning_graph_reachability
         await trio.sleep(0)
         # create obstacles only used for testing
-        if TESTING_MODE:
+        if self.TESTING_MODE:
             self.static_obstacle_map = Obstacles.create_obstacle_map()
             self.initialize_static_obstacle_map(Game)
             Simulation.add_obs_to_sim(self.static_obstacle_map)

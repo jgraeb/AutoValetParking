@@ -9,7 +9,7 @@ import trio
 import numpy as np
 import math
 from components.camera.gametools import make_line, remove_duplicates, rad2rad
-from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM, TESTING_MODE
+from variables.global_vars import SCALE_FACTOR_PLAN, SCALE_FACTOR_SIM#, TESTING_MODE
 import sys
 sys.path.append('/anaconda3/lib/python3.7/site-packages')
 from shapely.geometry import Polygon, Point, LineString
@@ -39,9 +39,10 @@ class Game(BoxComponent):
         self.trajs = dict()
         self.Logger = None
         self.obstacles = dict()
+        self.TESTING_MODE = False
 
     async def keep_track_influx(self):
-        if TESTING_MODE:
+        if self.TESTING_MODE:
             in_channel = self.in_channels['TestSuite']
         else:
             in_channel = self.in_channels['GameEnter']
@@ -554,9 +555,10 @@ class Game(BoxComponent):
                 return False
         return True
 
-    async def run(self, Logger):
+    async def run(self, Logger,TESTING_MODE):
         self.Logger = Logger
         self.Logger.info('GAME - started')
+        self.TESTING_MODE = TESTING_MODE
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.keep_track_influx)
             nursery.start_soon(self.keep_track_influx_peds)

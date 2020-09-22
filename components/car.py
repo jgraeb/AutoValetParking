@@ -6,7 +6,7 @@
 from prepare.boxcomponent import BoxComponent
 import trio
 import numpy as np
-from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED, TESTING_MODE
+from variables.global_vars import START_X, START_Y, START_YAW, SCALE_FACTOR_PLAN, DELAY_THRESH, TARGET_SPEED#, TESTING_MODE
 #from prepare.communication import
 import motiontracking.mpc_tracking as tracking
 import math
@@ -69,6 +69,7 @@ class Car(BoxComponent):
         self.new_spot = False
         self.send_response_channel = None
         self.Logger = None
+        self.TESTING_MODE = False
 
     async def update_planner_command(self,Game, Time): # directive/response system - receiving directives
         async with self.in_channels['Planner']:
@@ -124,7 +125,7 @@ class Car(BoxComponent):
                     await trio.sleep(0)
                     #await self.send_response(send_response_channel)
 
-    async def iterative_linear_mpc_control(self, xref, x0, dref, oa, od, breaking):
+    def iterative_linear_mpc_control(self, xref, x0, dref, oa, od, breaking):
         if oa is None or od is None:
             oa = [0.0] * tracking.T
             od = [0.0] * tracking.T
@@ -182,7 +183,7 @@ class Car(BoxComponent):
                 xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
                 # current state
                 x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
-                oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, True)
+                oa, odelta = self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, True)
                 if odelta is not None:
                     di, ai = odelta[0], oa[0]
                 self.state = tracking.update_state(self.state, ai, di)
@@ -279,6 +280,7 @@ class Car(BoxComponent):
         #self.waiting = False
         blocked = False
         while tracking.MAX_TIME >= time:
+            time_loop_start = trio.current_time()
             if self.status == 'Removed':
                 self.Logger.info('{0} - Removed'.format(self.name))
                 self.v = 0
@@ -372,9 +374,11 @@ class Car(BoxComponent):
             #print('Car {} back to driving'.format(self.id))
             self.status = 'Driving'
             self.waiting = False
+            if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed,self.last_segment): # modified goal speed
+                break
             xref, target_ind, dref = tracking.calc_ref_trajectory(self.state, cx, cy, cyaw, ck, sp, dl, target_ind)
             x0 = [self.state.x, self.state.y, self.state.v, self.state.yaw]  # current state
-            oa, odelta = await self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, False)
+            oa, odelta = self.iterative_linear_mpc_control(xref, x0, dref, oa, odelta, False)
             if odelta is not None:
                 di, ai = odelta[0], oa[0]
             self.state = tracking.update_state(self.state, ai, di)
@@ -384,8 +388,9 @@ class Car(BoxComponent):
             self.yaw = self.state.yaw
             self.v = self.state.v
             await trio.sleep(0)
-            if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed,self.last_segment): # modified goal speed
-                break
+            # if tracking.check_goal(self.state, goal, target_ind, len(cx),goalspeed,self.last_segment): # modified goal speed
+            #     break
+            #print(trio.current_time()-time_loop_start)
 
     def update_delay(self,Time):
         if self.requested:
@@ -459,7 +464,7 @@ class Car(BoxComponent):
         self.parked = False
         # including a failure in X% of cars randomly
         failidx = len(self.ref)
-        if TESTING_MODE: # no random failures
+        if self.TESTING_MODE: # no random failures
             chance = 100
         else:
             # if self.id ==1:
@@ -514,7 +519,7 @@ class Car(BoxComponent):
                 self.direction = tracking.check_direction(path)
                 # check if next segment is in the same direction or not to determine speed
                 next_direction = tracking.check_direction(self.ref[:][i+1])
-                if self.direction !=next_direction:
+                if self.direction != next_direction:
                     end_speed = 0.0
                     driving_speed = TARGET_SPEED/2
                 else:
@@ -640,9 +645,10 @@ class Car(BoxComponent):
         #     Game.reserved_areas_requested.pop(self)
         await self.send_response()
 
-    async def run(self,send_response_channel,Game, Time, Logger):
+    async def run(self,send_response_channel,Game, Time, Logger, TESTING_MODE):
         self.Logger = Logger
         self.Logger.info('{0} (ID {1}) - started'.format(self.name,self.id))
+        self.TESTING_MODE = TESTING_MODE
         self.send_response_channel = send_response_channel
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.update_planner_command,Game, Time)

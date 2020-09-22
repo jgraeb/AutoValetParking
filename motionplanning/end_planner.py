@@ -248,12 +248,15 @@ if __name__ == '__main__':
     remap = False
     if remap:
         end_states = find_end_states_from_image('AVP_planning_300p_end_states')
+        # end_states = find_end_states_from_image('AVP_planning_250p_end_states') # for ROS layout
         print(end_states)
         assume = TwoPointTurnAssumption(scan_radius=40,max_angle_diff=60,min_dist=15)
         guarantee = TwoPointTurnGuarantee(uncertainty=2)
         bitmap = img_to_csv_bitmap('AVP_planning_300p') # compute bitmap
+        # bitmap = img_to_csv_bitmap('AVP_planning_250p_reachability') # compute bitmap for ROS layout
         contract = EndStateContract(assume, guarantee, bitmap)
         with open('planning_graph.pkl', 'rb') as f:
+        # with open('planning_graph_250_reachability.pkl', 'rb') as f: # for ROS layout
             planning_graph = pickle.load(f)
         end_planner = EndPlanner(planning_graph=planning_graph,end_states=end_states,contract=contract)
         planning_graph = end_planner.get_planning_graph()
@@ -265,9 +268,11 @@ if __name__ == '__main__':
         edge_info = planning_graph['edge_info']
         simple_graph = planning_graph['graph']
         ps = []
+        # ps.append((60, 60, 0, 0)) # for ROS layout
         ps.append((120, 60, 0, 0))
         plt.plot(ps[0][0], ps[0][1], 'c.')
         img = plt.imread('imglib/AVP_planning_300p.png')
+        # img = plt.imread('imglib/AVP_planning_250p.png') # for ROS layout
         fig = plt.figure(1)
         plt.imshow(img)
         plt.axis('equal')
@@ -324,4 +329,3 @@ if __name__ == '__main__':
                             ps = ps[:-1]
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
-
