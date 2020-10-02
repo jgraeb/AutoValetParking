@@ -1,43 +1,64 @@
 # Tung Phan, Josefine Graebener
 # California Institute of Technology
-# This is an implementation of Curvature-Bounded Traversability
+# An implementation of the algorithms in Curvature-Bounded Traversability
 # Analysis for Motion Planning of Mobile Robots by R. V. Cowlagi and P. Tsiotras
-# https://users.wpi.edu/~rvcowlagi/publications/2014-tro-cbta.pdf
+# https://users.wpi.edu/~rvcowlagi/publications/2014-tro-cbta.pdf 
+# and https://users.wpi.edu/~rvcowlagi/publications/rvcowlagi-phdthesis.pdf
 
-import matplotlib.pyplot as plt
-from ipdb import set_trace as st
-import numpy as np
 from scipy.optimize import fsolve
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import List, Tuple
 
-def solve_Acos_Bsin_C(A, B, C):
-    # solve A cos(x) + B sin(x) = C, assuming cos(x) >= 0
-    # compute coefficients of quadratic equations
-    # a sinx^2 + b sinx + c = 0
-    a = A**2 + B**2
-    b = -2*B*C
-    c = C**2 - A**2
-    return [np.arcsin(sol) for sol in np.roots([a, b, c])]
 
-def solve_abc(A, B, C, guess):
-    # solve Acos(x) + Bsin(x) = C
-    # print('A'+str(A)+'B'+str(B)+'C'+str(C))
-    # R = np.sqrt(A**2+B**2)
-    # if A == 0.0:
-    #     alpha = np.arctan(np.inf)
-    # else:
-    #     alpha = np.arctan(B/A)
-    # sola = + np.arccos(C/R) + alpha
-    # solb = - np.arccos(C/R) + alpha
-    # sol = [sola, solb]
+class ChannelProblemSpecifications:
+    """
+    Problem specification class.
+    """
+    def __init__(self, d: float, y: float, z: float, w: float, r: float, beta_lo: float, beta_hi: float):
+        """
+        Init class object with params.
+        :param d: Square channel side length.
+        :param y: Lower bound on exit edge.
+        :param z: Upper bound on exit edge.
+        :param w: Position of entry point on entry edge.
+        :param r: Minimum radicus of curvature.
+        :param beta_lo: Min allowable heading on exit.
+        :param beta_hi: Max allowable  heading on exit.
+        """
+        self.d = d
+        self.y = y
+        self.z = z
+        self.w = w
+        self.r = r
+        self.beta_lo = beta_lo
+        self.beta_hi = beta_hi
+
+    def extract_params(self) -> Tuple[float]:
+        """
+        Return all parameters as a tuple.
+        """
+        return self.d, self.y, self.z, self.w, self.r, self.beta_lo, self.beta_hi
+
+
+def solve_abc(A: float, B: float, C: float, guess: float) -> List[float]:
+    """
+    Solves the equation A cos(x) + B sin(x) - C for x, given guess.
+    :param A: A coeffient.
+    :param B: B coeffient.
+    :param C: A coeffient.
+    :param guess: An initial guess.
+    :return: A list of solutions.
+    """
     root = fsolve(lambda x: A*np.cos(x) + B*np.sin(x) - C, guess)
     return root
 
-def get_Lambda_prime_x_CBTA_S1(spec):
+def get_Lambda_prime_x_CBTA_S1(spec: ChannelProblemSpecifications):
     Xs, LS, gammas = get_Upsilon_prime_x_CBTA_S1(spec) # use same function after flipping the spec
     LS = [-u if u is not None else None for u in LS] # flip the result as well
     return Xs, LS, gammas
 
-def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1 # Case 3
+def get_Upsilon_prime_x_CBTA_S1(spec: ChannelProblemSpecifications): # computation of Ypsilon_x(W) for CBTA-S1 # Case 3
     d, y, z, w, r, beta_lo, beta_hi = spec.extract_params()
     UPS = []
     gammas = []
@@ -289,7 +310,8 @@ def get_Lambda_prime_x_CBTA_S2(spec):
                 LS.append(np.rad2deg(Lambda_prime_x))
                 Xs.append(x)
                 gammas.append(np.rad2deg(beta_star_x))
-    for x in np.linspace(max(n1,y),min(n2,z),100):
+
+    for x in np.linspace(max(n1,y), min(n2,z), 100):
         sigma6 = (w**2 + x**2)/(2*r)
         A = -x
         B = w
@@ -333,63 +355,49 @@ def find_alphas(UPS, LS):
     alpha_lo = np.min(LS_mod)
     return alpha_hi, alpha_lo
 
-class Spec:
-    def __init__(self, d, y, z, w, r, beta_lo, beta_hi):
-        self.d = d
-        self.y = y
-        self.z = z
-        self.w = w
-        self.r = r
-        self.beta_lo = beta_lo
-        self.beta_hi = beta_hi
-    def extract_params(self):
-        return self.d, self.y, self.z, self.w, self.r, self.beta_lo, self.beta_hi
-
-    def get_altered_spec_for_lambda_prime_x_s1(self):
-        w = self.d -self.w
-        beta_lo = -self.beta_hi * (self.d - self.x)
-        beta_hi = -self.beta_lo * (self.d - self.x)
-        return Spec(d=self.d, y=self.y, z=self.z, w=w, r=self.r,
-                beta_lo=beta_lo, beta_hi=beta_hi)
 
 if __name__ == '__main__':
     # AVP Car parameters
     # Radius of curvature
-    rad_car = 6 #m
-    c_car = 1/rad_car #1/m
+    rad_car = 6 # m
+    c_car = 1/rad_car # 1/m
 
     # Choose which set of plots
     PLOT = 'Alphas' # 'SingleW' (check for specific w value),'Alphas' (find alpha_high and alpha_low)
-    CASE = 'CBTA-S2' # 'CBTA-S1', 'CBTA-S2'
-    # Example 1: Traversing a single rectangle
-    d = 10 # grid size in meters
-    y = 0 #
-    z = 5
+    CASE = 'CBTA-S1' # 'CBTA-S1', 'CBTA-S2'
+
+    # Example 1: Traversing a single square
+    d = 10 # Grid size in meters
+    y = 0 # Lower bound on exit edge
+    z = 5 # Upper bound on exit edge
+
     w_s = 5 # enter value for w if want to check for specific w value
     w_arr = np.linspace(0.3,9.0,20) # interval of w for Alphas case
     r = 45 # maximum radius of curvature (assuming larger than box for now)
-    beta_lo = -40/180*np.pi
-    beta_hi = 10/180*np.pi
+    beta_lo = -40/180.0 * np.pi
+    beta_hi = 10/180.0 * np.pi
+
     alpha_his = []
     alpha_los = []
+
     if PLOT == 'Alphas':
         for w_cur in w_arr:
             if CASE == 'CBTA-S1':
                 # spec for Upsilon analysis
-                spec = Spec(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
+                spec = ChannelProblemSpecifications(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
                 Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S1(spec)
                 # alter spec for Lambda analysis (Flip horizontally)
-                spec = Spec(d=d,y=d-z,z=d,w=d-w_cur,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
+                spec = ChannelProblemSpecifications(d=d,y=d-z,z=d,w=d-w_cur,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
                 Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S1(spec)
             elif CASE == 'CBTA-S2':
                 # same spec for both algorithms
-                spec = Spec(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
+                spec = ChannelProblemSpecifications(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
                 Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S2(spec)
                 Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S2(spec)
             try:
                 alpha_hi, alpha_lo = find_alphas(UPS, LS)
             except:
-                st()
+                import pdb; pdb.set_trace()
             alpha_his.append(alpha_hi)
             alpha_los.append(alpha_lo)
         plt.plot(w_arr, alpha_his, 'b',  label='Alpha High')
@@ -400,10 +408,10 @@ if __name__ == '__main__':
         plt.title('Upper and lower Angle Bounds')
         plt.show()
     elif PLOT == 'SingleW':
-        spec = Spec(d=d,y=y,z=z,w=w_s,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
+        spec = ChannelProblemSpecifications(d=d,y=y,z=z,w=w_s,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
         if CASE == 'CBTA-S1':
             Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S1(spec)
-            spec = Spec(d=d,y=y,z=z,w=d-w_s,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
+            spec = ChannelProblemSpecifications(d=d,y=y,z=z,w=d-w_s,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
             Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S1(spec)
             Xs2 = [-(a-10) for a in Xs2]
         elif CASE == 'CBTA-S2':
@@ -421,3 +429,4 @@ if __name__ == '__main__':
         plt.legend()
         plt.title(CASE)
         plt.show()
+
