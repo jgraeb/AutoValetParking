@@ -58,6 +58,7 @@ def get_Lambda_prime_x_CBTA_S1(spec: ChannelProblemSpecifications):
     LS = [-u if u is not None else None for u in LS] # flip the result as well
     return Xs, LS, gammas
 
+
 def get_Upsilon_prime_x_CBTA_S1(spec: ChannelProblemSpecifications): # computation of Ypsilon_x(W) for CBTA-S1 # Case 3
     d, y, z, w, r, beta_lo, beta_hi = spec.extract_params()
     UPS = []
@@ -81,6 +82,7 @@ def get_Upsilon_prime_x_CBTA_S1(spec: ChannelProblemSpecifications): # computati
         n2 = w + np.sqrt(r**2 - (r*np.sin(a_star_w)-d1)**2) - r * np.cos(a_star_w)
 
         if m1>=y or m2<=z:
+            #TODO: SOME PARTS SEEM INCORRECT HERE?, BUT CURRENTLY BEING BYPASSED!
             for x in np.linspace(min(y,m2), max(m1, z),100):
                 Upsilon_prime_x = a_star_w
                 print('U'+str(np.rad2deg(Upsilon_prime_x)))
@@ -89,8 +91,9 @@ def get_Upsilon_prime_x_CBTA_S1(spec: ChannelProblemSpecifications): # computati
                     UPS.append(max_val)
                     gammas.append(beta_star_x / np.pi * 180)
                     Xs.append(x)
+
         if n1>=y or n2<=z:
-            # execute 8-14 of Fig. C.4
+            # Execute 8-14 of Fig. C.4
             for x in np.linspace(max(m1,y), min(m2,z)):
                 A = np.cos(a_star_w)+(x-w)/r
                 B = np.sin(a_star_w)-d1/r
@@ -99,7 +102,7 @@ def get_Upsilon_prime_x_CBTA_S1(spec: ChannelProblemSpecifications): # computati
                 if beta_star_x < beta_lo:
                     A = np.cos(beta_lo)+(x-w)/r
                     B = np.sin(beta_lo)- d1/r
-                    C = 1 - (x-w)/r*np.cos(beta_lo)+ d1/r*np.sin(beta_lo)-((x-w)**2+d1**2)/(2*r**2)
+                    C = 1 - (x-w)/r*np.cos(beta_lo) + d1/r*np.sin(beta_lo)-((x-w)**2+d1**2)/(2*r**2)
                     Upsilon_prime_x = solve_abc(A,B,C,guess)
                     guess = Upsilon_prime_x
                 else:
