@@ -8,29 +8,51 @@ import matplotlib.pyplot as plt
 from ipdb import set_trace as st
 import numpy as np
 from scipy.optimize import fsolve
+from typing import List, Tuple
 
-def solve_Acos_Bsin_C(A, B, C):
-    # solve A cos(x) + B sin(x) = C, assuming cos(x) >= 0
-    # compute coefficients of quadratic equations
-    # a sinx^2 + b sinx + c = 0
-    a = A**2 + B**2
-    b = -2*B*C
-    c = C**2 - A**2
-    return [np.arcsin(sol) for sol in np.roots([a, b, c])]
+class ChannelProblemSpecifications:
+    """
+    Problem specification class.
+    """
+    def __init__(self, d: float, y: float, z: float, w: float, r: float, beta_lo: float, beta_hi: float):
+        """
+        Init class object with params.
+        :param d: Square channel side length.
+        :param y: Lower bound on exit edge.
+        :param z: Upper bound on exit edge.
+        :param w: Position of entry point on entry edge.
+        :param r: Minimum radicus of curvature.
+        :param beta_lo: Min allowable heading on exit.
+        :param beta_hi: Max allowable  heading on exit.
+        """
+        self.d = d
+        self.y = y
+        self.z = z
+        self.w = w
+        self.r = r
+        self.beta_lo = beta_lo
+        self.beta_hi = beta_hi
+
+    def extract_params(self) -> Tuple[float]:
+        """
+        Return all parameters as a tuple.
+        """
+        return self.d, self.y, self.z, self.w, self.r, self.beta_lo, self.beta_hi
 
 def solve_abc(A, B, C, guess):
-    # solve Acos(x) + Bsin(x) = C
-    # print('A'+str(A)+'B'+str(B)+'C'+str(C))
-    # R = np.sqrt(A**2+B**2)
-    # if A == 0.0:
-    #     alpha = np.arctan(np.inf)
-    # else:
-    #     alpha = np.arctan(B/A)
-    # sola = + np.arccos(C/R) + alpha
-    # solb = - np.arccos(C/R) + alpha
-    # sol = [sola, solb]
     root = fsolve(lambda x: A*np.cos(x) + B*np.sin(x) - C, guess)
     return root
+
+def get_union_interval(abounds, bbounds, stepsize = 0.1):
+    y,m1 = abounds
+    m2,z = bbounds
+    linspace_a = list(np.arange(y,m1,stepsize))
+    linspace_b = list(np.arange(m2,z,stepsize))
+    linspace_c = linspace_a + linspace_b
+    return linspace_c
+
+def get_intersection_of_set_with_interval(listinterval, intervalb):
+    return [item for item in listinterval if item <= intervalb[-1] and item >= intervalb[0]]
 
 def get_Lambda_prime_x_CBTA_S1(spec):
     Xs, LS, gammas = get_Upsilon_prime_x_CBTA_S1(spec) # use same function after flipping the spec
@@ -48,9 +70,8 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
     d1 = d2 = d
     guess = 0.5
     gamguess = 0
-
+    #st()
     a_star_w = np.arccos(1-(d-w)/r)
-
     if False:#r<=(d1**2+(d2-w)**2)/(2*(d2-w)) and r+np.sqrt(2*r*(d2-w)-(d2-w)**2) < d1:
         print('execute proc C.4') # not used in this case
     else:
@@ -60,9 +81,9 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
         n2 = w + np.sqrt(r**2 - (r*np.sin(a_star_w)-d1)**2) - r * np.cos(a_star_w)
 
         if m1>=y or m2<=z:
-            for x in np.linspace(min(y,m2), max(m1, z),100):
+            for x in get_union_interval((y,m2),(m1, z)):#np.linspace(min(y,m2), max(m1, z),100):
                 Upsilon_prime_x = a_star_w
-                print('U'+str(np.rad2deg(Upsilon_prime_x)))
+                #print('U'+str(np.rad2deg(Upsilon_prime_x)))
                 max_val = np.max(np.rad2deg(Upsilon_prime_x))
                 if not np.iscomplex(max_val):
                     UPS.append(max_val)
@@ -70,7 +91,9 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
                     Xs.append(x)
         if n1>=y or n2<=z:
             # execute 8-14 of Fig. C.4
-            for x in np.linspace(max(m1,y), min(m2,z)):
+            listinterval = get_union_interval((m1,n1), (n2,m2))
+            for x in get_intersection_of_set_with_interval(listinterval, (y,z)): # check n1
+            #for x in np.linspace(max(m1,y), min(m2,z)):
                 A = np.cos(a_star_w)+(x-w)/r
                 B = np.sin(a_star_w)-d1/r
                 C = 1 - (x-w)/r*np.cos(a_star_w) + d1/r*np.sin(a_star_w) - ((x-w)**2+d1**2)/(2*r**2)
@@ -83,20 +106,20 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
                     guess = Upsilon_prime_x
                 else:
                     Upsilon_prime_x = a_star_w
-                print('U'+str(np.rad2deg(Upsilon_prime_x)))
+                #print('U'+str(np.rad2deg(Upsilon_prime_x)))
                 max_val = np.max(np.rad2deg(Upsilon_prime_x))
                 if not np.iscomplex(max_val):
                     UPS.append(max_val)
                     gammas.append(beta_star_x / np.pi * 180)
                     Xs.append(x)
-
-        for x in np.linspace(y, min(n2, z),100):
+        for x in np.linspace(max(y,n1), min(n2, z),100):
+        #for x in np.linspace(y, min(n2, z),100):
             sigma3 = (d1**2 + (x-w)**2)/(2*r)
             A = (x-w)
             B = -d1
             C = sigma3
             gamma_star_x_arr_2 = solve_abc(A,B,C,0)
-            print('G'+str(gamma_star_x_arr_2))
+            #print('G'+str(gamma_star_x_arr_2))
             gamma_x = np.min(gamma_star_x_arr_2)
             for gamma_star_x in [gamma_x]:
                 if gamma_star_x < beta_lo:
@@ -107,7 +130,7 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
                     C = 1-(x-w)/r*np.cos(beta_lo)+d1/r*np.sin(beta_lo)-sigma3/r
                     Upsilon_prime_x = solve_abc(A,B,C,guess) # equation (4)
                     guess = Upsilon_prime_x
-                    print('U'+str(np.rad2deg(Upsilon_prime_x)))
+                    #print('U'+str(np.rad2deg(Upsilon_prime_x)))
                     max_val = np.max(np.rad2deg(Upsilon_prime_x))
                     if not np.iscomplex(max_val):
                         UPS.append(max_val)
@@ -120,7 +143,7 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
                     C = sigma3
                     Upsilon_prime_x = solve_abc(A,B,C,guess) # equation (5)
                     guess = Upsilon_prime_x
-                    print('U'+str(np.rad2deg(Upsilon_prime_x)))
+                    #print('U'+str(np.rad2deg(Upsilon_prime_x)))
                     max_val = np.max(np.rad2deg(Upsilon_prime_x))
                     if not np.iscomplex(max_val):
                         UPS.append(max_val)
@@ -150,6 +173,42 @@ def get_a_star(d1,d2,w,r):
         a_star_w_2 = np.min([val1, val2])
     a_star_w = np.min([a_star_w_1,a_star_w_2])
     return a_star_w
+
+def get_a_star_max(d1,d2,w,r):
+    """
+    Return a_star for the adjacent channel case.
+    """
+    # (C.11) and (C.12) of thesis
+    # Define alpha_1_star
+    if d2 - w > r:
+        a_star_w_1 = np.pi/2
+    else:
+        a_star_w_1 = np.arccos(1-(d2-w)/r)
+
+    # Define alpha_2_star
+    if r <= d1/2:
+        a_star_w_2 = np.pi/2
+    elif r > d1/2 and w > np.sqrt(2*d1*r-d1**2):
+        a_star_w_2 = np.arcsin(d1/r-1)
+    else:
+        d_hat = np.sqrt((d1**2+w**2)*(4*r**2-1))/(d1**2+2*r*w+w**2)
+        val1 = 2*np.arctan(d1+d_hat)
+        val2 = 2*np.arctan(d1-d_hat)
+        a_star_w_2 = min(val1, val2)
+
+    # Take the min
+    a_star_w = min(a_star_w_1, a_star_w_2)
+    return a_star_w
+
+def get_a_star_min(w: float, r: float) -> float:
+    """
+    Compute a_star_min in (C.14) from thesis.
+    """
+    if w > r:
+        a_star_w = np.pi/2
+    else:
+        a_star_w = np.arccos(1-w/r)
+    return -a_star_w
 
 def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
     d, y, z, w, r, beta_lo, beta_hi = spec.extract_params()
@@ -202,7 +261,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
                 C = 1 - x/r*np.cos(beta_lo) + w/r*np.sin(beta_lo) - (w**2+x**2)/(2*r**2)
                 Upsilon_prime_x = solve_abc(A,B,C, guess)
                 guess = Upsilon_prime_x
-                print('U'+str(Upsilon_prime_x))
+                #print('U'+str(Upsilon_prime_x))
                 UPS.append(np.rad2deg(Upsilon_prime_x))
                 Xs.append(x)
                 gammas.append(np.rad2deg(beta_star_x))
@@ -219,7 +278,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
             gamma_star_x_arr = solve_abc(A,B,C, gamguess)
             gamma_star_x = np.min(gamma_star_x_arr)
             gamguess = gamma_star_x
-            print('G'+str(gamma_star_x_arr))
+            #print('G'+str(gamma_star_x_arr))
             if gamma_star_x < beta_lo:
                 sigma4 = np.sin(beta_lo)-w/r
                 sigma5 = -np.cos(beta_lo)-x/r
@@ -227,7 +286,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
                 B = sigma5
                 C = 1-x/r*np.cos(beta_lo)+w/r*np.sin(beta_lo)-(w**2+x**2)/(2*r**2)
                 Upsilon_prime_x = solve_abc(A,B,C, guess)
-                print('U'+str(Upsilon_prime_x))
+                #print('U'+str(Upsilon_prime_x))
                 guess = Upsilon_prime_x
                 max_val = np.max(Upsilon_prime_x)
                 if not np.iscomplex(max_val):
@@ -239,7 +298,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
                 B = x
                 C = sigma6
                 Upsilon_prime_x = solve_abc(A,B,C, guess)
-                print('U'+str(Upsilon_prime_x))
+                #print('U'+str(Upsilon_prime_x))
                 guess = Upsilon_prime_x
                 max_val = np.max(Upsilon_prime_x)
                 if not np.iscomplex(max_val):
@@ -285,7 +344,7 @@ def get_Lambda_prime_x_CBTA_S2(spec):
                 C = 1 - x/r*np.cos(beta_lo)+w/r*np.sin(beta_lo)-(w**2+x**2)/(2*r**2)
                 Lambda_prime_x = solve_abc(A,B,C,guess)
                 guess = Lambda_prime_x
-                print('L'+str(Lambda_prime_x))
+                #print('L'+str(Lambda_prime_x))
                 LS.append(np.rad2deg(Lambda_prime_x))
                 Xs.append(x)
                 gammas.append(np.rad2deg(beta_star_x))
@@ -305,7 +364,7 @@ def get_Lambda_prime_x_CBTA_S2(spec):
             C = 1-x/r*np.cos(beta_lo)+w/r*np.sin(beta_lo)-(w**2+x**2)/(2*r**2)
             Lambda_prime_x = solve_abc(A,B,C, guess)
             guess = Lambda_prime_x
-            print('L'+str(Lambda_prime_x))
+            #print('L'+str(Lambda_prime_x))
             LS.append(np.rad2deg(Lambda_prime_x))
             Xs.append(x)
             gammas.append(np.rad2deg(gamma_star_x))
@@ -315,7 +374,7 @@ def get_Lambda_prime_x_CBTA_S2(spec):
             C = sigma6
             Lambda_prime_x = solve_abc(A,B,C, guess)
             guess = Lambda_prime_x
-            print('L'+str(Lambda_prime_x))
+            #print('L'+str(Lambda_prime_x))
             LS.append(np.rad2deg(Lambda_prime_x))
             Xs.append(x)
             gammas.append(np.rad2deg(gamma_star_x))
@@ -360,16 +419,16 @@ if __name__ == '__main__':
 
     # Choose which set of plots
     PLOT = 'Alphas' # 'SingleW' (check for specific w value),'Alphas' (find alpha_high and alpha_low)
-    CASE = 'CBTA-S2' # 'CBTA-S1', 'CBTA-S2'
+    CASE = 'CBTA-S1' # 'CBTA-S1', 'CBTA-S2'
     # Example 1: Traversing a single rectangle
     d = 10 # grid size in meters
     y = 0 #
     z = 5
-    w_s = 5 # enter value for w if want to check for specific w value
-    w_arr = np.linspace(0.3,9.0,20) # interval of w for Alphas case
-    r = 45 # maximum radius of curvature (assuming larger than box for now)
-    beta_lo = -40/180*np.pi
-    beta_hi = 10/180*np.pi
+    w_s = 4.102564102564102 # enter value for w if want to check for specific w value
+    w_arr = np.linspace(0.0,d,20) # interval of w for Alphas case
+    r = 6.0 # min radius of curvature (assuming larger than box for now)
+    beta_lo = -45/180*np.pi
+    beta_hi = 45/180*np.pi
     alpha_his = []
     alpha_los = []
     if PLOT == 'Alphas':
@@ -394,8 +453,8 @@ if __name__ == '__main__':
             alpha_los.append(alpha_lo)
         plt.plot(w_arr, alpha_his, 'b',  label='Alpha High')
         plt.plot(w_arr, alpha_los, 'r', label='Alpha Low')
-        #plt.ylim((-90,90))
-        plt.xlim((0,10))
+        plt.ylim((-90,90))
+        #plt.xlim((0,10))
         plt.legend()
         plt.title('Upper and lower Angle Bounds')
         plt.show()
@@ -409,6 +468,7 @@ if __name__ == '__main__':
         elif CASE == 'CBTA-S2':
             Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S2(spec)
             Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S2(spec)
+        st()
         plt.plot(Xs, gammas, 'b',label='Gamma')
         plt.plot(Xs, UPS, 'k',label='Upsilon')
         plt.plot(Xs2, LS, 'g', label='Lambda')
