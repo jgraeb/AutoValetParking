@@ -9,6 +9,7 @@ from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import List, Tuple
+from ipdb import set_trace as st
 
 
 class ChannelProblemSpecifications:
@@ -204,7 +205,7 @@ def get_a_star_min(w: float, r: float) -> float:
         a_star_w = np.pi/2
     else:
         a_star_w = np.arccos(1-w/r)
-    return -a_star_w
+    return -np.pi/2#-a_star_w
 
 def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
     d, y, z, w, r, beta_lo, beta_hi = spec.extract_params()
@@ -225,6 +226,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
         print('do fig C.11') # not used in example
         st()
     else:
+        #st()
         m = r*np.sin(a_star_w) + np.sqrt\
             (\
             2*r**2*(1-np.cos(a_star_w)+0.5*np.sin(a_star_w)**2) +\
@@ -240,7 +242,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
                 Upsilon_prime_x = a_star_w
                 UPS.append(np.rad2deg(Upsilon_prime_x))
                 Xs.append(x)
-                gammas.append(np.rad2deg(gamma_star_x))
+                #gammas.append(np.rad2deg(gamma_star_x))
         for x in np.linspace(max(n,y), min(m,z), 100): ## TODO: check this
             #print('6-12 of C.11')
             A = -np.sin(a_star_w) + x/r
@@ -317,10 +319,10 @@ def get_Lambda_prime_x_CBTA_S2(spec):
     guess = -0.5
     gamguess = 0
     # find a_star_w
-    if r<=(d1**2+w**2)/(2*w):
-        a_star_w = get_a_star_min(w,r)
-        LS.append(a_star_w)
-        return Xs, LS, gammas
+    # if r<=(d1**2+w**2)/(2*w):
+    #     a_star_w = get_a_star_min(w,r)
+    #     LS.append(a_star_w)
+    #     return Xs, LS, gammas
 
     a_star_w = get_a_star_min(w,r)
     #else:
@@ -407,15 +409,15 @@ if __name__ == '__main__':
     CASE = 'CBTA-S2' # 'CBTA-S1', 'CBTA-S2'
 
     # Example 1: Traversing a single square
-    d = 10 # Grid size in meters
+    d = 3.0 # Grid size in meters
     y = 0 # Lower bound on exit edge
-    z = 5 # Upper bound on exit edge
+    z = d # Upper bound on exit edge
 
     w_s = 5 # enter value for w if want to check for specific w value
-    w_arr = np.linspace(0,10.0,40) # interval of w for Alphas case
-    r = 45 # maximum radius of curvature (assuming larger than box for now)
-    beta_lo = -40/180.0 * np.pi
-    beta_hi = 10/180.0 * np.pi
+    w_arr = np.linspace(0,d,40) # interval of w for Alphas case
+    r = 6.0 # maximum radius of curvature (assuming larger than box for now)
+    beta_lo = -27.5/180.0 * np.pi
+    beta_hi = 27.5/180.0 * np.pi
 
     alpha_his = []
     alpha_los = []
@@ -445,7 +447,7 @@ if __name__ == '__main__':
         plt.xlabel('w')
         plt.ylabel('alphas')
         #plt.ylim((-90,90))
-        plt.xlim((0,10))
+        plt.xlim((0,d))
         plt.legend()
         plt.title('Upper and lower Angle Bounds')
         plt.show()
