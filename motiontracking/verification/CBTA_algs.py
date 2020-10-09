@@ -208,7 +208,7 @@ def get_a_star_min(w: float, r: float) -> float:
         a_star_w = np.pi/2
     else:
         a_star_w = np.arccos(1-w/r)
-    return -a_star_w
+    return -np.pi/2#-a_star_w
 
 def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
     d, y, z, w, r, beta_lo, beta_hi = spec.extract_params()
@@ -247,7 +247,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
                 Upsilon_prime_x = a_star_w
                 UPS.append(np.rad2deg(Upsilon_prime_x))
                 Xs.append(x)
-                gammas.append(np.rad2deg(gamma_star_x))
+                #gammas.append(np.rad2deg(gamma_star_x))
         for x in np.linspace(max(n,y), min(m,z)): ## CHECK THIS
             print('6-12 of C.11')
             #for x in np.linspace(y,min(m,z)):
@@ -419,16 +419,16 @@ if __name__ == '__main__':
 
     # Choose which set of plots
     PLOT = 'Alphas' # 'SingleW' (check for specific w value),'Alphas' (find alpha_high and alpha_low)
-    CASE = 'CBTA-S1' # 'CBTA-S1', 'CBTA-S2'
+    CASE = 'CBTA-S2' # 'CBTA-S1', 'CBTA-S2'
     # Example 1: Traversing a single rectangle
-    d = 10 # grid size in meters
-    y = 0 #
-    z = 5
+    d = 3 # grid size in meters
+    y = 0.0#
+    z = d
     w_s = 4.102564102564102 # enter value for w if want to check for specific w value
-    w_arr = np.linspace(0.0,d,20) # interval of w for Alphas case
+    w_arr = np.linspace(0.0,d,40) # interval of w for Alphas case
     r = 6.0 # min radius of curvature (assuming larger than box for now)
-    beta_lo = -45/180*np.pi
-    beta_hi = 45/180*np.pi
+    beta_lo = -27.5/180*np.pi
+    beta_hi = 27.5/180*np.pi
     alpha_his = []
     alpha_los = []
     if PLOT == 'Alphas':
