@@ -85,8 +85,11 @@ class PrimChannel:
             rectangle = Rectangle(1, self.gridsize, self.gridsize, self.buffer/2, self.gridsize-self.buffer/2, self.buffer/2, self.gridsize-self.buffer/2)
             self.rectangles.append(rectangle)
 
-    def define_parallel_square(self):
-        square = Rectangle(1, self.gridsize, self.gridsize, self.buffer/2, self.gridsize-self.buffer/2, self.buffer/2, self.gridsize-self.buffer/2)
+    def define_parallel_square(self, exit_angle):
+        if exit_angle ==0:
+            square = Rectangle(1, self.gridsize, self.gridsize, 0, self.gridsize, self.buffer/2, self.gridsize-self.buffer/2)
+        elif exit_angle == -45:
+            square = Rectangle(1, self.gridsize, self.gridsize, 0, self.gridsize, 0, self.buffer/2)
         return square
 
     def define_adjacent_square(self):
@@ -146,13 +149,12 @@ def find_alpha_bounds(avp_spec, square):
             # alter spec for Lambda analysis (Flip horizontally)
             spec = Spec(d=d,y=d-z,z=d,w=d-w_cur,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
             Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S1(spec)
-            alpha_hi, alpha_lo = find_alphas(UPS, LS)
         if square.type==2:
             # spec for Upsilon analysis
             spec = Spec(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
             Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S2(spec)
             Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S2(spec)
-            alpha_hi, alpha_lo = find_alphas(UPS, LS)
+        alpha_hi, alpha_lo = find_alphas(UPS, LS)
         alpha_his.append(alpha_hi)
         alpha_los.append(alpha_lo)
     return alpha_his, alpha_los, w_arr
@@ -174,7 +176,7 @@ def run_testcase(avp_spec): # try verification with first primitive (straight ah
 def run_parallel_square(avp_spec, buffer):
     beta_lo, beta_hi, alpha_min, alpha_max, r, gridsize = avp_spec.extract_params()
     segment = PrimChannel("0", gridsize, buffer)
-    square = segment.define_parallel_square()
+    square = segment.define_parallel_square(0)
     alpha_his, alpha_los, w_arr = find_alpha_bounds(avp_spec, square)
     return w_arr, alpha_his, alpha_los
     #plot_bounds(w_arr, alpha_his, alpha_los)
@@ -187,8 +189,17 @@ def run_paper_example():
     return w_arr, alpha_his, alpha_los
 
 if __name__ == '__main__':
-    # AVP parameters
-    avp_spec = AVPSpec(np.deg2rad(-90), np.deg2rad(90), np.deg2rad(-90), np.deg2rad(90), 5.0, 15)
+    # define exit configuration
+    exit_config = [0, 20.0, 0.0] # nomimal_exit_angle, angle_bound, buffer\
+    exit_angle = exit_config[0]
+    angle_bound = exit_config[1] # in degrees
+    buffer = exit_config[2]
+    gridsize_pxl = 10 # in pixel (1 pxl = 0.3 m)
+    gridsize = gridsize_pxl*SCALE_FACTOR_PLAN # in m
+    # AVP car parameters
+    r_curv = 6.0
+    # create the spec
+    avp_spec = AVPSpec(np.deg2rad(exit_angle-angle_bound), np.deg2rad(exit_angle+angle_bound), r_curv, gridsize_pxl)
     # run the motionprimitives testcase
     #run_testcase(avp_spec)
     # sanity check

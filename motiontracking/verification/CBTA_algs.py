@@ -4,11 +4,18 @@
 # Analysis for Motion Planning of Mobile Robots by R. V. Cowlagi and P. Tsiotras
 # https://users.wpi.edu/~rvcowlagi/publications/2014-tro-cbta.pdf
 
+<<<<<<< HEAD
+=======
+from scipy.optimize import fsolve
+#import matplotlib as mpl
+>>>>>>> 785c278... add parallel verification
 import matplotlib.pyplot as plt
 from ipdb import set_trace as st
 import numpy as np
 from scipy.optimize import fsolve
 from typing import List, Tuple
+from ipdb import set_trace as st
+import operator
 
 class ChannelProblemSpecifications:
     """
@@ -39,9 +46,53 @@ class ChannelProblemSpecifications:
         """
         return self.d, self.y, self.z, self.w, self.r, self.beta_lo, self.beta_hi
 
+<<<<<<< HEAD
 def solve_abc(A, B, C, guess):
     root = fsolve(lambda x: A*np.cos(x) + B*np.sin(x) - C, guess)
     return root
+=======
+
+def solve_abc(A: float, B: float, C: float, guess: float) -> List[float]:
+    """
+    Solves the equation A cos(x) + B sin(x) - C for x, given guess.
+    :param A: A coefficent.
+    :param B: B coefficent.
+    :param C: C coefficent.
+    :param guess: An initial guess.
+    :return: A list of solutions.
+    """
+    if guess is None:
+        #st()
+        root0 = fsolve(lambda x: A*np.cos(x) + B*np.sin(x) - C, 0)
+        root1 = fsolve(lambda x: A*np.cos(x) + B*np.sin(x) - C, -np.pi/2)
+        root2 = fsolve(lambda x: A*np.cos(x) + B*np.sin(x) - C, np.pi/2)
+        print(root0,root1,root2)
+        if np.abs(root0)< np.pi/2:
+            return root0
+        root = [root0,root1,root2]
+        absroot = [np.abs(root0),np.abs(root1),np.abs(root2)]
+        idx = absroot.index(min(absroot))
+        sol = check_if_solution_exists(A,B,C,root[idx])
+        if sol:
+            return root[idx]
+        else:
+            return sol
+    else:
+        root = fsolve(lambda x: A*np.cos(x) + B*np.sin(x) - C, guess)
+        print(root)
+        sol = check_if_solution_exists(A,B,C,root)
+        if sol:
+            return root
+        else:
+            return sol
+
+def check_if_solution_exists(A,B,C,x):
+    rem = A*np.cos(x)+B*np.sin(x)-C
+    if np.abs(rem) < 0.001:
+        return True
+    else:
+        return False
+>>>>>>> 785c278... add parallel verification
 
 def get_union_interval(abounds, bbounds, stepsize = 0.1):
     y,m1 = abounds
@@ -68,17 +119,24 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
     ups_2 = []
     # squares instead of rectangles
     d1 = d2 = d
+<<<<<<< HEAD
     guess = 0.5
     gamguess = 0
     #st()
+=======
+    guess = None
+    gamguess = None
+
+>>>>>>> 785c278... add parallel verification
     a_star_w = np.arccos(1-(d-w)/r)
     if False:#r<=(d1**2+(d2-w)**2)/(2*(d2-w)) and r+np.sqrt(2*r*(d2-w)-(d2-w)**2) < d1:
-        print('execute proc C.4') # not used in this case
+        print('execute proc C.4') # not used in this case - gives issues
     else:
         m1 = w - np.sqrt(4*r**2-(r*np.sin(a_star_w)-d1)**2) - r*np.cos(a_star_w)
         m2 = w + np.sqrt(4*r**2-(r*np.sin(a_star_w)-(d1-r))**2) - r*np.cos(a_star_w)
         n1 = w - np.sqrt(2*r*d1-d1**2)
         n2 = w + np.sqrt(r**2 - (r*np.sin(a_star_w)-d1)**2) - r * np.cos(a_star_w)
+<<<<<<< HEAD
 
         if m1>=y or m2<=z:
             for x in get_union_interval((y,m2),(m1, z)):#np.linspace(min(y,m2), max(m1, z),100):
@@ -107,19 +165,63 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
                 else:
                     Upsilon_prime_x = a_star_w
                 #print('U'+str(np.rad2deg(Upsilon_prime_x)))
+=======
+        #st()
+        if m1>=y or m2<=z:
+            for x in np.linspace(min(y,m2), max(m1, z),100):
+            #for x in np.linspace(y,z,100):#get_union_interval((y,m2),(m1, z)):
+                Upsilon_prime_x = a_star_w
+                print('Ups'+str(Upsilon_prime_))
+>>>>>>> 785c278... add parallel verification
                 max_val = np.max(np.rad2deg(Upsilon_prime_x))
                 if not np.iscomplex(max_val):
                     UPS.append(max_val)
-                    gammas.append(beta_star_x / np.pi * 180)
+                    #gammas.append(beta_star_x / np.pi * 180)
                     Xs.append(x)
+<<<<<<< HEAD
         for x in np.linspace(max(y,n1), min(n2, z),100):
         #for x in np.linspace(y, min(n2, z),100):
+=======
+                    #st()
+        #elif n1>=y or n2<=z:
+            # # execute 8-14 of Fig. C.4
+            # listinterval = get_union_interval((m1,n1), (n2,m2))
+            # #for x in np.linspace(max(m1,y), min(m2,z)):
+            # for x in get_intersection_of_set_with_interval(listinterval, (y,z)): # check n1
+            #     A = np.cos(a_star_w)+(x-w)/r
+            #     B = np.sin(a_star_w)-d1/r
+            #     C = 1 - (x-w)/r*np.cos(a_star_w) + d1/r*np.sin(a_star_w) - ((x-w)**2+d1**2)/(2*r**2)
+            #     beta_star_x = solve_abc(A,B,C,gamguess)
+            #     print('beta'+str(beta_star_x))
+            #     if beta_star_x < beta_lo:
+            #         A = np.cos(beta_lo)+(x-w)/r
+            #         B = np.sin(beta_lo)- d1/r
+            #         C = 1 - (x-w)/r*np.cos(beta_lo) + d1/r*np.sin(beta_lo)-((x-w)**2+d1**2)/(2*r**2)
+            #         Upsilon_prime_x = solve_abc(A,B,C,guess)
+            #         guess = Upsilon_prime_x
+            #     else:
+            #         Upsilon_prime_x = a_star_w
+            #     print('Ups'+str(Upsilon_prime_x))
+            #     max_val = np.max(np.rad2deg(Upsilon_prime_x))
+            #     if not np.iscomplex(max_val):
+            #         UPS.append(max_val)
+            #         gammas.append(beta_star_x / np.pi * 180)
+            #         Xs.append(x)
+            #         #st()
+
+        for x in np.linspace(y, min(n2, z),100):
+        #for x in np.linspace(max(y,n1), min(n2, z),100):
+>>>>>>> 785c278... add parallel verification
             sigma3 = (d1**2 + (x-w)**2)/(2*r)
             A = (x-w)
             B = -d1
             C = sigma3
             gamma_star_x_arr_2 = solve_abc(A,B,C,0)
+<<<<<<< HEAD
             #print('G'+str(gamma_star_x_arr_2))
+=======
+            print('Gamma'+str(gamma_star_x_arr_2))
+>>>>>>> 785c278... add parallel verification
             gamma_x = np.min(gamma_star_x_arr_2)
             for gamma_star_x in [gamma_x]:
                 if gamma_star_x < beta_lo:
@@ -130,27 +232,38 @@ def get_Upsilon_prime_x_CBTA_S1(spec): # computation of Ypsilon_x(W) for CBTA-S1
                     C = 1-(x-w)/r*np.cos(beta_lo)+d1/r*np.sin(beta_lo)-sigma3/r
                     Upsilon_prime_x = solve_abc(A,B,C,guess) # equation (4)
                     guess = Upsilon_prime_x
+<<<<<<< HEAD
                     #print('U'+str(np.rad2deg(Upsilon_prime_x)))
+=======
+                    print('Ups'+str(Upsilon_prime_x))
+>>>>>>> 785c278... add parallel verification
                     max_val = np.max(np.rad2deg(Upsilon_prime_x))
                     if not np.iscomplex(max_val):
                         UPS.append(max_val)
                         gammas.append(gamma_star_x / np.pi * 180)
                         Xs.append(x)
+                        #st()
                     break
-                if beta_lo <= gamma_star_x and gamma_star_x < beta_hi or gamma_star_x < beta_lo:
+                if beta_lo <= gamma_star_x and gamma_star_x < beta_hi:# or gamma_star_x < beta_lo:
                     A = -(x-w)
                     B = d1
                     C = sigma3
                     Upsilon_prime_x = solve_abc(A,B,C,guess) # equation (5)
                     guess = Upsilon_prime_x
+<<<<<<< HEAD
                     #print('U'+str(np.rad2deg(Upsilon_prime_x)))
+=======
+                    print('Ups'+str(Upsilon_prime_x))
+>>>>>>> 785c278... add parallel verification
                     max_val = np.max(np.rad2deg(Upsilon_prime_x))
                     if not np.iscomplex(max_val):
                         UPS.append(max_val)
                         gammas.append(gamma_star_x / np.pi * 180)
                         Xs.append(x)
+                        #st()
                         break
                 else:
+                    #st()
                     print('does not exist')
                     UPS.append(None)
                     Xs.append(x)
@@ -188,7 +301,7 @@ def get_a_star_max(d1,d2,w,r):
     # Define alpha_2_star
     if r <= d1/2:
         a_star_w_2 = np.pi/2
-    elif r > d1/2 and w > np.sqrt(2*d1*r-d1**2):
+    elif r > d1/2 and w < np.sqrt(2*d1*r-d1**2):
         a_star_w_2 = np.arcsin(d1/r-1)
     else:
         d_hat = np.sqrt((d1**2+w**2)*(4*r**2-1))/(d1**2+2*r*w+w**2)
@@ -204,7 +317,7 @@ def get_a_star_min(w: float, r: float) -> float:
     """
     Compute a_star_min in (C.14) from thesis.
     """
-    if w > r:
+    if w < r:
         a_star_w = np.pi/2
     else:
         a_star_w = np.arccos(1-w/r)
@@ -218,9 +331,10 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
     # now for square boxes
     d1 = d2 = d
     # guesses for solver
-    gamguess = 0.5
-    guess = 0.5
+    gamguess = None
+    guess = None
     # find a_star_w
+<<<<<<< HEAD
     if d2 - w <= r:
         a_star_w_1 = np.arccos(1-(d2-w)/r)
     else:
@@ -235,81 +349,106 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
         val2 = 2*np.arctan(d1-d_hat)
         a_star_w_2 = np.min([val1, val2])
     a_star_w = np.min([a_star_w_1,a_star_w_2])
+=======
+    a_star_w = get_a_star_max(d1,d2,w,r)
+    # st()
+    # print('astarw'+str(a_star_w))
+>>>>>>> 785c278... add parallel verification
     # start algorithm Fig.12
     if r+r*np.cos(a_star_w)<w:
         print('do fig C.11') # not used in example
-        st()
+        #st()
     else:
+<<<<<<< HEAD
         m = r*np.sin(a_star_w)+np.sqrt(2*r**2*(1-np.cos(a_star_w)+0.5*np.sin(a_star_w)**2)+2*w*r*(1+np.cos(a_star_w))-w**2)
         n = r*np.sin(a_star_w)+np.sqrt(r**2*np.sin(a_star_w)**2+2*w*r*np.cos(a_star_w)-w**2)
         if m<=z:
             for x in np.linspace(m, z):
+=======
+        #st()
+        m = r*np.sin(a_star_w) + np.sqrt(2*r**2*(1-np.cos(a_star_w)+0.5*np.sin(a_star_w)**2) +2*w*r*(1 + np.cos(a_star_w)) -w**2)
+        n = r*np.sin(a_star_w) + np.sqrt(r**2*np.sin(a_star_w)**2 + 2*w*r*np.cos(a_star_w) - w**2)
+
+        if m <= z:
+            for x in np.linspace(m, z, 100):
+>>>>>>> 785c278... add parallel verification
                 Upsilon_prime_x = a_star_w
                 UPS.append(np.rad2deg(Upsilon_prime_x))
                 Xs.append(x)
                 #gammas.append(np.rad2deg(gamma_star_x))
-        for x in np.linspace(max(n,y), min(m,z)): ## CHECK THIS
-            print('6-12 of C.11')
-            #for x in np.linspace(y,min(m,z)):
-            A = -np.sin(a_star_w)+x/r
-            B = np.cos(a_star_w)-w/r
-            C = 1 + w/r*np.cos(a_star_w)+x/r*np.sin(a_star_w)-(w**2+x**2)/(2*r**2)
-            beta_star_x = solve_abc(A,B,C, 0)
-            if beta_star_x < beta_lo:
-                A = np.sin(beta_lo)-w/r
-                B = -np.cos(beta_lo)-x/r
-                C = 1 - x/r*np.cos(beta_lo) + w/r*np.sin(beta_lo) - (w**2+x**2)/(2*r**2)
-                Upsilon_prime_x = solve_abc(A,B,C, guess)
-                guess = Upsilon_prime_x
-                #print('U'+str(Upsilon_prime_x))
-                UPS.append(np.rad2deg(Upsilon_prime_x))
-                Xs.append(x)
-                gammas.append(np.rad2deg(beta_star_x))
-            # else:
-            #     Upsilon_prime_x = a_star_w
-            #     UPS.append(np.rad2deg(Upsilon_prime_x))
-            #     Xs.append(x)
-            #     gammas.append(np.rad2deg(beta_star_x))
+        for x in np.linspace(max(n,y), min(m,z), 100): ## TODO: check this
+            #print('6-12 of C.11')
+            A = -np.sin(a_star_w) + x/r
+            B = np.cos(a_star_w) - w/r
+            C = 1 + (w/r)*np.cos(a_star_w) + (x/r)*np.sin(a_star_w)-(w**2+x**2)/(2*r**2)
+            beta_star_x = solve_abc(A,B,C, gamguess)
+            if beta_star_x:
+                gamguess = beta_star_x
+                print('beta'+str(beta_star_x))
+                if beta_star_x < beta_lo:
+                    A = np.sin(beta_lo)-w/r
+                    B = -np.cos(beta_lo)-x/r
+                    C = 1 - (x/r)*np.cos(beta_lo) + (w/r)*np.sin(beta_lo) - (w**2+x**2)/(2*r**2)
+                    Upsilon_prime_x = solve_abc(A,B,C, guess)
+                    guess = Upsilon_prime_x
+                    if Upsilon_prime_x > a_star_w:
+                        Upsilon_prime_x = a_star_w
+                    #print('U'+str(Upsilon_prime_x))
+                    UPS.append(np.rad2deg(Upsilon_prime_x))
+                    Xs.append(x)
+                    gammas.append(np.rad2deg(beta_star_x))
+                else:
+                    Upsilon_prime_x = a_star_w
+                    UPS.append(np.rad2deg(Upsilon_prime_x))
+                    Xs.append(x)
+                    gammas.append(np.rad2deg(beta_star_x))
+            else:
+                print('skipped')
+                #st()
         for x in np.linspace(y,n,100):
             sigma6 = (w**2 + x**2)/(2*r)
             A = x
             B = -w
             C = sigma6
             gamma_star_x_arr = solve_abc(A,B,C, gamguess)
-            gamma_star_x = np.min(gamma_star_x_arr)
-            gamguess = gamma_star_x
-            #print('G'+str(gamma_star_x_arr))
-            if gamma_star_x < beta_lo:
-                sigma4 = np.sin(beta_lo)-w/r
-                sigma5 = -np.cos(beta_lo)-x/r
-                A = sigma4
-                B = sigma5
-                C = 1-x/r*np.cos(beta_lo)+w/r*np.sin(beta_lo)-(w**2+x**2)/(2*r**2)
-                Upsilon_prime_x = solve_abc(A,B,C, guess)
-                #print('U'+str(Upsilon_prime_x))
-                guess = Upsilon_prime_x
-                max_val = np.max(Upsilon_prime_x)
-                if not np.iscomplex(max_val):
-                    UPS.append(np.rad2deg(max_val))
+            if gamma_star_x_arr:
+                gamma_star_x = np.min(gamma_star_x_arr)
+                gamguess = gamma_star_x
+                print('gamma'+str(gamma_star_x))
+                #print('G'+str(gamma_star_x_arr))
+                if gamma_star_x < beta_lo:
+                    sigma4 = np.sin(beta_lo)-w/r
+                    sigma5 = -np.cos(beta_lo)-x/r
+                    A = sigma4
+                    B = sigma5
+                    C = 1-x/r*np.cos(beta_lo)+w/r*np.sin(beta_lo)-(w**2+x**2)/(2*r**2)
+                    Upsilon_prime_x = solve_abc(A,B,C, guess)
+                    if Upsilon_prime_x > a_star_w:
+                        Upsilon_prime_x = a_star_w
+                    #print('U'+str(Upsilon_prime_x))
+                    guess = Upsilon_prime_x
+                    UPS.append(np.rad2deg(Upsilon_prime_x))
                     Xs.append(x)
                     gammas.append(np.rad2deg(gamma_star_x))
-            elif beta_lo <= gamma_star_x < beta_hi:
-                A = w
-                B = x
-                C = sigma6
-                Upsilon_prime_x = solve_abc(A,B,C, guess)
-                #print('U'+str(Upsilon_prime_x))
-                guess = Upsilon_prime_x
-                max_val = np.max(Upsilon_prime_x)
-                if not np.iscomplex(max_val):
-                    UPS.append(np.rad2deg(max_val))
+                elif beta_lo <= gamma_star_x < beta_hi:
+                    A = w
+                    B = x
+                    C = sigma6
+                    Upsilon_prime_x = solve_abc(A,B,C,guess)
+                    if Upsilon_prime_x > a_star_w:
+                        Upsilon_prime_x = a_star_w
+                    #print('U'+str(Upsilon_prime_x))
+                    guess = Upsilon_prime_x
+                    UPS.append(np.rad2deg(Upsilon_prime_x))
                     Xs.append(x)
                     gammas.append(np.rad2deg(gamma_star_x))
-            else:
-                print('Upsilon does not exist')
-                UPS.append(None)
-                Xs.append(x)
-                gammas.append(np.rad2deg(gamma_star_x))
+                else:
+                    #print('Upsilon does not exist')
+                    UPS.append(None)
+                    Xs.append(x)
+                    gammas.append(np.rad2deg(gamma_star_x))
+            # else:
+            #     st()
     return Xs, UPS, gammas
 
 def get_Lambda_prime_x_CBTA_S2(spec):
@@ -322,17 +461,32 @@ def get_Lambda_prime_x_CBTA_S2(spec):
     #
     guess = -0.5
     gamguess = 0
+    #st()
     # find a_star_w
-    a_star_w = get_a_star(d1,d2,w,r)
+    # if w!=0:
+    #     if r<=(d1**2+w**2)/(2*w):
+    #         a_star_w = get_a_star_min(w,r)
+    #         LS.append(np.rad2deg(a_star_w))
+    #         return Xs, LS, gammas
+    a_star_w = get_a_star_min(w,r)
+    #else:
+    #    print(r,w)
+    #    st()
     m1 = r - np.sqrt(3*r**2+2*w*r-w**2)
     m2 = 2*r*np.sqrt(2)-r*np.sin(a_star_w)
     n1 = r - np.sqrt(r**2-w**2)
     n2 = np.sqrt(2*r*w-w**2)
 
-    if m1 >= y or n2 <= z:
-        #for x in np.linspace(max(n1,y),min(m2,z),100):
+    if m1 >= y or m2 <= z:
+        #st()
+        m = r*np.sin(a_star_w) + np.sqrt(2*r**2*(1-np.cos(a_star_w)+0.5*np.sin(a_star_w)**2) +2*w*r*(1 + np.cos(a_star_w)) -w**2)
+        for x in np.linspace(m, z, 100):
+            LS.append(np.rad2deg(a_star_w))
+            Xs.append(x)
+    if n1>=y or n2<=z:
+        #st()
         for x in np.linspace(max(n1,y),min(m2,z),100):
-            print('lines 5-11 of C.14')
+            #print('lines 5-11 of C.14')
             A = -(np.sin(a_star_w)+x/r)
             B = np.cos(a_star_w)+w/r
             C = 1 - w/r*np.cos(a_star_w)-x/r*np.sin(a_star_w)-(w**2+x**2)/(2*r**2)
@@ -348,7 +502,12 @@ def get_Lambda_prime_x_CBTA_S2(spec):
                 LS.append(np.rad2deg(Lambda_prime_x))
                 Xs.append(x)
                 gammas.append(np.rad2deg(beta_star_x))
-    for x in np.linspace(max(n1,y),min(n2,z),100):
+            else:
+                LS.append(np.rad2deg(a_star_w))
+                Xs.append(x)
+
+
+    for x in np.linspace(max(n1,y), min(n2,z), 100):
         sigma6 = (w**2 + x**2)/(2*r)
         A = -x
         B = w
@@ -368,7 +527,7 @@ def get_Lambda_prime_x_CBTA_S2(spec):
             LS.append(np.rad2deg(Lambda_prime_x))
             Xs.append(x)
             gammas.append(np.rad2deg(gamma_star_x))
-        elif beta_lo <= gamma_star_x < beta_hi or beta_hi < gamma_star_x:
+        elif beta_lo <= gamma_star_x < beta_hi:
             A = -w
             B = -x
             C = sigma6
@@ -392,24 +551,29 @@ def find_alphas(UPS, LS):
     alpha_lo = np.min(LS_mod)
     return alpha_hi, alpha_lo
 
-class Spec:
-    def __init__(self, d, y, z, w, r, beta_lo, beta_hi):
-        self.d = d
-        self.y = y
-        self.z = z
-        self.w = w
-        self.r = r
-        self.beta_lo = beta_lo
-        self.beta_hi = beta_hi
-    def extract_params(self):
-        return self.d, self.y, self.z, self.w, self.r, self.beta_lo, self.beta_hi
+def sort(Xs,UPS):
+    U = sorted(zip(Xs,UPS), key=operator.itemgetter(0))
+    new_Xs, new_UPS = zip(*U)
+    return new_Xs, new_UPS
 
-    def get_altered_spec_for_lambda_prime_x_s1(self):
-        w = self.d -self.w
-        beta_lo = -self.beta_hi * (self.d - self.x)
-        beta_hi = -self.beta_lo * (self.d - self.x)
-        return Spec(d=self.d, y=self.y, z=self.z, w=w, r=self.r,
-                beta_lo=beta_lo, beta_hi=beta_hi)
+def smooth(w_arr,alpha_his):
+    delidxs = []
+    w_arr1 = w_arr
+    for idx, val in enumerate(alpha_his):
+        if idx >= 1:
+            if np.abs(val - alpha_his[idx-1])> 10:
+                delidxs.append(idx)
+            elif idx-1 in delidxs:
+                if np.abs(val - alpha_his[idx-2])> 10:
+                    delidxs.append(idx)
+            elif np.abs(val)>90:
+                delidxs.append(idx)
+    delidxs = np.flip(delidxs)
+    for idx in delidxs:
+        alpha_his.pop(idx)
+        w_arr1 = np.delete(w_arr1, idx)
+    return w_arr1, alpha_his
+
 
 if __name__ == '__main__':
     # AVP Car parameters
@@ -419,16 +583,20 @@ if __name__ == '__main__':
 
     # Choose which set of plots
     PLOT = 'Alphas' # 'SingleW' (check for specific w value),'Alphas' (find alpha_high and alpha_low)
-    CASE = 'CBTA-S2' # 'CBTA-S1', 'CBTA-S2'
-    # Example 1: Traversing a single rectangle
-    d = 3 # grid size in meters
-    y = 0.0#
-    z = d
-    w_s = 4.102564102564102 # enter value for w if want to check for specific w value
-    w_arr = np.linspace(0.0,d,40) # interval of w for Alphas case
-    r = 6.0 # min radius of curvature (assuming larger than box for now)
-    beta_lo = -27.5/180*np.pi
-    beta_hi = 27.5/180*np.pi
+    CASE = 'CBTA-S1' # 'CBTA-S1', 'CBTA-S2'
+
+    # Example 1: Traversing a single square
+    buffer = 2.0
+    d = 10 # Grid size in meters
+    y = buffer/2 # Lower bound on exit edge
+    z = d-buffer/2 # Upper bound on exit edge
+
+    w_s = 0 # enter value for w if want to check for specific w value
+    w_arr = np.linspace(0,d,100) # interval of w for Alphas case
+    r = 20.0 # maximum radius of curvature (assuming larger than box for now)
+    beta_lo = -5/180.0 * np.pi
+    beta_hi = 5/180.0 * np.pi
+
     alpha_his = []
     alpha_los = []
     if PLOT == 'Alphas':
@@ -440,6 +608,8 @@ if __name__ == '__main__':
                 # alter spec for Lambda analysis (Flip horizontally)
                 spec = Spec(d=d,y=d-z,z=d,w=d-w_cur,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
                 Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S1(spec)
+                Xs, UPS = sort(Xs,UPS)
+                Xs2, LS = sort(Xs2,LS)
             elif CASE == 'CBTA-S2':
                 # same spec for both algorithms
                 spec = Spec(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
@@ -451,12 +621,19 @@ if __name__ == '__main__':
                 st()
             alpha_his.append(alpha_hi)
             alpha_los.append(alpha_lo)
-        plt.plot(w_arr, alpha_his, 'b',  label='Alpha High')
-        plt.plot(w_arr, alpha_los, 'r', label='Alpha Low')
+        # scale w_arr down again
+        w_arr = [item*0.3 for item in list(w_arr)]
+        w_arr1, alpha_his = smooth(w_arr,alpha_his)
+        w_arr2, alpha_los = smooth(w_arr,alpha_los)
+        plt.rcParams.update({"text.usetex": True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"]})
+        plt.plot(w_arr1, alpha_his, 'b',  label=r'$\overline{\alpha}$')
+        plt.plot(w_arr2, alpha_los, 'r', label=r'$\underline{\alpha}$')
+        plt.xlabel('w')
+        plt.ylabel('Angle')
         plt.ylim((-90,90))
-        #plt.xlim((0,10))
+        plt.xlim((0,w_arr[-1]))
         plt.legend()
-        plt.title('Upper and lower Angle Bounds')
+        plt.title('Angle Bounds '+str(CASE))
         plt.show()
     elif PLOT == 'SingleW':
         spec = Spec(d=d,y=y,z=z,w=w_s,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
@@ -464,20 +641,23 @@ if __name__ == '__main__':
             Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S1(spec)
             spec = Spec(d=d,y=y,z=z,w=d-w_s,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
             Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S1(spec)
-            Xs2 = [-(a-10) for a in Xs2]
+            Xs2 = [-(a-d) for a in Xs2]
         elif CASE == 'CBTA-S2':
             Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S2(spec)
             Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S2(spec)
-        st()
-        plt.plot(Xs, gammas, 'b',label='Gamma')
-        plt.plot(Xs, UPS, 'k',label='Upsilon')
-        plt.plot(Xs2, LS, 'g', label='Lambda')
+        new_Xs, new_UPS = sort(Xs,UPS)
+        new_Xs2, new_LS = sort(Xs2,LS)
+        new_Xs0, new_gammas = sort(Xs,gammas)
+        plt.plot(new_Xs0, new_gammas, 'b',label='Gamma')
+        plt.plot(new_Xs, new_UPS, 'k',label='Upsilon')
+        plt.plot(new_Xs2, new_LS, 'g', label='Lambda')
         # Plot the bounds
         plt.plot(Xs, np.rad2deg(beta_lo)*np.ones(len(Xs)), 'r-')
         plt.plot(Xs, np.rad2deg(beta_hi)*np.ones(len(Xs)), 'r-')
         # Configure plot axis to match graph in paper
         #plt.ylim((-90,90))
         #plt.xlim((0,10))
+        st()
         plt.legend()
         plt.title(CASE)
         plt.show()
