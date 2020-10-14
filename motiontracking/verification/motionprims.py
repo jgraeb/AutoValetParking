@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 
 class AVPSpec:
-    def __init__(self, beta_lo: float, beta_hi: float, alpha_lo: float, alpha_hi: float, rad : float, gridsize : int):
+    def __init__(self, beta_lo: float, beta_hi: float, rad : float, gridsize : int):
         """
         Init class object with params.
         :param beta_lo: Lower angle bound at the exit
@@ -30,8 +30,6 @@ class AVPSpec:
         """
         self.beta_lo = beta_lo
         self.beta_hi = beta_hi
-        self.alpha_lo = alpha_lo
-        self.alpha_hi = alpha_hi
         self.rad = rad
         self.gridsize = gridsize
 
@@ -39,7 +37,7 @@ class AVPSpec:
         """
         Return all parameters as a tuple.
         """
-        return self.beta_lo, self.beta_hi, self.alpha_lo, self.alpha_hi, self.rad, self.gridsize
+        return self.beta_lo, self.beta_hi, self.rad, self.gridsize
 
 class Rectangle:
     def __init__(self, type: int, d1: float, d2:float, entry_lo: float, entry_hi: float, exit_lo: float, exit_hi: float):
@@ -118,19 +116,21 @@ def get_channels_from_motionprimives():
         channels.append(channel)
     return channels
 
-def plot_bounds(w_arr, alpha_his, alpha_los):
-    plt.plot(w_arr, alpha_his, 'b',  label='Alpha High')
-    plt.plot(w_arr, alpha_los, 'r', label='Alpha Low')
+def plot_bounds(alpha_his, w_arr1, alpha_los, w_arr2):
+    plt.rcParams.update({"text.usetex": True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"]})
+    plt.plot(w_arr1, alpha_his, 'b',  label=r'$\overline{\alpha}$')
+    plt.plot(w_arr2, alpha_los, 'r', label=r'$\underline{\alpha}$')
     plt.xlabel('w')
-    plt.ylabel('alphas')
+    plt.ylabel('Initial Angle')
+    plt.xlim(min(w_arr1[0],w_arr2[0]),max(w_arr1[-1],w_arr2[-1]))
     plt.ylim((-90,90))
     plt.legend()
-    plt.title('Upper and lower Angle Bounds')
+    plt.title('Angle Bounds for Initial Parallel Square')
     plt.show()
 
 def find_alpha_bounds(avp_spec, square):
     # get parameters
-    beta_lo, beta_hi, alpha_lo, alpha_hi, r, gridsize = avp_spec.extract_params()
+    beta_lo, beta_hi, r, gridsize = avp_spec.extract_params()
     t, d1, d2, w0, w1, y, z = square.extract_params()
     d = d1
     #st()
@@ -142,12 +142,12 @@ def find_alpha_bounds(avp_spec, square):
     for w_cur in w_arr:
         if square.type==1:
             # spec for Upsilon analysis
-            spec = Spec(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
+            spec = ChannelProblemSpecifications(d=d,y=y,z=z,w=w_cur,r=r,beta_lo=beta_lo,beta_hi=beta_hi)
             #st()
             Xs, UPS, gammas = get_Upsilon_prime_x_CBTA_S1(spec)
             #st()
             # alter spec for Lambda analysis (Flip horizontally)
-            spec = Spec(d=d,y=d-z,z=d,w=d-w_cur,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
+            spec = ChannelProblemSpecifications(d=d,y=d-z,z=d,w=d-w_cur,r=r,beta_lo=-beta_hi,beta_hi=-beta_lo)
             Xs2, LS, gammas2 = get_Lambda_prime_x_CBTA_S1(spec)
         if square.type==2:
             # spec for Upsilon analysis
@@ -157,7 +157,9 @@ def find_alpha_bounds(avp_spec, square):
         alpha_hi, alpha_lo = find_alphas(UPS, LS)
         alpha_his.append(alpha_hi)
         alpha_los.append(alpha_lo)
-    return alpha_his, alpha_los, w_arr
+    w_arr1, alpha_his = smooth(w_arr,alpha_his)
+    w_arr2, alpha_los = smooth(w_arr,alpha_los)
+    return alpha_his, w_arr1, alpha_los, w_arr2
 
 def run_testcase(avp_spec): # try verification with first primitive (straight ahead 2 blocks)
     # load the motionprimitives
@@ -167,30 +169,30 @@ def run_testcase(avp_spec): # try verification with first primitive (straight ah
     sols_lo = []
     sols_hi = []
     for idx, square in enumerate(squares):
-        alpha_his, alpha_los, w_arr = find_alpha_bounds(avp_spec, square)
+        alpha_his, w_arr1, alpha_los, w_arr2 = find_alpha_bounds(avp_spec, square)
         sols_lo.append(alpha_los)
         sols_hi.append(alpha_his)
     st()
-    plot_bounds(w_arr, alpha_his, alpha_los)
+    plot_bounds(w_arr1, w_arr2, alpha_his, alpha_los)
 
 def run_parallel_square(avp_spec, buffer):
-    beta_lo, beta_hi, alpha_min, alpha_max, r, gridsize = avp_spec.extract_params()
+    beta_lo, beta_hi, r, gridsize = avp_spec.extract_params()
     segment = PrimChannel("0", gridsize, buffer)
     square = segment.define_parallel_square(0)
-    alpha_his, alpha_los, w_arr = find_alpha_bounds(avp_spec, square)
-    return w_arr, alpha_his, alpha_los
+    alpha_his, w_arr1, alpha_los, w_arr2 = find_alpha_bounds(avp_spec, square)
+    return alpha_his, w_arr1, alpha_los, w_arr2
     #plot_bounds(w_arr, alpha_his, alpha_los)
 
 def run_paper_example():
-    avp_spec = AVPSpec(np.deg2rad(-40), np.deg2rad(10), np.deg2rad(-45), np.deg2rad(45), 45.0, 30)
+    avp_spec = AVPSpec(np.deg2rad(-40), np.deg2rad(10), 45.0, 30)
     square = Rectangle(1, 10, 10, 0, 10, 0, 5)
-    alpha_his, alpha_los, w_arr = find_alpha_bounds(avp_spec, square)
+    alpha_his, w_arr1, alpha_los, w_arr2 = find_alpha_bounds(avp_spec, square)
     #st()
-    return w_arr, alpha_his, alpha_los
+    return alpha_his, w_arr1, alpha_los, w_arr2
 
 if __name__ == '__main__':
     # define exit configuration
-    exit_config = [0, 20.0, 0.0] # nomimal_exit_angle, angle_bound, buffer\
+    exit_config = [0, 5.0, 1.0] # nomimal_exit_angle, angle_bound, buffer\
     exit_angle = exit_config[0]
     angle_bound = exit_config[1] # in degrees
     buffer = exit_config[2]
@@ -207,15 +209,5 @@ if __name__ == '__main__':
     # define starting values
     min_diff = 0
     buffer = 0
-    w_arr, alpha_his, alpha_los = run_parallel_square(avp_spec, buffer)
-    # run parallel square testcase to find buffer for 45 degree angle difference
-    # while min_diff < 45:
-    #     w_arr, alpha_his, alpha_los = run_parallel_square(avp_spec, buffer)
-    #     min_diff = np.min(np.abs(alpha_his))
-    #     buffer += 0.1
-    #     print('Buffer = {0}, min. diff = {1}'.format(buffer,min_diff))
-    #
-    #     #st()
-    # print('Found solution, buffer = {0}'.format(buffer))
-    #w_arr, alpha_his, alpha_los = run_parallel_square(avp_spec, buffer)
-    plot_bounds(w_arr, alpha_his, alpha_los)
+    alpha_his, w_arr1, alpha_los, w_arr2 = run_parallel_square(avp_spec, buffer)
+    plot_bounds(alpha_his, w_arr1, alpha_los, w_arr2)
