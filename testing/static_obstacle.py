@@ -27,9 +27,9 @@ class Obstacles(BoxComponent):
         self.only_accept_obs = False
 
     def create_obstacle_map(self): # static obstacles initialized at the beginning of the simulation
-        self.obs = {1: (33, 180, 3, 3), # example test data
-         2: (17, 220, 0, 3),
-         3: (13, 200, 0, 3)}
+        self.obs = {1: (210, 80, 0, 5)} # example test data
+         # 2: (17, 220, 0, 3),
+         # 3: (13, 200, 0, 3)}
         # 3: (190, 100, 0, 3)}
         # read static obstacle map from test data file
         # with open(sys.path[0]+'/../testing/static_obstacle_test_data/static_obstacle_2020_09_01_13_23_43.dat', 'rb') as f:
