@@ -7,10 +7,15 @@ ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
 if ros_path in sys.path:
     sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import cv2
+import math
 import numpy as np
 import networkx as nx
 from scipy.spatial.distance import cdist
 from ipdb import set_trace as st
+import scipy.interpolate as interpolate
+import itertools
+sys.path.append("..")
+from variables.global_vars import SCALE_FACTOR_PLAN as SFP
 
 def img_to_csv_bitmap(img_path, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
@@ -205,6 +210,49 @@ def segment_to_mpc_inputs(start, end, edge_info_dict):
     mpc_inputs = np.array([[xy[0], xy[1], heading] for xy, heading in zip(waypoints, headings)])
     return mpc_inputs
 
+def pi_2_pi(angle):
+    while(angle > math.pi):
+        angle = angle - 2.0 * math.pi
+
+    while(angle < -math.pi):
+        angle = angle + 2.0 * math.pi
+    return angle
+
+def check_direction(path):
+    cx = path[:,0]*SFP
+    cy = path[:,1]*SFP
+    cyaw = np.deg2rad(path[:,2])
+    dx = cx[1] - cx[0]
+    dy = cy[1] - cy[0]
+    move_direction = math.atan2(-dy, dx)
+    # print(move_direction)
+    # print(cyaw[0])
+    dangle = abs(pi_2_pi(move_direction - cyaw[0]))
+    if dangle >= math.pi / 4.0:
+        direction = -1.0
+    else:
+        direction = 1.0
+    #print('The direction is: '+str(direction))
+    return direction
+
+def waypoints_to_curve(waypoints):
+     if len(waypoints) > 4:
+         t = [0]
+         arc_length = 0
+         for n1, n2 in zip(waypoints, waypoints[1:]):
+             arc_length += np.sqrt((n1[0]-n2[0])**2 + (n1[1]-n2[1])**2)
+             t.append(arc_length)
+         x = np.array([point[0] for point in waypoints])
+         y = np.array([point[1] for point in waypoints])
+         # s for smoothness, k for degree
+         tx, cx, kx = interpolate.splrep(t, x, s=20, k=4)
+         ty, cy, ky = interpolate.splrep(t, y, s=20, k=4)
+         spline_x = interpolate.BSpline(tx, cx, kx, extrapolate=False)
+         spline_y = interpolate.BSpline(ty, cy, ky, extrapolate=False)
+         return list(zip(spline_x(t), spline_y(t)))
+     else:
+         return waypoints
+
 def convert_to_edge_dict(start_node, end_node, node_sequence):
     edge = dict()
     edge['node_sequence'] = node_sequence
@@ -217,4 +265,3 @@ def get_nodes_to_delete(planning_graph, ball_center, ball_radius):
     all_dist = cdist([ball_center], all_nodes_array,
             'euclidean').tolist()[0]
     return [all_nodes_array[idx] for idx in range(len(all_nodes_array)) if all_dist[idx] <= ball_radius]
-

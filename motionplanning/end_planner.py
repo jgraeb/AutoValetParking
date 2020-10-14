@@ -8,19 +8,26 @@ from ipdb import set_trace as st
 import matplotlib.pyplot as plt
 import numpy as np
 from ipdb import set_trace as st
+import sys
+sys.path.append("..")
+from variables.global_vars import SCALE_FACTOR_PLAN as SFP
+
 if __name__ == '__main__':
     from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
     get_tube_for_lines, point_set_is_safe, compute_edge_weight,
-    astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+    astar_trajectory, waypoints_to_headings, waypoints_to_curve, convert_to_edge_dict, segment_to_mpc_inputs,
+    check_direction, pi_2_pi)
 else:
     try:
         from motionplanning.tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
         get_tube_for_lines, point_set_is_safe, compute_edge_weight,
-        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs,
+        check_direction, pi_2_pi)
     except:
         from tools import (constrain_heading_to_pm_180, img_to_csv_bitmap,
         get_tube_for_lines, point_set_is_safe, compute_edge_weight,
-        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs)
+        astar_trajectory, waypoints_to_headings, convert_to_edge_dict, segment_to_mpc_inputs,
+        check_direction, pi_2_pi)
 import cv2
 import sys
 sys.path.append('..')
@@ -225,6 +232,53 @@ def distance(a, b):
     b1 = b[1]
     return min(((a[0] - b0[0])**2 + (a[1] - b0[1])**2)**0.5,((a[0] - b1[0])**2 + (a[1] - b1[1])**2)**0.5)
 
+def split_up_path(segments): # split the path up if there is a direction change
+    directions = []
+    split_here = []
+    for segment in segments:
+        direction = check_direction(segment)
+        directions.append(direction)
+    for idx,direction in enumerate(directions):
+        if idx>=1 and direction!=directions[idx-1]:
+            split_here.append(idx-1)
+    subsegments = []
+    startidx = 0
+    for idx in split_here:
+        subsegments.append(segments[startidx:idx+1])
+        startidx = idx+1
+    subsegments.append(segments[startidx:])
+    return subsegments
+
+def curvature_analysis(segment):
+    # do curvature analysis
+    dx_dt = np.gradient(segment[:, 0])
+    dy_dt = np.gradient(segment[:, 1])
+    d2x_dt2 = np.gradient(dx_dt)
+    d2y_dt2 = np.gradient(dy_dt)
+    curvature = np.abs(d2x_dt2 * dy_dt - dx_dt * d2y_dt2) / (dx_dt * dx_dt + dy_dt * dy_dt)**1.5
+    return curvature[:-1]
+
+def check_curvature(segments):
+    subsegments = split_up_path(segments)
+    curvatures = []
+    # smooth the path segments
+    for subsegment in subsegments:
+        waypoints = []
+        for subsubsegment in subsegment:
+            for waypoint in subsubsegment:
+                waypoint = tuple(waypoint)
+                if waypoint not in waypoints:
+                    waypoints.append(waypoint)
+        segment = np.array(waypoints_to_curve(waypoints))
+        segment = segment*SFP
+        curvature = curvature_analysis(segment)
+        curvatures.append(curvature)
+    print(curvatures)
+    st()
+    radii = [1/x if x!=0 else '999' for x in curvatures]
+    print(radii)
+    return curvatures
+
 # def complete_path_is_safe(traj):
 #     # check whether the subpath is safe
 #     is_safe = True
@@ -246,6 +300,7 @@ def distance(a, b):
 # TODO: make separate planner class
 if __name__ == '__main__':
     remap = False
+    smooth = True
     if remap:
         end_states = find_end_states_from_image('AVP_planning_300p_end_states')
         # end_states = find_end_states_from_image('AVP_planning_250p_end_states') # for ROS layout
@@ -309,6 +364,7 @@ if __name__ == '__main__':
                         #      # TODO: not sure how to generate the path
                         #     new_subpath = astar_trajectory(simple_graph, safe_start, end)
                         #     traj = safe_subpath + new_subpath
+                        segments = []
                         for start, end in zip(traj, traj[1:]):
                             #print('Start'+str(start))
                             #print(end)
@@ -318,6 +374,13 @@ if __name__ == '__main__':
                             plt.plot(segment[-1,0], segment[-1,1], 'rx')
                             plt.plot(segment[:,0], segment[:,1], 'k--')
                             plt.pause(0.1)
+                            segments.append(segment)
+                        if smooth:
+                            curvature = check_curvature(segments)
+                            # plt.plot(segment[0,0], segment[0,1], 'b.')
+                            # plt.plot(segment[-1,0], segment[-1,1], 'rx')
+                            # plt.plot(segment[:,0], segment[:,1], 'k--')
+                            # plt.pause(0.1)
                         print('trajectory plotted!')
                         print('click to set desired xy')
                         clickok = True
