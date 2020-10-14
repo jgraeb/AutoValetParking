@@ -36,6 +36,7 @@ class Game(BoxComponent):
         self.lane2box = LANE_2_BOX
         self.reserved_areas = dict()
         self.reserved_areas_requested = OrderedDict()
+        self.reserved_in_advance = OrderedDict()
         self.trajs = dict()
         self.Logger = None
         self.obstacles = dict()
@@ -183,8 +184,35 @@ class Game(BoxComponent):
         traj = split(newlinestring,point)
         # reserve new path until getting back to original path
         traj = traj[0]
-        area = traj.buffer(3.5)
-        self.Logger.info('GAME - Reserving Replanning Area for Car ID {0}'.format(car.id))
+        # if car is retrieving, only reserve once it is at the boundary of the lane box
+        if car.retrieving:
+            intersection = traj.intersection(self.accept_box)
+            try:
+                firstpt = Point(intersection.coords[0])
+            except:
+                try:
+                    firstpt = Point(intersection[0].coords[0])
+                except:
+                    st()
+            traj = split(traj,firstpt)
+            traj = traj[-1]
+            area = traj.buffer(3.5)
+            car.future_reservation = True
+            self.reserved_in_advance.update({car: area})
+        else:
+            area = traj.buffer(3.5)
+            self.Logger.info('GAME - Reserving Replanning Area for Car ID {0}'.format(car.id))
+            self.reserve_request(car,area)
+            # self.reserved_areas_requested.update({car: area})
+            # self.trajs.update({car: (traj,point)})
+            # self.update_reserved_areas()
+
+    def start_reservation(car):
+        area = self.reserved_in_advance.pop(car)
+        self.reserve_request(car,area)
+        car.hold = True
+
+    def reserve_request(car, area):
         self.reserved_areas_requested.update({car: area})
         self.trajs.update({car: (traj,point)})
         self.update_reserved_areas()

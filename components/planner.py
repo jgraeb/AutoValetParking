@@ -40,6 +40,7 @@ class Planner(BoxComponent):
         self.Logger = None
         self.static_obstacle_map = dict()
         self.reversing_on = False
+        self.TESTING_MODE = False
 
     async def get_car_position(self,car):
         self.Logger.info('PLANNER - Sending position request to Map system')
@@ -587,7 +588,7 @@ class Planner(BoxComponent):
         self.planning_graph_all = self.planning_graph_reachability
         await trio.sleep(0)
         # create obstacles only used for testing
-        if self.TESTING_MODE:
+        if True:#self.TESTING_MODE:
             self.static_obstacle_map = Obstacles.create_obstacle_map()
             self.initialize_static_obstacle_map(Game)
             Simulation.add_obs_to_sim(self.static_obstacle_map)

@@ -70,6 +70,7 @@ class Car(BoxComponent):
         self.send_response_channel = None
         self.Logger = None
         self.TESTING_MODE = False
+        self.future_reservation = False
 
     async def update_planner_command(self,Game, Time): # directive/response system - receiving directives
         async with self.in_channels['Planner']:
@@ -274,6 +275,9 @@ class Car(BoxComponent):
             if self.clear_of_reserved_area(Game):
                 self.release_reserved_area(Game)
                 self.reserved = False
+        if self.future_reservation:
+            if self.check_in_accept_box:
+                Game.start_reservation(self)
         target_ind, _ = tracking.calc_nearest_index(self.state, cx, cy, cyaw, 0)
         odelta, oa = None, None
         cyaw = tracking.smooth_yaw(cyaw)
