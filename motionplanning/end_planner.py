@@ -250,52 +250,70 @@ def split_up_path(segments): # split the path up if there is a direction change
     return subsegments
 
 def curvature_analysis(segment):
-    # do curvature analysis
+    # do curvature analysis - spline package
     dx_dt = np.gradient(segment[:, 0])
     dy_dt = np.gradient(segment[:, 1])
     d2x_dt2 = np.gradient(dx_dt)
     d2y_dt2 = np.gradient(dy_dt)
     curvature = np.abs(d2x_dt2 * dy_dt - dx_dt * d2y_dt2) / (dx_dt * dx_dt + dy_dt * dy_dt)**1.5
-    return curvature[:-1]
+    return curvature
 
-def check_curvature(segments):
-    subsegments = split_up_path(segments)
+def do_smoothing(segment, t0):
+    segments = split_up_path(segment)
+    # smooth the path segments for cuvature analysis
+    waypoints = []
     curvatures = []
-    # smooth the path segments
-    for subsegment in subsegments:
+    segmentf = []
+    ts = []
+    #t0 = 0
+    for subsegment in segments:
         waypoints = []
         for subsubsegment in subsegment:
             for waypoint in subsubsegment:
                 waypoint = tuple(waypoint)
                 if waypoint not in waypoints:
                     waypoints.append(waypoint)
-        segment = np.array(waypoints_to_curve(waypoints))
-        segment = segment*SFP
-        curvature = curvature_analysis(segment)
-        curvatures.append(curvature)
-    print(curvatures)
-    st()
-    radii = [1/x if x!=0 else '999' for x in curvatures]
-    print(radii)
-    return curvatures
+        if len(waypoints)<5:
+            # add waypoints
+            #st()
+            mod_waypoints_xy = []#[waypoints[0][:-1]]
+            mod_waypoints = []
+            for idx,waypoint in enumerate(waypoints):
+                if idx in range(0,len(waypoints)-1):
+                    waypoint_x = (waypoint[0]+waypoints[idx+1][0])/2
+                    waypoint_y = (waypoint[1]+waypoints[idx+1][1])/2
+                    int_waypoint = (waypoint_x,waypoint_y)
+                    mod_waypoints_xy.append(waypoint[:-1])
+                    mod_waypoints_xy.append(int_waypoint)
+                else:
+                    mod_waypoints_xy.append(waypoint)
+                # find headings
+            headings = waypoints_to_headings(mod_waypoints_xy, waypoints[0][2])
+            for idx, head in enumerate(headings):
+                mod_waypoints.append(tuple((mod_waypoints_xy[idx][0],mod_waypoints_xy[idx][1],head)))
+            waypoints = mod_waypoints
+        segment_a, t, curvature = waypoints_to_curve(waypoints)
+        #st()
+        t = [item + t0 for item in t]
+        t0 = t[-1]
+        curvatures.extend(curvature)
+        ts.extend(t)
+        segmentf.extend(segment_a)
+    segment = np.array(segmentf)
+    return segment, ts, curvatures, t0
 
-# def complete_path_is_safe(traj):
-#     # check whether the subpath is safe
-#     is_safe = True
-#     for sub_start, sub_end in zip(traj, traj[1:]):
-#         if not subpath_is_safe(sub_start, sub_end): # if someone blocks the subpath
-#             is_safe = False
-#             return is_safe
-#     return is_safe
-
-# def longest_safe_subpath(traj):
-#     idx = -1
-#     for sub_start, sub_end in zip(traj, traj[1:]):
-#         idx += 1
-#         if not subpath_is_safe(sub_start, sub_end):
-#             safe_subpath = traj[0:idx]
-#             safe_start = traj[idx]
-#             return safe_subpath, safe_start
+def plot_curvature(ts, curvature):
+    max_curv = 1/5.0
+    plt.rcParams.update({"text.usetex": True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"]})
+    plt.figure(2)
+    plt.plot(ts, curvature, 'b-' )
+    plt.plot(ts, max_curv*np.ones(len(ts)), 'r-')
+    plt.axvline(x=ts[0], color='r', linestyle='--')
+    plt.axvline(x=ts[-1], color='r', linestyle='--')
+    plt.ylabel(r'$\kappa$')
+    plt.xlabel('Path Length')
+    plt.title('Path Curvature $\kappa$')
+    plt.pause(0.1)
 
 # TODO: make separate planner class
 if __name__ == '__main__':
@@ -335,8 +353,9 @@ if __name__ == '__main__':
         clicks = 0
         print('click on parking lot to set next desired xy')
         clickok = True
+        t0 = 0.0
         def onclick(event):
-            global ix, iy, clicks, coords, ps, clickok
+            global ix, iy, clicks, coords, ps, clickok,t0
             if clickok:
                 clickok = False
                 ix, iy = event.xdata, event.ydata
@@ -369,19 +388,23 @@ if __name__ == '__main__':
                             #print('Start'+str(start))
                             #print(end)
                             segment = segment_to_mpc_inputs(start, end, edge_info)
-                            print(segment)
-                            plt.plot(segment[0,0], segment[0,1], 'b.')
-                            plt.plot(segment[-1,0], segment[-1,1], 'rx')
-                            plt.plot(segment[:,0], segment[:,1], 'k--')
-                            plt.pause(0.1)
-                            segments.append(segment)
-                        if smooth:
-                            curvature = check_curvature(segments)
+                            #print(segment)
                             # plt.plot(segment[0,0], segment[0,1], 'b.')
                             # plt.plot(segment[-1,0], segment[-1,1], 'rx')
                             # plt.plot(segment[:,0], segment[:,1], 'k--')
                             # plt.pause(0.1)
+                            segments.append(segment)
+                        if smooth:
+                            #curvature = check_curvature(segments)
+                            # plot the curve
+                            segment, ts, curvature, t0 = do_smoothing(segments, t0)
+                            plt.figure(1)
+                            plt.plot(segment[0,0], segment[0,1], 'b.')
+                            plt.plot(segment[-1,0], segment[-1,1], 'rx')
+                            plt.plot(segment[:,0], segment[:,1], 'k--')
+                            plt.pause(0.1)
                         print('trajectory plotted!')
+                        plot_curvature(ts, curvature)
                         print('click to set desired xy')
                         clickok = True
                         plt.show()

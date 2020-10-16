@@ -16,6 +16,7 @@ import scipy.interpolate as interpolate
 import itertools
 sys.path.append("..")
 from variables.global_vars import SCALE_FACTOR_PLAN as SFP
+import matplotlib.pyplot as plt
 
 def img_to_csv_bitmap(img_path, save_name=None, verbose=False):
     # usage: img_to_bitmap(img) where img is a numpy array of RGB values with
@@ -236,22 +237,50 @@ def check_direction(path):
     return direction
 
 def waypoints_to_curve(waypoints):
-     if len(waypoints) > 4:
-         t = [0]
-         arc_length = 0
-         for n1, n2 in zip(waypoints, waypoints[1:]):
-             arc_length += np.sqrt((n1[0]-n2[0])**2 + (n1[1]-n2[1])**2)
-             t.append(arc_length)
-         x = np.array([point[0] for point in waypoints])
-         y = np.array([point[1] for point in waypoints])
-         # s for smoothness, k for degree
-         tx, cx, kx = interpolate.splrep(t, x, s=20, k=4)
-         ty, cy, ky = interpolate.splrep(t, y, s=20, k=4)
-         spline_x = interpolate.BSpline(tx, cx, kx, extrapolate=False)
-         spline_y = interpolate.BSpline(ty, cy, ky, extrapolate=False)
-         return list(zip(spline_x(t), spline_y(t)))
-     else:
-         return waypoints
+    #st()
+    if len(waypoints) > 4:
+        if len(waypoints)>5:
+            kval = 4
+        else:
+            kval = 2
+        t = [0]
+        arc_length = 0
+        for n1, n2 in zip(waypoints, waypoints[1:]):
+            arc_length += np.sqrt((n1[0]-n2[0])**2 + (n1[1]-n2[1])**2)
+            t.append(arc_length)
+        x = np.array([point[0] for point in waypoints])
+        y = np.array([point[1] for point in waypoints])
+        # s for smoothness, k for degree
+        tx, cx, kx = interpolate.splrep(t, x, s=20, k=kval)
+        ty, cy, ky = interpolate.splrep(t, y, s=20, k=kval)
+        spline_x = interpolate.BSpline(tx, cx, kx, extrapolate=False)
+        spline_y = interpolate.BSpline(ty, cy, ky, extrapolate=False)
+        ts, curvature = get_path_curvature(spline_x, spline_y, t[-1], 100)
+        return list(zip(spline_x(t), spline_y(t))), ts, curvature
+    else:
+        return waypoints
+
+
+def evaluate_bspline(bsplineobj, maxinterval, pt_num):
+    b_eval = lambda x: bsplineobj(x)
+
+def eval_curvature(bsplineobj_x, bsplineobj_y, val):
+    spline_x = bsplineobj_x
+    spline_y = bsplineobj_y
+    dx_dt = spline_x.derivative()
+    dy_dt = spline_y.derivative()
+    d2x_dt2 = dx_dt.derivative()
+    d2y_dt2 = dy_dt.derivative()
+    curvature = np.abs(d2x_dt2(val) * dy_dt(val) - dx_dt(val) * d2y_dt2(val)) / (dx_dt(val) * dx_dt(val) + dy_dt(val) * dy_dt(val))**1.5
+    return curvature
+
+def get_path_curvature(bsplineobj_x, bsplineobj_y, maxinterval, pt_num):
+    # get curvature over interval
+    ts = np.linspace(0,maxinterval,pt_num)
+    vals = []
+    for val in ts:
+        vals.append(eval_curvature(bsplineobj_x, bsplineobj_y, val))
+    return ts, vals
 
 def convert_to_edge_dict(start_node, end_node, node_sequence):
     edge = dict()
