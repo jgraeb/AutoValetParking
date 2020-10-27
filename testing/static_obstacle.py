@@ -27,7 +27,7 @@ class Obstacles(BoxComponent):
         self.only_accept_obs = False
 
     def create_obstacle_map(self): # static obstacles initialized at the beginning of the simulation
-        self.obs = {1: (210, 80, 0, 5)} # example test data
+        self.obs = dict()#{1: (210, 80, 0, 5)} # example test data
          # 2: (17, 220, 0, 3),
          # 3: (13, 200, 0, 3)}
         # 3: (190, 100, 0, 3)}

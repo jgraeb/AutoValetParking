@@ -62,7 +62,7 @@ class Planner(BoxComponent):
             self.planning_graph = self.original_lanes_planning_graph
         else:
             self.get_current_planning_graph(Game)
-            traj, weight = self.get_path(start,end)
+        traj, weight = self.get_path(start,end,original)
         self.Logger.info('PLANNER - {0} driving from {1} to {2}, Path weight: {3}'.format(car.name,start,end,weight))
         if traj:
             if car.replan and not car.new_spot:
@@ -245,6 +245,7 @@ class Planner(BoxComponent):
 
     def get_current_planning_graph(self,Game): # includes all current obstacles
         # loop through obstacles and generate new graph
+        #st()
         if self.obstacles:
             self.Logger.info('PLANNER - Updating Planning Graph')
             obs = []
@@ -253,15 +254,16 @@ class Planner(BoxComponent):
             obs_boxes_all = []
             for key,value in self.obstacles.items():
                 obstacle = {key : [value[0]/SFP,value[1]/SFP,value[2]]}
+                obstacle_m = {key : [value[0],value[1],value[2]]}
                 try:
-                    buff = value[3]/SFP+ 5.0
+                    buff = value[3]/SFP + 5.0
                     val = (value[0], value[1], value[2], value[3])
                 except:
                     buff = 15.0
                     val = (value[0], value[1], value[2], 0)
-                    self.obstacles.update({key: val})
+                    #self.obstacles.update({key: val})
                 if not self.reversing_on:
-                    if self.is_single_failure_in_acceptable_area(obstacle, Game):
+                    if self.is_single_failure_in_acceptable_area(obstacle_m, Game):
                     #print('Failure is in acceptable area')
                         obs.append(val)
                         obs_boxes.append(Point(val[0]/SFP,val[1]/SFP).buffer(buff))
@@ -302,14 +304,19 @@ class Planner(BoxComponent):
             self.planning_graph = self.original_lanes_planning_graph
             self.planning_graph_all = self.planning_graph_reachability
 
-    def get_path(self, start, end): # compute path using grid_planner + end_planner
+    def get_path(self, start, end, original): # compute path using grid_planner + end_planner
         check_block = False
+        check_heading = False
         # if end in parking spot
         if end in parking_spots.values():
-            planning_graph = self.planning_graph_all
-            check_block = True
+            if original:
+                planning_graph = self.planning_graph_reachability
+            else:
+                planning_graph = self.planning_graph_all
+                check_block = True
         else:
             planning_graph = self.planning_graph
+        spot_locs = [(a[0],a[1]) for a in parking_spots.values()]
         # use planning graph all, if that's not possible use planning_graph
         traj = None
         try:
@@ -324,6 +331,13 @@ class Planner(BoxComponent):
             else:
                 traj = None
                 weight = None
+        if traj:
+            if tuple((traj[0][0][0],traj[0][0][1])) in spot_locs:
+                check_heading = True
+                try:
+                    traj[0][1][2]=traj[0][0][2]
+                except:
+                    st()
         if traj and not weight == np.inf:
             return traj, weight
         else:
@@ -398,7 +412,7 @@ class Planner(BoxComponent):
                     # except:
                     #     st()
                     # Game.check_and_reserve_other_lane(car,directive)
-                elif resp[0]=='Blocked': # compute a path around the blockage if possiblw, if not possible, wait
+                elif resp[0]=='Blocked': # compute a path around the blockage if possible, if not possible, wait
                     obscar = resp[1]
                     obs = obscar
                     if self.is_failure_in_acceptable_area(Game,obs):
@@ -423,7 +437,7 @@ class Planner(BoxComponent):
                             start[2] = -np.rad2deg(pos[2])
                             start[3] = 0
                             self.get_current_planning_graph(Game)
-                            traj, weight = self.get_path(start,end)
+                            traj, weight = self.get_path(start,end, False)
                             # if no path, reverse first
                             if traj:
                                 await self.send_directive_to_car(car, end, Game, False, obs)
@@ -485,6 +499,19 @@ class Planner(BoxComponent):
                 self.spots.update({todo[1]: car.name})
                 end = self.find_spot_coordinates(todo[1])
                 await self.send_directive_to_car(car, end, Game, False, None)
+            if todo[0] == 'ParkWait':
+                car.wait = True
+                self.Logger.info('PLANNER - receiving directive from Supervisor to park {0} in Spot {1}'.format(car.name,todo[1]))
+                self.cars.update({car.name: 'Assigned'})
+                delidx = None
+                for key,val in self.spots.items():
+                    if val == car.name:
+                        delidx = key
+                if delidx:
+                    self.spots.pop(key)
+                self.spots.update({todo[1]: car.name})
+                end = self.find_spot_coordinates(todo[1])
+                await self.send_directive_to_car(car, end, Game, True, None)
             elif todo == 'Pickup':
                 self.Logger.info('PLANNER -  receiving directive from Supervisor to retrieve {0}'.format(car.name))
                 car.replan = False
@@ -560,7 +587,7 @@ class Planner(BoxComponent):
     def check_reachable_from_car(self,spot,car):
         start = (car.x/SFP, car.y/SFP, np.rad2deg(car.yaw)*(-1),0) # start position on the grid
         end = self.find_spot_coordinates(spot)
-        traj, _ = self.get_path(start,end)
+        traj, _ = self.get_path(start,end, False)
         if traj:
             return True
         else:

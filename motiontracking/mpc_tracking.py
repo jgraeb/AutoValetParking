@@ -26,12 +26,12 @@ from variables.global_vars import *
 #     raise
 #mod
 TOL = 0.5
-BACK_TARGET_SPEED = -10.0 / 3.6  # [m/s] target speed
-GOAL_SPEED = 0.0
+#BACK_TARGET_SPEED = -10.0 / 3.6  # [m/s] target speed
+#GOAL_SPEED = 0.0
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
-T = 3  # horizon length (5)
+T = 5  # horizon length (5)
 
 # mpc parameters
 R = np.diag([0.01, 0.01])  # input cost matrix
@@ -358,15 +358,17 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
     return xref, ind, dref
 
 
-def check_goal(state, goal, tind, nind,goalspeed, last_segment):
+def check_goal(state, goal, tind, nind,goalspeed, last_segment, reversing):
 
     # check goal
     dx = state.x - goal[0]
     dy = state.y - goal[1]
     d = math.sqrt(dx ** 2 + dy ** 2)
 
-    if not last_segment:
+    if reversing:
         isgoal = (d <= GOAL_DIS)
+    elif last_segment:
+        isgoal = (d <= 1.0)
     else:
         isgoal = (d <= GOAL_DIS)
     if abs(tind - nind) >= 5:

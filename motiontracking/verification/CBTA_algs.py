@@ -245,9 +245,9 @@ def get_a_star_min(w: float, r: float) -> float:
         a_star_w = np.pi/2
     else:
         a_star_w = np.arccos(1-w/r)
-    return -a_star_w
+    return -np.pi/2#-a_star_w
 
-def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A - NOT RELIABLE
+def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
     d, y, z, w, r, beta_lo, beta_hi = spec.extract_params()
     UPS = []
     gammas = []
@@ -351,7 +351,7 @@ def get_Upsilon_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3A
             #     st()
     return Xs, UPS, gammas
 
-def get_Lambda_prime_x_CBTA_S2(spec): # traversal across adjacent edges Case 3B - NOT RELIABLE
+def get_Lambda_prime_x_CBTA_S2(spec):
     d, y, z, w, r, beta_lo, beta_hi = spec.extract_params()
     LS = []
     gammas = []

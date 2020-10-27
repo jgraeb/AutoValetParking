@@ -29,7 +29,7 @@ class Supervisor(BoxComponent):
         self.conflicts = []
         self.counter = 1
         self.upper_spots = UPPER_SPOTS
-        self.lower_spots = LOWER_SPOTS 
+        self.lower_spots = LOWER_SPOTS
         self.middle_box = MIDDLE_BOX
         self.Logger = None
 
@@ -81,8 +81,8 @@ class Supervisor(BoxComponent):
                 elif resp == 'NoPath':
                     if self.cars.get(car.name)== 'Assigned':
                         spot = self.pick_spot(car,Planner, Simulation)
-                        for key, value in self.parking_spots.items(): 
-                            if value == ('Assigned',car.name): 
+                        for key, value in self.parking_spots.items():
+                            if value == ('Assigned',car.name):
                                 val = key
                         self.parking_spots[val]=(('Vacant','None'))
                         Simulation.spots.pop(val)
@@ -100,8 +100,8 @@ class Supervisor(BoxComponent):
                         await self.reserve_reverse_area(car)
                 elif resp[0] == 'SpotUnreachable':
                     obs = resp[1]
-                    for key, value in self.parking_spots.items(): 
-                        if value == ('Assigned',car.name): 
+                    for key, value in self.parking_spots.items():
+                        if value == ('Assigned',car.name):
                             oldspot = key
                     newspot = self.pick_new_spot(car,obs,Planner)
                     if newspot: # if there exits a possible new spot send updated command
@@ -115,8 +115,9 @@ class Supervisor(BoxComponent):
                     else: # drive to old spot
                         car.replan = False
                         car.new_spot = False
-                        await self.send_directive_to_planner(car,('Park',oldspot))
+                        await self.send_directive_to_planner(car,('ParkWait',oldspot))
                 elif resp[0] == 'Conflict':
+                    st()
                     car_list = resp[1]
                     for cars in car_list:
                         #prio = self.priority.get(cars.name)
@@ -142,10 +143,10 @@ class Supervisor(BoxComponent):
                                     await self.send_directive_to_planner(car,('Back2spot'))
                                     self.conflicts.append(car)
                                 else:
-                                    print('Conflict resoling needed at supervisor level')
+                                    print('Conflict resolving needed at supervisor level')
                                     #await self.send_directive_to_planner(car,('Reverse'))
                 await trio.sleep(0)
-    
+
     async def initiate_towing(self,car, Simulation): # tow the failed car
         self.Logger.info('SUPERVISOR - sending towing request')
         await self.out_channels['TowTruck'].send(car)
@@ -153,14 +154,14 @@ class Supervisor(BoxComponent):
     async def update_towed_cars(self,Simulation):
         async with self.in_channels['TowTruck']:
             async for car in self.in_channels['TowTruck']:
-                directive = [car, 'Towed'] 
+                directive = [car, 'Towed']
                 await self.out_channels['Planner'].send(directive)
                 self.cars.pop(car.name)
                 self.priority.pop(car.name)
                 self.failures.pop(car.name)
                 await self.out_channels['GameExit'].send(car)
-                for spot, value in self.parking_spots.items(): 
-                    if value == ('Assigned',car.name) or value == ('Occupied', car.name) or value == ('Requested', car.name): 
+                for spot, value in self.parking_spots.items():
+                    if value == ('Assigned',car.name) or value == ('Occupied', car.name) or value == ('Requested', car.name):
                         val = spot
                 self.parking_spots[val]=(('Vacant','None'))
                 if val in Simulation.spots:
@@ -170,7 +171,7 @@ class Supervisor(BoxComponent):
 
     def pick_spot(self,car,pln,sim): # pick a parking spot randomly
         random_list = random.sample(list(self.parking_spots.keys()),len(list(self.parking_spots.keys())))
-        for spot in random_list: 
+        for spot in random_list:
             if (self.parking_spots[spot]==('Vacant','None')) and pln.check_reachability(spot):
                 return spot
         return None
@@ -281,8 +282,8 @@ class Supervisor(BoxComponent):
             self.priority.update({car.name: '1'})
             self.cars.update({car.name: 'Requested'})
             car.retrieving = True
-            for key, value in self.parking_spots.items(): 
-                if value == ('Assigned',car.name) or value == ('Occupied',car.name): 
+            for key, value in self.parking_spots.items():
+                if value == ('Assigned',car.name) or value == ('Occupied',car.name):
                     val = key
             self.parking_spots[val]=(('Requested',car.name))
             Simulation.spots.pop(val)
